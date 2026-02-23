@@ -804,7 +804,7 @@ h6 {
 
 /* Hero Flip Animation Styles */
 .hero-flip-card {
-    height: 480px;
+    height: 520px;
     /* Fixed height to prevent flickering/jumping */
     display: flex;
     flex-direction: column;
@@ -1096,7 +1096,7 @@ audio::-webkit-media-controls-panel {
     padding: 0 !important;
     /* Remove card padding for full-bleed feel if needed, but we used .card so let's keep it consistent */
     overflow: hidden;
-    min-height: 480px;
+    height: 520px;
 }
 
 .lyrics-carousel-container:hover {

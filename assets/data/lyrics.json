@@ -53,5 +53,58 @@
         "showOnHome": false,
         "homeOrder": 4,
         "releaseYear": "2024"
+    },
+    {
+        "id": "shi-jie-mo-mo-ri",
+        "title": "世界末末日",
+        "author": "Dean Huo",
+        "date": "2024-01-02",
+        "cover": "assets/images/lyrics/shi-jie-mo-mo-ri.jpg",
+        "summary": "零零碎碎,铺在朽木藤椅上,历史广场,多少人的懦弱被埋葬,就让我的倔强,连同世界末末日,燃尽最后一丝亮,留芳名百世",
+        "contentPath": "assets/lyrics/shi-jie-mo-mo-ri.md",
+        "order": 5,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2024"
+    },
+    {
+        "id": "ti-zui-yang-fu-er-mo-si",
+        "title": "替罪羊福尔摩斯",
+        "author": "Dean Huo",
+        "date": "2024-01-02",
+        "cover": "assets/images/lyrics/ti-zui-yang-fu-er-mo-si.jpg",
+        "summary": "黑色的窗帘 漏过一丝光，听不见声响 狠摔在黑色地板上，福尔摩斯说这光斑的碎片杂乱无章，且让他闭上眼睛还原案发现场",
+        "contentPath": "assets/lyrics/ti-zui-yang-fu-er-mo-si.md",
+        "audioPath": "assets/audio/ti-zui-yang-fu-er-mo-si.mp3",
+        "order": 6,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2024"
+    },
+    {
+        "id": "ma-che-bei-shang",
+        "title": "马车北上",
+        "author": "Dean Huo",
+        "date": "2024-01-02",
+        "cover": "assets/images/lyrics/ma-che-bei-shang.jpg",
+        "summary": "红豆树荫下，被竹篾拉长的艳阳，临摹后山芦苇，霜商时节 醉翁的荡漾",
+        "contentPath": "assets/lyrics/ma-che-bei-shang.md",
+        "order": 7,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2024"
+    },
+    {
+        "id": "tong-lei-xiang",
+        "title": "同类项",
+        "author": "Dean Huo",
+        "date": "2024-01-02",
+        "cover": "assets/images/lyrics/tong-lei-xiang.jpg",
+        "summary": "木屋旁的落羽松开始泛黄，黄昏下的爱也倒映在枯水期的水塘，忘记沉默了多久，你只是用树枝在泥巴上留了诗两行",
+        "contentPath": "assets/lyrics/tong-lei-xiang.md",
+        "order": 8,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2024"
     }
 ]

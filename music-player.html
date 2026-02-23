@@ -4,332 +4,478 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Music Player | Dean Huo</title>
+    <title>Music Player | Orbit Design</title>
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/style.css">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        :root {
-            --player-bg: rgba(13, 13, 13, 0.85);
-            --glass-border: rgba(255, 255, 255, 0.1);
-        }
-
         body {
             height: 100vh;
             margin: 0;
             overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #000;
-        }
-
-        .bg-blur {
-            position: fixed;
-            inset: -50px;
-            background-size: cover;
-            background-position: center;
-            filter: blur(40px) brightness(0.4);
-            z-index: -1;
-            transition: background-image 0.5s ease;
-        }
-
-        .player-container {
-            width: 90%;
-            max-width: 1100px;
-            height: 80vh;
-            background: var(--player-bg);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: var(--radius-lg);
-            display: grid;
-            grid-template-rows: auto 1fr auto;
-            overflow: hidden;
-            animation: fadeIn 0.8s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: scale(0.95);
-            }
-
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-
-        /* Header */
-        .player-header {
-            padding: var(--spacing-lg);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .back-btn {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: var(--text-secondary);
-            font-size: 18px;
-            cursor: pointer;
-            transition: var(--transition-fast);
-        }
-
-        .back-btn:hover {
-            color: var(--accent-color);
-            transform: translateX(-4px);
-        }
-
-        /* Main Content */
-        .player-main {
-            display: grid;
-            grid-template-columns: 1fr 1.2fr;
-            gap: var(--spacing-xxl);
-            padding: 0 var(--spacing-xxl) var(--spacing-lg);
-            overflow: hidden;
-        }
-
-        /* Left side: Cover & Info */
-        .left-side {
+            background: #05070a;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            gap: var(--spacing-lg);
+            user-select: none;
         }
 
-        .cover-art {
-            width: 100%;
-            aspect-ratio: 1;
-            border-radius: var(--radius-md);
+        /* Dynamic Background & Stars */
+        .dynamic-bg-container {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background: radial-gradient(circle at 50% 45%, #0d121f 0%, #05070a 100%);
+        }
+
+        .cover-blur-bg {
+            position: absolute;
+            inset: -20px;
             background-size: cover;
             background-position: center;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+            filter: blur(100px) brightness(0.12);
+            opacity: 0.5;
+            transition: background-image 1.2s ease;
         }
 
-        .track-meta h1 {
-            font-size: 32px;
-            margin-bottom: 4px;
+        .stars-container {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 1.5s ease;
+            pointer-events: none;
         }
 
-        .track-meta p {
-            color: var(--text-secondary);
-            font-size: 18px;
+        .is-playing .stars-container {
+            opacity: 1;
         }
 
-        .description-box {
-            margin-top: var(--spacing-md);
-            padding: var(--spacing-md);
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: var(--radius-sm);
-            font-size: 14px;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            max-height: 80px;
-            overflow-y: auto;
+        .star {
+            position: absolute;
+            background: #fff;
+            border-radius: 50%;
+            filter: blur(0.5px);
+            animation: twinkle var(--duration) infinite ease-in-out;
+            opacity: 0.3;
         }
 
-        /* Right side: Lyrics */
-        .lyrics-panel {
+        @keyframes twinkle {
+
+            0%,
+            100% {
+                opacity: 0.2;
+                transform: scale(0.8);
+            }
+
+            50% {
+                opacity: 0.8;
+                transform: scale(1.2);
+            }
+        }
+
+        /* Essential Player Layout */
+        .player-content {
             position: relative;
-            padding: 40vh 0;
-            /* Huge padding to allow centering any line */
-            overflow-y: auto;
-            scrollbar-width: none;
-            scroll-behavior: smooth;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            justify-content: space-between;
+            padding: 40px 0;
         }
 
-        .lyrics-panel::-webkit-scrollbar {
-            display: none;
+        /* Top Meta */
+        .track-header {
+            position: relative;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        .track-header h1 {
+            font-size: 26px;
+            font-weight: 500;
+            margin: 0;
+            color: #fff;
+        }
+
+        .track-header p {
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.3);
+            margin: 6px 0 0 0;
+        }
+
+        /* Orbit & Carousel Container */
+        .center-stage {
+            position: relative;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+
+        /* 3D Carousel Responsive Sizing */
+        .carousel-view {
+            position: relative;
+            width: 100%;
+            height: clamp(200px, 40vh, 400px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            perspective: 1200px;
+            z-index: 20;
+        }
+
+        .carousel-inner {
+            position: relative;
+            width: clamp(180px, 35vh, 320px);
+            height: clamp(180px, 35vh, 320px);
+            transform-style: preserve-3d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cover-card {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            border-radius: 12px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+            transition: all 0.7s cubic-bezier(0.19, 1, 0.22, 1);
+            cursor: pointer;
+            overflow: hidden;
+            display: block;
+        }
+
+        /* Card States based on responsive units */
+        .cover-card.active {
+            transform: translateZ(clamp(50px, 10vh, 120px));
+            z-index: 10;
+            opacity: 1;
+            box-shadow: 0 40px 80px rgba(0, 0, 0, 0.7);
+        }
+
+        .cover-card.prev {
+            transform: translateX(calc(clamp(-280px, -35vw, -180px))) translateZ(0) rotateY(35deg) scale(0.8);
+            z-index: 5;
+            opacity: 0.3;
+            filter: brightness(0.6) blur(1px);
+        }
+
+        .cover-card.next {
+            transform: translateX(calc(clamp(180px, 35vw, 280px))) translateZ(0) rotateY(-35deg) scale(0.8);
+            z-index: 5;
+            opacity: 0.3;
+            filter: brightness(0.6) blur(1px);
+        }
+
+        .cover-card.hidden {
+            transform: scale(0.4) translateZ(-200px);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Orbiting Progress Ring */
+        .orbit-track {
+            position: absolute;
+            width: clamp(600px, 90vw, 1000px);
+            height: 25vh;
+            /* Increased to allow deeper arc */
+            max-height: 280px;
+            min-height: 150px;
+            bottom: -15vh;
+            /* Pushed significantly lower to avoid overlap with cover images */
+            z-index: 15;
+            pointer-events: none;
+            /* Fading edges using mask */
+            mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+            -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+        }
+
+        .orbit-svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        .orbit-base {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.05);
+            stroke-width: 3;
+        }
+
+        .orbit-fill {
+            fill: none;
+            stroke: url(#green-theme-gradient);
+            stroke-width: 4;
+            /* Thicker progress line */
+            stroke-linecap: round;
+            filter: drop-shadow(0 0 12px rgba(0, 229, 122, 0.5));
+            transition: stroke-dashoffset 0.1s linear;
+        }
+
+        .orbit-dot {
+            fill: #00e57a;
+            filter: drop-shadow(0 0 15px #00e57a);
+        }
+
+        .time-display {
+            position: absolute;
+            width: 100%;
+            max-width: 780px;
+            display: flex;
+            justify-content: space-between;
+            bottom: -15vh;
+            /* Matches orbit-track bottom for visual alignment */
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.2);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Progress Slider Input */
+        .progress-hitbox {
+            position: absolute;
+            width: 800px;
+            height: 80px;
+            bottom: 10px;
+            z-index: 30;
+            cursor: pointer;
+            opacity: 0;
+        }
+
+        /* Lyrics Panel */
+        .lyrics-section {
+            width: 100%;
+            height: clamp(80px, 15vh, 120px);
+            position: relative;
+            text-align: center;
+            margin-top: 4vh;
+            /* Push away from the center stage/orbit */
+            margin-bottom: 2vh;
+            mask-image: linear-gradient(to bottom, transparent, white 20%, white 80%, transparent);
+            overflow: hidden;
+            z-index: 20;
+            /* Ensure lyrics render above background cleanly */
         }
 
         .lyric-line {
-            font-size: 24px;
-            line-height: 2;
-            margin: var(--spacing-xl) 0;
-            color: rgba(255, 255, 255, 0.2);
-            transition: all 0.3s ease;
-            cursor: pointer;
-            font-weight: 500;
-            text-align: center;
-            /* Center text as well */
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 100%;
+            font-size: 19px;
+            transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+            opacity: 0;
+            transform: translateY(15vh);
+            pointer-events: none;
+            margin: 0;
+            padding: 0;
         }
 
         .lyric-line.active {
-            color: var(--accent-color);
-            transform: scale(1.4);
-            /* Big focus */
             opacity: 1;
-            text-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+            transform: translateY(-50%);
+            font-weight: 500;
+            color: #fff;
+            font-size: 22px;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
         }
 
-        .lyric-line:hover {
-            color: rgba(255, 255, 255, 0.6);
+        .lyric-line.near-prev {
+            opacity: 0.35;
+            color: #6a7c93;
+            font-size: 17px;
+            transform: translateY(-160%);
         }
 
-        /* Bottom: Player Controls */
-        .player-footer {
-            background: rgba(0, 0, 0, 0.3);
-            padding: var(--spacing-xl) var(--spacing-xxl);
-            display: flex;
-            flex-direction: column;
-            gap: var(--spacing-lg);
+        .lyric-line.near-next {
+            opacity: 0.35;
+            color: #6a7c93;
+            font-size: 17px;
+            transform: translateY(60%);
         }
 
-        .progress-row {
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-lg);
+        .lyric-line.far-prev {
+            opacity: 0;
+            transform: translateY(-250%);
         }
 
-        .play-pause-btn-mini {
-            width: 48px;
-            height: 48px;
-            background: #fff;
-            color: #000;
-            border-radius: 50%;
+        .lyric-line.far-next {
+            opacity: 0;
+            transform: translateY(150%);
+        }
+
+        /* Controls */
+        .player-controls {
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            border: none;
-            flex-shrink: 0;
-            transition: var(--transition-fast);
+            gap: 45px;
+            margin-bottom: 30px;
         }
 
-        .play-pause-btn-mini:hover {
-            background: var(--accent-color);
+        .control-btn {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn:hover {
+            color: #fff;
             transform: scale(1.1);
         }
 
-        .progress-container {
-            flex: 1;
-            height: 6px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-            position: relative;
-            cursor: pointer;
+        .play-btn {
+            width: 76px;
+            height: 76px;
+            background: #fff;
+            color: #000;
+            border-radius: 50%;
+            font-size: 32px;
+            box-shadow: 0 10px 25px rgba(255, 255, 255, 0.15);
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+            transition: all 0.2s ease;
         }
 
-        .progress-bar {
-            height: 100%;
-            background: var(--accent-gradient);
-            border-radius: 3px;
-            width: 0%;
+        .play-btn:hover {
+            transform: scale(1.05);
+            background: #f0f0f0;
         }
 
-        .time-label {
-            font-size: 13px;
-            color: var(--text-secondary);
-            font-family: var(--font-mono);
-            min-width: 45px;
+        .play-btn:active {
+            transform: scale(0.95);
+            background: #e0e0e0;
         }
 
-        .nav-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+        /* Dual Icon Toggle for Performance - No more JS lag */
+        .play-btn .icon-pause {
+            display: none !important;
         }
 
-        .btn-nav {
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: var(--transition-fast);
-            padding: 8px;
+        .is-playing .play-btn .icon-play {
+            display: none !important;
         }
 
-        .btn-nav:hover {
-            color: var(--accent-color);
-            transform: scale(1.2);
+        .is-playing .play-btn .icon-pause {
+            display: block !important;
         }
 
-        /* Mobile Adjustments */
-        @media (max-width: 768px) {
-            .player-main {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto 1fr;
-                padding: 0 var(--spacing-lg);
+        /* Dual Icon Toggle System - Removed */
+
+        .btn-side {
+            font-size: 20px;
+            opacity: 0.5;
+        }
+
+        /* Extra Icons matching Design */
+        .shuffle-btn,
+        .queue-btn {
+            font-size: 18px;
+        }
+
+        @media (max-width: 900px) {
+            .orbit-track {
+                width: 90%;
             }
 
-            .left-side {
-                flex-direction: row;
-                align-items: center;
-                gap: var(--spacing-md);
+            .carousel-inner {
+                width: 280px;
+                height: 280px;
             }
 
-            .cover-art {
-                width: 100px;
+            .cover-card.prev {
+                transform: translateX(-160px) scale(0.7) rotateY(20deg);
             }
 
-            .track-meta h1 {
-                font-size: 20px;
-            }
-
-            .track-meta p {
-                font-size: 14px;
-            }
-
-            .description-box {
-                display: none;
-            }
-
-            .mini-info {
-                display: none;
+            .cover-card.next {
+                transform: translateX(160px) scale(0.7) rotateY(-20deg);
             }
         }
     </style>
 </head>
 
 <body>
-    <div id="bg-blur" class="bg-blur"></div>
-
-    <div class="player-container">
-        <header class="player-header">
-            <div class="back-btn" onclick="location.href='music.html'">
-                <i data-lucide="chevron-left"></i>
-                <span id="header-playlist">Playlist</span>
-            </div>
-        </header>
-
-        <main class="player-main">
-            <section class="left-side">
-                <div id="cover-art" class="cover-art"></div>
-                <div class="track-meta">
-                    <h1 id="track-title">Loading...</h1>
-                    <p id="track-artist">Loading...</p>
-                    <div id="track-description" class="description-box"></div>
-                </div>
-            </section>
-
-            <section id="lyrics-panel" class="lyrics-panel">
-                <!-- Lyrics go here -->
-            </section>
-        </main>
-
-        <footer class="player-footer">
-            <div class="progress-row">
-                <button id="play-pause-btn" class="play-pause-btn-mini">
-                    <i data-lucide="play" fill="currentColor"></i>
-                </button>
-                <span id="current-time" class="time-label">0:00</span>
-                <div id="progress-container" class="progress-container">
-                    <div id="progress-fill" class="progress-bar"></div>
-                </div>
-                <span id="duration" class="time-label">0:00</span>
-            </div>
-
-            <div class="nav-row">
-                <button id="prev-btn" class="btn-nav"><i data-lucide="skip-back" size="24"></i></button>
-                <button id="next-btn" class="btn-nav"><i data-lucide="skip-forward" size="24"></i></button>
-            </div>
-        </footer>
+    <div class="dynamic-bg-container" id="bg-container">
+        <div class="cover-blur-bg" id="cover-blur"></div>
+        <div class="stars-container" id="stars-container"></div>
     </div>
 
-    <audio id="audio-player"></audio>
+    <main class="player-content">
+        <!-- Top Metadata -->
+        <div class="track-header">
+            <h1 id="track-title">--</h1>
+            <p id="track-artist">--</p>
+        </div>
+
+        <!-- Carousel & Progress Region -->
+        <div class="center-stage">
+            <div class="carousel-view">
+                <div class="carousel-inner" id="carousel-deck">
+                    <!-- Cards injected by JS -->
+                </div>
+            </div>
+
+            <div class="orbit-track">
+                <svg class="orbit-svg" viewBox="0 0 1000 300">
+                    <defs>
+                        <linearGradient id="green-theme-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#00a35c" />
+                            <stop offset="50%" stop-color="#00e57a" />
+                            <stop offset="100%" stop-color="#00ff88" />
+                        </linearGradient>
+                    </defs>
+                    <path class="orbit-base" d="M 50,50 Q 500,300 950,50" />
+                    <path id="progress-orbit" class="orbit-fill" d="M 50,50 Q 500,300 950,50" pathLength="100"
+                        stroke-dasharray="100" stroke-dashoffset="100" />
+                    <circle id="orbit-dot" class="orbit-dot" cx="50" cy="50" r="7" />
+                </svg>
+            </div>
+
+            <div class="time-display">
+                <span id="time-current">0:00</span>
+                <span id="time-total">0:00</span>
+            </div>
+
+            <input type="range" id="progress-slider" class="progress-hitbox" min="0" max="100" value="0">
+        </div>
+
+        <!-- Lyrics Region -->
+        <div class="lyrics-section" id="lyrics-display">
+            <!-- Lyrics lines injected by JS -->
+        </div>
+
+        <!-- Controls Region (Removed Point 4 & 5) -->
+        <div class="player-controls">
+            <button class="control-btn" id="btn-prev"><i data-lucide="skip-back" size="28"
+                    fill="currentColor"></i></button>
+
+            <button class="control-btn play-btn" id="btn-toggle">
+                <i data-lucide="play" class="icon-play" fill="currentColor"></i>
+                <i data-lucide="pause" class="icon-pause" fill="currentColor"></i>
+            </button>
+
+            <button class="control-btn" id="btn-next"><i data-lucide="skip-forward" size="28"
+                    fill="currentColor"></i></button>
+        </div>
+    </main>
+
+    <audio id="audio-element"></audio>
 
     <script src="js/music-player.js"></script>
     <script>lucide.createIcons();</script>
