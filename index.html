@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dean Huo | Personal Website</title>
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+
+    <!-- New Header Section -->
+    <header class="site-header container">
+        <h1 class="header-title font-heading">
+            在结构之外，留一束光
+        </h1>
+        <div class="header-tags">
+            <div class="header-tag" style="gap: 8px;">
+                <i data-lucide="layers" style="width: 16px; color: var(--accent-color);"></i> 产品
+            </div>
+            <div class="header-tag" style="gap: 8px;">
+                <i data-lucide="aperture" style="width: 16px; color: var(--accent-color);"></i> 光影
+            </div>
+            <div class="header-tag" style="gap: 8px;">
+                <i data-lucide="feather" style="width: 16px; color: var(--accent-color);"></i> 词句
+            </div>
+        </div>
+    </header>
+
+    <!-- Sticky Navigation -->
+    <div class="sticky-nav-container">
+        <nav class="sticky-nav">
+            <a href="index.html" class="nav-btn active" data-tooltip="Home">
+                <i data-lucide="home" style="width: 20px;"></i>
+            </a>
+            <a href="photos.html" target="_blank" class="nav-btn" data-tooltip="Photos">
+                <i data-lucide="camera" style="width: 20px;"></i>
+            </a>
+            <a href="lyrics.html" target="_blank" class="nav-btn" data-tooltip="Lyrics">
+                <i data-lucide="file-text" style="width: 20px;"></i>
+            </a>
+            <a href="music.html" target="_blank" class="nav-btn" data-tooltip="Music">
+                <i data-lucide="music" style="width: 20px;"></i>
+            </a>
+            <a href="projects.html" target="_blank" class="nav-btn" data-tooltip="Projects">
+                <i data-lucide="briefcase" style="width: 20px;"></i>
+            </a>
+            <a href="mailto:contact@deanhuo.com" class="hire-btn-sm">
+                <i data-lucide="plus-circle" style="width: 16px;"></i> Hire me
+            </a>
+        </nav>
+    </div>
+
+    <main class="container bento-grid">
+
+        <!-- Hero Card (Left) -->
+        <div class="card hero-flip-card" style="grid-column: span 7; padding: 0;">
+            <div class="hero-flip-inner" id="hero-flip-inner">
+                <!-- Front Side: Original Hero -->
+                <div class="hero-front active" style="padding: 40px;">
+                    <div class="hero-card-inner">
+                        <div class="hero-text">
+                            <div
+                                style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(0, 255, 136, 0.1); border-radius: 999px; color: var(--accent-color); font-size: 12px; width: fit-content; margin-bottom: 24px;">
+                                <div
+                                    style="width: 8px; height: 8px; background: var(--accent-color); border-radius: 50%;">
+                                </div>
+                                Available to Hire
+                            </div>
+                            <h2 style="font-size: 48px; margin-bottom: 16px; font-weight: 300;">
+                                It's <span style="font-weight: 600;">Dean Huo</span>
+                            </h2>
+                            <p
+                                style="color: var(--text-secondary); max-width: 450px; margin-bottom: 32px; line-height: 1.8;">
+                                教育与全球 IoT 领域的产品经理。<br>
+                                5年教育产品沉淀，3年出海智能硬件实战。<br>
+                                Vibe Coding 一员，喜欢打破结构、重组想象。<br>
+                                热爱智能设备与光影记录，理性构建，感性表达。
+                            </p>
+                            <button id="chat-btn" class="btn btn-primary" style="width: fit-content;">
+                                <i data-lucide="message-circle" style="margin-right: 8px;"></i> 一起聊聊
+                            </button>
+                        </div>
+
+                        <!-- Icon Grid (Right) -->
+                        <div class="hero-icon-grid">
+                            <div class="hero-icon-box"><i data-lucide="figma"
+                                    style="color: #F24E1E; width: 28px; height: 28px;"></i></div>
+                            <div class="hero-icon-box"><i data-lucide="atom"
+                                    style="color: #61DAFB; width: 28px; height: 28px;"></i></div>
+                            <div class="hero-icon-box"><i data-lucide="box"
+                                    style="color: #fff; width: 28px; height: 28px;"></i>
+                            </div>
+
+                            <div class="hero-icon-box"><i data-lucide="wind"
+                                    style="color: #38BDF8; width: 28px; height: 28px;"></i></div>
+                            <div class="hero-icon-box"><i data-lucide="book-open"
+                                    style="color: #fff; width: 28px; height: 28px;"></i></div>
+                            <div class="hero-icon-box"><i data-lucide="code"
+                                    style="color: #007ACC; width: 28px; height: 28px;"></i></div>
+
+                            <div class="hero-icon-box"><i data-lucide="github"
+                                    style="color: #fff; width: 28px; height: 28px;"></i></div>
+                            <div class="hero-icon-box"
+                                style="font-family: monospace; font-weight: bold; font-size: 20px; color: #3178C6;">TS
+                            </div>
+                            <div class="hero-icon-box"><i data-lucide="more-horizontal"
+                                    style="color: #888; width: 28px; height: 28px;"></i></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Back Side: Electronic Business Card -->
+                <div class="hero-back" style="padding: 40px;">
+                    <div class="ecard-container">
+                        <div class="ecard-header">
+                            <button id="back-to-hero" class="ecard-back-btn">
+                                <i data-lucide="arrow-left" style="width: 16px;"></i> 返回
+                            </button>
+                            <div class="ecard-logo">
+                                <span class="ecard-logo-dot"></span>
+                                <span class="ecard-logo-text">DIGITAL CARD</span>
+                            </div>
+                        </div>
+
+                        <div class="ecard-body">
+                            <div class="ecard-info">
+                                <h3 class="ecard-name">Dean-Huo</h3>
+                                <div class="ecard-details">
+                                    <div class="ecard-detail-item">
+                                        <i data-lucide="mail"></i>
+                                        <span>dinosamw@gmail.com</span>
+                                    </div>
+                                    <div class="ecard-detail-item">
+                                        <i data-lucide="globe"></i>
+                                        <a href="https://www.startlytab.com" target="_blank">www.startlytab.com</a>
+                                    </div>
+                                    <div class="ecard-detail-item">
+                                        <i data-lucide="message-square"></i>
+                                        <span>WeChat: Dean-Huo</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="ecard-qr-section">
+                                <div class="ecard-qr-wrapper">
+                                    <img src="assets/images/wechat-qr.png" alt="WeChat QR Code" class="ecard-qr">
+                                </div>
+                                <span class="ecard-qr-label">微信扫一扫</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lyrics Carousel (Right) -->
+        <div class="card lyrics-carousel-container" id="lyrics-home-carousel">
+            <!-- Content will be injected by JavaScript -->
+            <div
+                style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);">
+                Loading...
+            </div>
+        </div>
+
+        <!-- Vinyl Record Module (Left) -->
+        <a href="https://music.163.com/#/song?id=1301435253" target="_blank" class="card vinyl-card">
+            <div class="vinyl-overlay">
+                <div class="vinyl-play-btn">
+                    <i data-lucide="play" style="width: 24px; height: 24px; fill: white;"></i>
+                </div>
+                <div class="vinyl-title">《爬行动物》</div>
+            </div>
+            <div style="position: absolute; bottom: 20px; left: 20px; z-index: 1;">
+                <div
+                    style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(0,0,0,0.6); border-radius: 999px; backdrop-filter: blur(4px);">
+                    <i data-lucide="disc" style="width: 14px; color: var(--accent-color);"></i>
+                    <span style="font-size: 12px; color: #fff;">《爬行动物》by Dean Huo&苏阳</span>
+                </div>
+            </div>
+        </a>
+
+        <!-- Music Works Module (Right) -->
+        <div class="card music-works-card" id="music-home-module">
+            <div class="module-header" style="margin-bottom: 32px;">
+                <div class="module-title"
+                    style="color: var(--text-primary); font-size: 14px; font-weight: 600; letter-spacing: 1px;">
+                    <span style="background: var(--accent-color); width: 6px; height: 6px;"></span> SOUND
+                </div>
+            </div>
+            <h3 class="font-heading" style="font-size: 32px; margin-bottom: 24px;">Music Works</h3>
+            <div id="music-list-container">
+                <!-- Music items injected here -->
+                <div style="color: var(--text-secondary); text-align: center; padding: 20px;">Loading music...</div>
+            </div>
+            <div class="music-works-footer"
+                style="margin-top: auto; padding-top: 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                <p style="font-size: 11px; color: var(--text-secondary); font-style: italic; max-width: 150px;">A
+                    curated collection of sonic narratives.</p>
+                <a href="music.html" class="explore-link"
+                    style="font-size: 11px; color: var(--text-primary); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; transition: color 0.3s;">
+                    EXPLORE SOUNDCLOUD <i data-lucide="arrow-right" style="width: 12px;"></i>
+                </a>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Photography Showcase Section (New UI Style Reference) -->
+    <section class="photography-showcase container" id="photography-home-section">
+        <div class="photo-showcase-inner">
+            <div class="photo-feature-text">
+                <h2 class="font-heading showcase-title" id="feature-photo-title">Street is Life —</h2>
+                <p class="showcase-desc" id="feature-photo-desc">A Remarkable Photographic Journey in the Road of Paris
+                    in the search of life in different prospective</p>
+
+                <div class="photo-author-tag">
+                    <img src="https://ui-avatars.com/api/?name=Dean+Huo&background=0D0D0D&color=fff" alt="Dean Huo"
+                        class="author-avatar">
+                    <div class="author-info">
+                        <span class="author-name">DEAN HUO</span>
+                        <span class="author-role">Member of SPI</span>
+                    </div>
+                </div>
+
+                <div class="showcase-actions">
+                    <a href="photos.html" class="btn-outline-gold">SEE FULL GALLERY</a>
+                </div>
+            </div>
+
+            <div class="photo-main-display">
+                <div class="scroll-down-vertical">
+                    <span>SCROLL DOWN</span>
+                    <i data-lucide="chevron-down"></i>
+                </div>
+                <div class="main-image-wrapper">
+                    <img src="" alt="Feature Photo" id="main-feature-img">
+                </div>
+            </div>
+
+            <div class="photo-thumbnails-container">
+                <div class="photo-thumbnails-track" id="photo-thumbnails-track">
+                    <!-- Thumbnails injected here -->
+                </div>
+                <a href="photos.html" class="explore-thumbs-btn">
+                    Explore <i data-lucide="play" style="width: 12px; fill: currentColor;"></i>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- SVG Filter for Particle Dissolve Effect -->
+    <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
+        <defs>
+            <filter id="particle-dissolve" x="-20%" y="-20%" width="140%" height="140%">
+                <feTurbulence id="turbulence" type="fractalNoise" baseFrequency="0" numOctaves="3" result="noise" />
+                <feDisplacementMap id="displacement" in="SourceGraphic" in2="noise" scale="0" xChannelSelector="R"
+                    yChannelSelector="G" />
+            </filter>
+        </defs>
+    </svg>
+
+    <script src="js/main.js?v=1.0"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>

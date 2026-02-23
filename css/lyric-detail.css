@@ -1,0 +1,423 @@
+/* Page Structure */
+.page-background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #050505;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding-left: 80px;
+    /* sidebar space */
+    z-index: 1;
+    overflow: hidden;
+}
+
+/* New Left Panel Background System (Matches Reference) */
+.left-panel-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    filter: blur(25px);
+    /* Soft frosted glass effect */
+    transform: scale(1.1);
+    /* Prevent white edges from blur */
+    z-index: 0;
+    transition: background-image 1s ease;
+}
+
+.left-panel-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    /* Deep dark overlay */
+    z-index: 1;
+}
+
+/* Global Noise Grain */
+.page-background::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.1;
+    z-index: 2;
+    pointer-events: none;
+    mix-blend-mode: soft-light;
+}
+
+/* Main Premium Glass Card */
+.glass-card {
+    width: 90%;
+    max-width: 1100px;
+    height: 80vh;
+    background: rgba(5, 5, 5, 0.4);
+    backdrop-filter: blur(60px);
+    -webkit-backdrop-filter: blur(60px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 40px;
+    display: flex;
+    position: relative;
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.9);
+    overflow: hidden;
+    z-index: 5;
+}
+
+/* Left Panel: Vertical Title & Player Positioning */
+.left-panel {
+    flex: 0 0 45%;
+    display: flex;
+    flex-direction: column;
+    padding: 60px 40px 50px 40px;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    position: relative;
+    z-index: 10;
+    overflow: hidden;
+    background: #000;
+}
+
+.title-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    z-index: 5;
+    /* Above bg and overlay */
+}
+
+.title-block {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.vertical-line {
+    width: 1px;
+    height: 100px;
+    background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.2), transparent);
+}
+
+/* Font: Premium Songti (Noto Serif SC 900) */
+.vertical-main-title {
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 52px;
+    font-weight: 900;
+    color: #FFFFFF;
+    letter-spacing: 0.4em;
+    margin: 0;
+    text-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+}
+
+/* New Author Badge Style (Matches Reference) */
+.author-badge {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 6px 16px 6px 6px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.avatar-circle {
+    width: 28px;
+    height: 28px;
+    background: #4F46E5;
+    /* Brand color from reference info */
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+}
+
+.author-name {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 500;
+}
+
+/* Meta Info Line */
+.meta-info {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0.1em;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dot {
+    opacity: 0.5;
+}
+
+/* Modern Pill Audio Player */
+.modern-player {
+    background: rgba(5, 5, 5, 0.6);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    width: 320px;
+    height: 52px;
+    border-radius: 26px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: auto;
+    align-self: center;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    z-index: 20;
+}
+
+.modern-player:hover {
+    background: rgba(10, 10, 10, 0.8);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.player-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #FFFFFF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
+}
+
+.player-btn:hover {
+    opacity: 1;
+}
+
+.time-display {
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.6);
+    white-space: nowrap;
+    letter-spacing: 0.05em;
+}
+
+.progress-bar-container {
+    flex: 1;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+}
+
+.progress-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: #FFFFFF;
+    border-radius: 2px;
+    width: 0%;
+}
+
+/* Right Panel: Content Scrolling */
+.right-panel-wrapper {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #050505;
+}
+
+.scroll-mask {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 180px;
+    z-index: 100;
+    pointer-events: none;
+}
+
+.mask-top {
+    top: 0;
+    background: linear-gradient(to bottom, #050505 0%, #050505 40px, transparent 100%);
+}
+
+.mask-bottom {
+    bottom: 0;
+    background: linear-gradient(to top, #050505 0%, #050505 80px, transparent 100%);
+}
+
+.right-panel {
+    flex: 1;
+    padding: 120px 60px 200px 60px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.right-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+.right-panel::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+/* Fixed Nav Info Overlay */
+.fixed-nav-links {
+    position: absolute;
+    bottom: 35px;
+    left: 60px;
+    z-index: 150;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.8;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: none;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 10px rgba(0, 0, 0, 1);
+}
+
+.fixed-nav-links span {
+    display: block;
+}
+
+.lyrics-text-area {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 17px;
+    line-height: 2.6;
+    color: rgba(255, 255, 255, 0.9);
+    letter-spacing: 0.15em;
+    max-width: 600px;
+}
+
+.lyrics-text-area p {
+    margin-bottom: 0;
+    opacity: 0.85;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: default;
+    transform-origin: left center;
+}
+
+.lyrics-text-area p:hover {
+    color: var(--accent-color);
+    opacity: 1;
+    font-size: 19px;
+    /* 高亮行字号再次调大 */
+    transform: translateX(15px);
+    /* 增加位移感 */
+    transition-delay: 0.08s;
+    /* 关键：增加极短的延迟，鼠标快速划过时不触发变化，防止眼晕 */
+}
+
+/* 快速滚动时强制禁用所有高亮状态 */
+body.is-scrolling .lyrics-text-area p {
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-size: 17px !important;
+    transform: none !important;
+    opacity: 0.85 !important;
+    transition: none !important;
+    /* 滚动时立即恢复，不加动画防止延迟感 */
+}
+
+/* 恢复段落间的呼吸感 */
+.lyric-spacer {
+    height: 1.5em;
+    width: 100%;
+}
+
+.lyrics-text-area p:last-child {
+    margin-bottom: 200px;
+}
+
+/* Navigation Arrows */
+.nav-overlay {
+    position: absolute;
+    bottom: 30px;
+    right: 35px;
+    display: flex;
+    gap: 15px;
+    z-index: 200;
+}
+
+.nav-arrow-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.nav-arrow-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 900px) {
+    .glass-card {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+        width: 100%;
+        border-radius: 0;
+    }
+
+    .left-panel {
+        width: 100%;
+        padding: 40px 20px;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .modern-player {
+        align-self: center;
+        margin-top: 40px;
+    }
+
+    .right-panel {
+        padding: 40px 30px;
+    }
+
+    .page-background {
+        padding-left: 0;
+        padding-top: 60px;
+    }
+}

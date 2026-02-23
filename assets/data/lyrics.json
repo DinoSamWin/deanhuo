@@ -1,0 +1,57 @@
+[
+    {
+        "id": "mo-fa",
+        "title": "墨法",
+        "author": "Dean Huo & 苏阳",
+        "date": "2003-11-11",
+        "cover": "assets/images/lyrics/mo-fa.jpg",
+        "summary": "宣纸上定格的水墨画,有你沉淀后的腊月梅花。笔肚饱蘸｜浊化明朝涨墨法，墨泼水饱｜破墨唐宋八大家。",
+        "contentPath": "assets/lyrics/mo-fa.md",
+        "audioPath": "",
+        "order": 1,
+        "showOnHome": true,
+        "homeOrder": 1,
+        "releaseYear": "2023"
+    },
+    {
+        "id": "an-bing-bu-dong",
+        "title": "按兵不动",
+        "author": "Dean Huo",
+        "date": "2024-01-02",
+        "cover": "assets/images/lyrics/an-bing-bu-dong.jpg",
+        "summary": "那边塞的战火,那信使的求和,一品、宰相、乌纱在我眼前左左右的踱",
+        "contentPath": "assets/lyrics/an-bing-bu-dong.md",
+        "audioPath": "assets/audio/an-bing-bu-dong.mp3",
+        "order": 2,
+        "showOnHome": true,
+        "homeOrder": 2,
+        "releaseYear": "2024"
+    },
+    {
+        "id": "bei-wei-35-du",
+        "title": "北纬35°",
+        "author": "Dean Huo",
+        "date": "2024-01-02",
+        "cover": "assets/images/lyrics/bei-wei-35-du.jpg",
+        "summary": "我们看过同一片云,却来自不同的地域,再怎么相信也没有出现奇迹",
+        "contentPath": "assets/lyrics/bei-wei-35-du.md",
+        "audioPath": "assets/audio/bei-wei-35-du.mp3",
+        "order": 3,
+        "showOnHome": true,
+        "homeOrder": 3,
+        "releaseYear": "2024"
+    },
+    {
+        "id": "wei-ni-si-sha-shou",
+        "title": "威尼斯杀手",
+        "author": "Dean Huo",
+        "date": "2024-01-02",
+        "cover": "assets/images/lyrics/wei-ni-si-sha-shou.jpg",
+        "summary": "威尼斯的水,稀释中世纪骑士结痂的泪,伽利略的沉睡,动摇了神父的权威...",
+        "contentPath": "assets/lyrics/wei-ni-si-sha-shou.md",
+        "order": 4,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2024"
+    }
+]

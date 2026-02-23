@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Player | Dean Huo</title>
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --player-bg: rgba(13, 13, 13, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+        }
+
+        .bg-blur {
+            position: fixed;
+            inset: -50px;
+            background-size: cover;
+            background-position: center;
+            filter: blur(40px) brightness(0.4);
+            z-index: -1;
+            transition: background-image 0.5s ease;
+        }
+
+        .player-container {
+            width: 90%;
+            max-width: 1100px;
+            height: 80vh;
+            background: var(--player-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            overflow: hidden;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* Header */
+        .player-header {
+            padding: var(--spacing-lg);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-secondary);
+            font-size: 18px;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+
+        .back-btn:hover {
+            color: var(--accent-color);
+            transform: translateX(-4px);
+        }
+
+        /* Main Content */
+        .player-main {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: var(--spacing-xxl);
+            padding: 0 var(--spacing-xxl) var(--spacing-lg);
+            overflow: hidden;
+        }
+
+        /* Left side: Cover & Info */
+        .left-side {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: var(--spacing-lg);
+        }
+
+        .cover-art {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: var(--radius-md);
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .track-meta h1 {
+            font-size: 32px;
+            margin-bottom: 4px;
+        }
+
+        .track-meta p {
+            color: var(--text-secondary);
+            font-size: 18px;
+        }
+
+        .description-box {
+            margin-top: var(--spacing-md);
+            padding: var(--spacing-md);
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        /* Right side: Lyrics */
+        .lyrics-panel {
+            position: relative;
+            padding: 40vh 0;
+            /* Huge padding to allow centering any line */
+            overflow-y: auto;
+            scrollbar-width: none;
+            scroll-behavior: smooth;
+        }
+
+        .lyrics-panel::-webkit-scrollbar {
+            display: none;
+        }
+
+        .lyric-line {
+            font-size: 24px;
+            line-height: 2;
+            margin: var(--spacing-xl) 0;
+            color: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            font-weight: 500;
+            text-align: center;
+            /* Center text as well */
+        }
+
+        .lyric-line.active {
+            color: var(--accent-color);
+            transform: scale(1.4);
+            /* Big focus */
+            opacity: 1;
+            text-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+        }
+
+        .lyric-line:hover {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        /* Bottom: Player Controls */
+        .player-footer {
+            background: rgba(0, 0, 0, 0.3);
+            padding: var(--spacing-xl) var(--spacing-xxl);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        .progress-row {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-lg);
+        }
+
+        .play-pause-btn-mini {
+            width: 48px;
+            height: 48px;
+            background: #fff;
+            color: #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: none;
+            flex-shrink: 0;
+            transition: var(--transition-fast);
+        }
+
+        .play-pause-btn-mini:hover {
+            background: var(--accent-color);
+            transform: scale(1.1);
+        }
+
+        .progress-container {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--accent-gradient);
+            border-radius: 3px;
+            width: 0%;
+        }
+
+        .time-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            min-width: 45px;
+        }
+
+        .nav-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .btn-nav {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: var(--transition-fast);
+            padding: 8px;
+        }
+
+        .btn-nav:hover {
+            color: var(--accent-color);
+            transform: scale(1.2);
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            .player-main {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+                padding: 0 var(--spacing-lg);
+            }
+
+            .left-side {
+                flex-direction: row;
+                align-items: center;
+                gap: var(--spacing-md);
+            }
+
+            .cover-art {
+                width: 100px;
+            }
+
+            .track-meta h1 {
+                font-size: 20px;
+            }
+
+            .track-meta p {
+                font-size: 14px;
+            }
+
+            .description-box {
+                display: none;
+            }
+
+            .mini-info {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="bg-blur" class="bg-blur"></div>
+
+    <div class="player-container">
+        <header class="player-header">
+            <div class="back-btn" onclick="location.href='music.html'">
+                <i data-lucide="chevron-left"></i>
+                <span id="header-playlist">Playlist</span>
+            </div>
+        </header>
+
+        <main class="player-main">
+            <section class="left-side">
+                <div id="cover-art" class="cover-art"></div>
+                <div class="track-meta">
+                    <h1 id="track-title">Loading...</h1>
+                    <p id="track-artist">Loading...</p>
+                    <div id="track-description" class="description-box"></div>
+                </div>
+            </section>
+
+            <section id="lyrics-panel" class="lyrics-panel">
+                <!-- Lyrics go here -->
+            </section>
+        </main>
+
+        <footer class="player-footer">
+            <div class="progress-row">
+                <button id="play-pause-btn" class="play-pause-btn-mini">
+                    <i data-lucide="play" fill="currentColor"></i>
+                </button>
+                <span id="current-time" class="time-label">0:00</span>
+                <div id="progress-container" class="progress-container">
+                    <div id="progress-fill" class="progress-bar"></div>
+                </div>
+                <span id="duration" class="time-label">0:00</span>
+            </div>
+
+            <div class="nav-row">
+                <button id="prev-btn" class="btn-nav"><i data-lucide="skip-back" size="24"></i></button>
+                <button id="next-btn" class="btn-nav"><i data-lucide="skip-forward" size="24"></i></button>
+            </div>
+        </footer>
+    </div>
+
+    <audio id="audio-player"></audio>
+
+    <script src="js/music-player.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+
+</html>

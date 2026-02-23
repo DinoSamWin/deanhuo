@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>歌词详情 | Dean Huo</title>
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/lyric-detail.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700;900&family=ZCOOL+XiaoWei&family=Ma+Shan+Zheng&family=Inter:wght@300;400;600&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <!-- 侧边导航 -->
+    <nav class="sidebar-nav">
+        <a href="index.html" class="nav-btn" data-tooltip="首页"><i data-lucide="home" style="width: 20px;"></i></a>
+        <a href="photos.html" class="nav-btn" data-tooltip="相册"><i data-lucide="camera" style="width: 20px;"></i></a>
+        <a href="lyrics.html" class="nav-btn active" data-tooltip="歌词"><i data-lucide="file-text"
+                style="width: 20px;"></i></a>
+        <a href="music.html" class="nav-btn" data-tooltip="音乐"><i data-lucide="music" style="width: 20px;"></i></a>
+        <a href="projects.html" class="nav-btn" data-tooltip="项目"><i data-lucide="briefcase"
+                style="width: 20px;"></i></a>
+    </nav>
+
+    <main class="page-background">
+        <div class="glass-card">
+            <!-- Left Side: Title & Player -->
+            <div class="left-panel">
+                <div id="left-panel-bg" class="left-panel-bg"></div>
+                <div class="left-panel-overlay"></div>
+
+                <div class="title-section">
+                    <div class="title-block">
+                        <div class="vertical-line"></div>
+                        <h1 id="lyric-title" class="vertical-main-title">加载中</h1>
+                        <div class="vertical-line"></div>
+                    </div>
+
+                    <div class="author-badge">
+                        <span class="avatar-circle">DH</span>
+                        <span class="author-name">by <span id="lyric-author">Dean Huo</span></span>
+                    </div>
+
+                    <div class="meta-info">
+                        <span id="lyric-date">加载中...</span>
+                        <span class="dot">•</span>
+                        <span>8 MIN READ</span>
+                    </div>
+                </div>
+
+                <div id="audio-module" class="modern-player">
+                    <button id="play-btn" class="player-btn"><i data-lucide="play"></i></button>
+                    <div class="time-display"><span id="current-time">0:00</span> / <span id="duration">0:00</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="progress-bar" class="progress-bar"></div>
+                    </div>
+                    <button id="volume-btn" class="player-btn"><i data-lucide="volume-2"></i></button>
+                    <audio id="lyric-audio"></audio>
+                </div>
+            </div>
+
+            <!-- Right Side: Lyrics Content -->
+            <div class="right-panel-wrapper">
+                <div class="scroll-mask mask-top"></div>
+                <div class="scroll-mask mask-bottom"></div>
+
+                <div class="right-panel">
+                    <article id="lyric-body" class="lyrics-text-area">
+                        <!-- 歌词内容 -->
+                    </article>
+                </div>
+
+                <div id="fixed-nav-info" class="fixed-nav-links">
+                    <!-- 动态注入 上一篇 / 下一篇 文案 -->
+                </div>
+            </div>
+
+            <!-- Navigation Overlay (Arrows) -->
+            <div class="nav-overlay">
+                <button id="prev-btn" class="nav-arrow-btn" title="上一篇"><i data-lucide="chevron-left"></i></button>
+                <button id="next-btn" class="nav-arrow-btn" title="下一篇"><i data-lucide="chevron-right"></i></button>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="js/lyric-detail.js?v=5.1"></script>
+    <script>lucide.createIcons();</script>
+</body>
+
+</html>

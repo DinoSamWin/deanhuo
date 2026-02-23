@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lyrics | Dean Huo</title>
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar-nav">
+        <a href="index.html" class="nav-btn" data-tooltip="Home"><i data-lucide="home" style="width: 20px;"></i></a>
+        <a href="photos.html" class="nav-btn" data-tooltip="Photos"><i data-lucide="camera"
+                style="width: 20px;"></i></a>
+        <a href="lyrics.html" class="nav-btn active" data-tooltip="Lyrics"><i data-lucide="file-text"
+                style="width: 20px;"></i></a>
+        <a href="music.html" class="nav-btn" data-tooltip="Music"><i data-lucide="music" style="width: 20px;"></i></a>
+        <a href="projects.html" class="nav-btn" data-tooltip="Projects"><i data-lucide="briefcase"
+                style="width: 20px;"></i></a>
+    </nav>
+
+    <main class="container" style="max-width: 1200px;">
+        <div style="text-align: center; margin-bottom: 60px; margin-top: 40px;">
+            <h1 class="font-heading" style="font-size: 48px; margin-bottom: 16px;">霍澍的词</h1>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <img src="assets/images/jay-avatar-rounded.png" alt="Jay Chou" class="jay-avatar">
+                <span class="text-secondary" style="font-size: 14px;">故事的小黄花，从出生那年就飘着...... 你好，我也是一位杰迷～</span>
+            </div>
+        </div>
+
+        <!-- Lyrics Grid Container -->
+        <div class="lyrics-grid">
+            <!-- Lyrics cards will be injected here by JS -->
+        </div>
+
+    </main>
+
+    <!-- Lyrics Modal -->
+    <div id="lyrics-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+
+            <div class="modal-header-info" style="text-align: center; margin-bottom: 24px;">
+                <h2 id="modal-title" style="margin-bottom: 12px;">Song Title</h2>
+                <!-- Audio Player Container -->
+                <div id="modal-audio-container" style="margin-top: 20px; display: none;">
+                    <audio id="modal-audio" controls
+                        style="width: 100%; border-radius: 50px; background: rgba(255,255,255,0.05);"></audio>
+                </div>
+            </div>
+
+            <div id="modal-content" class="markdown-body">
+                <!-- Lyrics content will be injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>lucide.createIcons();</script>
+    <script src="js/lyrics.js?v=2.1"></script>
+</body>
+
+</html>

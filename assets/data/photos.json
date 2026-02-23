@@ -1,0 +1,42 @@
+[
+    {
+        "id": "street-is-life",
+        "title": "Street is Life",
+        "description": "A Remarkable Photographic Journey in the Road of Paris",
+        "src": "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=1200",
+        "showOnHome": true,
+        "homeOrder": 1,
+        "category": "Street",
+        "date": "Nov 2024"
+    },
+    {
+        "id": "foggy-forest",
+        "title": "Foggy Forest",
+        "description": "Deep in the woods of Scandinavia",
+        "src": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=600",
+        "showOnHome": true,
+        "homeOrder": 2,
+        "category": "Nature",
+        "date": "Oct 2024"
+    },
+    {
+        "id": "mountain-view",
+        "title": "Mountain View",
+        "description": "Sunrise over the Alps",
+        "src": "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=600",
+        "showOnHome": true,
+        "homeOrder": 3,
+        "category": "Nature",
+        "date": "Sep 2024"
+    },
+    {
+        "id": "girl-in-nature",
+        "title": "Girl in Nature",
+        "description": "Portrait session in the fields",
+        "src": "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=600",
+        "showOnHome": true,
+        "homeOrder": 4,
+        "category": "Portrait",
+        "date": "Aug 2024"
+    }
+]

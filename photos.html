@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photos | Dean Huo</title>
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar-nav">
+        <a href="index.html" class="nav-btn" data-tooltip="Home"><i data-lucide="home" style="width: 20px;"></i></a>
+        <a href="photos.html" class="nav-btn active" data-tooltip="Photos"><i data-lucide="camera"
+                style="width: 20px;"></i></a>
+        <a href="lyrics.html" class="nav-btn" data-tooltip="Lyrics"><i data-lucide="file-text"
+                style="width: 20px;"></i></a>
+        <a href="music.html" class="nav-btn" data-tooltip="Music"><i data-lucide="music" style="width: 20px;"></i></a>
+        <a href="projects.html" class="nav-btn" data-tooltip="Projects"><i data-lucide="briefcase"
+                style="width: 20px;"></i></a>
+    </nav>
+
+    <main class="container">
+        <div style="text-align: center; margin-bottom: 60px;">
+            <h1 class="font-heading" style="font-size: 48px;">Photography</h1>
+            <p class="text-secondary">Capturing moments in time.</p>
+        </div>
+
+        <div class="masonry-grid">
+            <!-- Photos will be loaded dynamically here -->
+        </div>
+    </main>
+    <script src="js/photos.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+
+</html>

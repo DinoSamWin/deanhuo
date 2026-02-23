@@ -1,0 +1,50 @@
+[
+    {
+        "id": "bei-wei-35-du",
+        "title": "北纬35°",
+        "artist": "Dean Huo",
+        "genre": "Electronic",
+        "year": "2025",
+        "type": "Original",
+        "cover": "assets/images/lyrics/bei-wei-35-du.jpg",
+        "url": "assets/audio/bei-wei-35-du.mp3",
+        "description": "A journey through digital soundscapes and ethereal melodies, exploring the intersection of technology and human emotion.",
+        "lyricId": "bei-wei-35-du"
+    },
+    {
+        "id": "deep-dive",
+        "title": "Deep Dive",
+        "artist": "Collab with Sun Yang",
+        "genre": "Ambient",
+        "year": "2025",
+        "type": "Original",
+        "cover": "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600",
+        "url": "https://music.163.com",
+        "description": "Deep atmospheric textures and submerged rhythms, designed for deep focus and meditation.",
+        "lyricId": "an-bing-bu-dong"
+    },
+    {
+        "id": "night-rider",
+        "title": "Night Rider",
+        "artist": "Solo Project",
+        "genre": "Synthwave",
+        "year": "2024",
+        "type": "Original",
+        "cover": "https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=600",
+        "url": "https://music.163.com",
+        "description": "A high-octane synthwave track inspired by 80s aesthetics and late-night city drives.",
+        "lyricText": "The neon signs flash by like memories\nChasing the sun that never rises here\nMy engine hums a tune of solitude\nThrough the grid of chrome and fear\nNight rider, racing through the static\nThe chrome horizon is all I see\nOne more mile into the artificial night\nWhere the speed is the only thing that's free"
+    },
+    {
+        "id": "coffee-code",
+        "title": "Coffee & Code",
+        "artist": "Dean Huo",
+        "genre": "Lofi",
+        "year": "2024",
+        "type": "Cover",
+        "cover": "https://images.unsplash.com/photo-1459749411177-0473ef716175?w=600",
+        "url": "https://music.163.com",
+        "description": "Relaxing lofi beats created specifically for coding sessions and rainy afternoons.",
+        "lyricText": "The cursor blinks in the dim light\nA warm cup in my cold hands\nLines of logic, weaving the future\nIn the silence, the idea expands\nOne more function, one more sip\nThe code flows while the world sleeps"
+    }
+]
