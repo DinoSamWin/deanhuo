@@ -1,10 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
     const masonryGrid = document.querySelector('.masonry-grid');
 
-    // Fetch photos data
-    fetch('assets/data/photos.json')
+    // Fetch photos data - using a static version or no version to allow caching
+    fetch('assets/data/photos.json?v=1.0')
         .then(response => response.json())
         .then(data => {
+            console.log('Loaded photos:', data.length);
             renderPhotos(data);
         })
         .catch(error => console.error('Error loading photos:', error));
@@ -15,15 +16,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = document.createElement('div');
             item.classList.add('masonry-item');
 
-            // Create image element
             const img = document.createElement('img');
-            img.src = photo.src;
             img.alt = photo.description || 'Photo';
 
-            // Add error handling for images
+            // Set up load handler BEFORE setting src
+            img.onload = function () {
+                this.classList.add('loaded');
+            };
+
+            img.src = photo.src;
+
+            // CRITICAL: If image is already in cache, it will be 'complete' immediately
+            if (img.complete) {
+                img.classList.add('loaded');
+                img.style.transition = 'none'; // No animation for cached images
+            }
+
+            // Error handling
             img.onerror = function () {
-                this.style.display = 'none'; // Hide if image fails to load
-                console.warn('Image not found:', photo.src);
+                this.parentElement.style.display = 'none';
             };
 
             item.appendChild(img);

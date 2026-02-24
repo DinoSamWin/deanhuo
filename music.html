@@ -179,7 +179,7 @@
                                 </div>
                             </div>
                             <h3>${song.title}</h3>
-                            <p class="text-secondary" style="font-size: 14px;">${song.genre} • ${song.year}</p>
+                            <p class="text-secondary" style="font-size: 14px;">${song.genre || 'Original'} • ${song.year}</p>
                         </div>
                     `).join('');
 

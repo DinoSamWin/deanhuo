@@ -279,10 +279,10 @@ async function initPhotographyModule() {
     if (!section) return;
 
     try {
-        const response = await fetch('assets/data/photos.json?v=' + Date.now());
+        const response = await fetch('assets/data/photos.json?v=1.0');
         const photos = await response.json();
 
-        const homePhotos = photos.filter(p => p.showOnHome).sort((a, b) => a.homeOrder - b.homeOrder);
+        const homePhotos = photos.filter(p => p.showOnHome).sort((a, b) => (b.updateTime || 0) - (a.updateTime || 0));
         if (homePhotos.length === 0) return;
 
         const thumbTrack = document.getElementById('photo-thumbnails-track');
@@ -291,6 +291,20 @@ async function initPhotographyModule() {
         const featureDesc = document.getElementById('feature-photo-desc');
 
         function updateFeature(photo) {
+            // Check if already cached
+            const tempImg = new Image();
+            tempImg.src = photo.src;
+
+            if (tempImg.complete) {
+                // Instant update for cached
+                featureImg.src = photo.src;
+                featureTitle.innerText = photo.title + ' —';
+                featureDesc.innerText = photo.description;
+                featureImg.style.opacity = '1';
+                return;
+            }
+
+            // Normal fade for new
             featureImg.style.opacity = '0.3';
             setTimeout(() => {
                 featureImg.src = photo.src;
