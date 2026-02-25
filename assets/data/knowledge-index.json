@@ -1,0 +1,12 @@
+[
+    {
+        "id": "getting-started",
+        "title": "Welcome to Knowledge Fridge",
+        "description": "A quick guide on how to add and edit content, including images, Bilibili videos, and Gamma presentations.",
+        "date": "2026-02-25",
+        "tags": [
+            "Guide"
+        ],
+        "filename": "getting-started.md"
+    }
+]
