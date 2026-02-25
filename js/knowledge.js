@@ -14,8 +14,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            grid.innerHTML = data.map(item => `
-                <a href="knowledge-detail.html?id=${item.id}" class="knowledge-card">
+            grid.innerHTML = data.map(item => {
+                // Determine destination URL and target
+                const destUrl = item.externalUrl ? item.externalUrl : `knowledge-detail.html?id=${item.id}`;
+                const targetAttr = item.externalUrl ? `target="_blank" rel="noopener noreferrer"` : ``;
+
+                return `
+                <a href="${destUrl}" ${targetAttr} class="knowledge-card">
                     <div class="knowledge-card-body">
                         <div class="knowledge-tags">
                             ${(item.tags || []).map(tag => `<span class="k-tag">${tag}</span>`).join('')}
@@ -25,12 +30,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="knowledge-card-meta">
                             <span>${item.date}</span>
                             <span style="display: flex; align-items: center; gap: 4px; color: var(--accent-color); font-weight: 500;">
-                                Read <i data-lucide="arrow-right" style="width: 14px;"></i>
+                                ${item.externalUrl ? 'Visit <i data-lucide="external-link" style="width: 14px;"></i>' : 'Read <i data-lucide="arrow-right" style="width: 14px;"></i>'}
                             </span>
                         </div>
                     </div>
                 </a>
-            `).join('');
+                `;
+            }).join('');
 
             if (window.lucide) {
                 lucide.createIcons();

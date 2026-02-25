@@ -1,12 +1,47 @@
 [
     {
-        "id": "getting-started",
-        "title": "Welcome to Knowledge Fridge",
-        "description": "A quick guide on how to add and edit content, including images, Bilibili videos, and Gamma presentations.",
-        "date": "2026-02-25",
+        "id": "da-jiang-wu-ren-ji",
+        "title": "大疆无人机图传功能",
+        "description": "Insta360 影石发布了一款 360° 全景无人机，TIM 测评整体表现出色，但图传延时和画质问题较为明显；相比大疆可达十几公里的图传能力，我们在日常监控场景中 2.4G/5G 仅覆盖几十米，因此决定深入研究其图传技术原理与差异。",
+        "date": "2025-11-25",
+        "externalUrl": "https://gamma.app/embed/lsb8xkj68appl7f",
         "tags": [
-            "Guide"
+            "图传",
+            "通讯",
+            "底层逻辑"
         ],
-        "filename": "getting-started.md"
+        "filename": "da-jiang-wu-ren-ji.md"
+    },
+    {
+        "id": "qing-xi-du-ma-lv",
+        "title": "产品经理实际项目里遇到了“清晰度 vs 码率”的坑，看完影视飓风的视频，我决定写这一篇",
+        "description": "今天工作中遇到一个有趣的问题——视频网站网络差时都会提示“调低清晰度”，可我们做智能摄像头的，偏偏选择“降低码率”。那问题来了：清晰度 vs 码率，到底谁才决定你的视频能不能顺利播放？",
+        "date": "2025-09-09",
+        "tags": [
+            "解码",
+            "清晰度",
+            "码率"
+        ],
+        "filename": "qing-xi-du-ma-lv.md"
+    },
+    {
+        "id": "huo-er-chuan-gan-qi",
+        "title": "产品经理的一次调研，彻底让我理解了霍尔传感器的“神奇”",
+        "description": "我一边研究一边感慨：这东西也太“全能打工人”了吧？今天就来给大家科普一下这个“被低估的核心角色”。",
+        "date": "2025-07-18",
+        "tags": [
+            "智能硬件","每天学一点"
+        ],
+        "filename": "huo-er-chuan-gan-qi.md"
+    },
+    {
+        "id": "xin-li-zhang-hu-qian-yi",
+        "title": "从体脂秤到云存储：心理账户的迁移启发",
+        "description": "家里有一个用多年的体重计，虽然不能接入米家记录数据，但功能也还够用。但是我突然一个早上立刻下单了，原因是...",
+        "date": "2025-07-20",
+        "tags": [
+            "心理学","心理账户"
+        ],
+        "filename": "xin-li-zhang-hu-qian-yi.md"
     }
 ]

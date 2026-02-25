@@ -62,11 +62,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>`;
             }
 
-            // Gamma
-            if (url.includes('gamma.app/docs/')) {
-                const embedUrl = url.replace('/docs/', '/embed/');
-                return `<div class="video-embed-container gamma-embed">
-                    <iframe src="${embedUrl}" style="width: 100%; height: 100%; border: none; border-radius: 4px;" allow="fullscreen" title="Gamma Presentation"></iframe>
+            if (url.includes('gamma.app/docs/') || url.includes('gamma.app/embed/')) {
+                const embedUrl = url.includes('/docs/') ? url.replace('/docs/', '/embed/') : url;
+                return `<div class="embed-wrapper">
+                    <div class="gamma-scroll-overlay"></div>
+                    <div class="video-embed-container gamma-embed">
+                        <iframe src="${embedUrl}" allow="fullscreen" title="Gamma Presentation"></iframe>
+                    </div>
+                    <button class="gamma-fullscreen-btn" aria-label="建议全屏预览">
+                        <i data-lucide="maximize"></i> 建议全屏预览
+                    </button>
                 </div>`;
             }
 
@@ -74,7 +79,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    marked.use({ extensions: [embedExtension] });
+    // Override the default html tokenizer to also catch pasted iframe tags
+    const iframeHtmlExtension = {
+        name: 'html',
+        level: 'block',
+        // Hook into renderer to inject wrappers around raw iframes if they are Gamma or otherwise
+        renderer(token) {
+            if (token.text && token.text.trim().startsWith('<iframe') && token.text.includes('gamma.app')) {
+                // Return original iframe wrapped with our custom button
+                return `<div class="embed-wrapper">
+                    <div class="gamma-scroll-overlay"></div>
+                    ${token.text}
+                    <button class="gamma-fullscreen-btn" aria-label="建议全屏预览">
+                        <i data-lucide="maximize"></i> 建议全屏预览
+                    </button>
+                </div>`;
+            }
+            return false; // Leave other HTML alone
+        }
+    };
+
+    marked.use({ extensions: [embedExtension, iframeHtmlExtension] });
 
     // Step 1: Fetch metadata from knowledge-index.json to populate header
     fetch('assets/data/knowledge-index.json?v=' + Date.now())
@@ -107,6 +132,32 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(text => {
             if (text) {
                 document.getElementById('article-body').innerHTML = marked.parse(text);
+
+                // Re-initialize icons for newly added buttons
+                if (window.lucide) {
+                    lucide.createIcons();
+                }
+
+                // Add Intersection Observer for smart scroll overlay
+                const wrappers = document.querySelectorAll('.embed-wrapper');
+                if (wrappers.length > 0) {
+                    const observer = new IntersectionObserver((entries) => {
+                        entries.forEach(entry => {
+                            const rect = entry.boundingClientRect;
+                            // Check if the bottom is visible in viewport or iframe is mostly visible
+                            const isBottomVisible = entry.isIntersecting && rect.bottom <= window.innerHeight + 10;
+                            const isFullyVisible = entry.intersectionRatio >= 0.95;
+
+                            if (isFullyVisible || isBottomVisible) {
+                                entry.target.classList.add('is-interactive');
+                            } else {
+                                entry.target.classList.remove('is-interactive');
+                            }
+                        });
+                    }, { threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0] });
+
+                    wrappers.forEach(w => observer.observe(w));
+                }
             }
         })
         .catch(err => {
@@ -120,4 +171,24 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             if (window.lucide) lucide.createIcons();
         });
+
+    // Handle Fullscreen button clicks using event delegation
+    document.getElementById('article-body').addEventListener('click', (e) => {
+        const btn = e.target.closest('.gamma-fullscreen-btn');
+        if (!btn) return;
+
+        const wrapper = btn.closest('.embed-wrapper');
+        if (!wrapper) return;
+
+        const iframe = wrapper.querySelector('iframe');
+        if (!iframe) return;
+
+        if (iframe.requestFullscreen) {
+            iframe.requestFullscreen();
+        } else if (iframe.webkitRequestFullscreen) { /* Safari */
+            iframe.webkitRequestFullscreen();
+        } else if (iframe.msRequestFullscreen) { /* IE11 */
+            iframe.msRequestFullscreen();
+        }
+    });
 });

@@ -18,8 +18,8 @@
         }
 
         .knowledge-detail-container {
-            width: 100%;
-            max-width: 800px;
+            width: 90%;
+            max-width: 1100px;
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-lg);
@@ -213,6 +213,18 @@
             border: none;
         }
 
+        /* Support for direct iframe pasting */
+        .markdown-fridge iframe:not(.video-embed-container iframe) {
+            width: 100% !important;
+            max-width: 100% !important;
+            border-radius: var(--radius-md);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            margin: 2em 0;
+            /* Gamma specific aspect ratio approx */
+            height: 65vw !important;
+            max-height: 600px !important;
+        }
+
         /* Responsive padding for mobile */
         @media (max-width: 768px) {
             .knowledge-detail-container {
@@ -222,6 +234,91 @@
             .article-title {
                 font-size: 32px;
             }
+        }
+
+        /* Custom Fullscreen Button for Embeds */
+        .embed-wrapper {
+            position: relative;
+            margin: 2em 0;
+        }
+
+        /* Cancel out margin if the wrapper wraps an existing spaced element */
+        .embed-wrapper .video-embed-container,
+        .embed-wrapper iframe {
+            margin: 0 !important;
+        }
+
+        /* Overlay to prevent scroll hijacking until fully visible */
+        .gamma-scroll-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            background: transparent;
+        }
+
+        /* When the wrapper is fully in view, hide the overlay to allow interaction */
+        .embed-wrapper.is-interactive .gamma-scroll-overlay {
+            pointer-events: none;
+        }
+
+        .gamma-fullscreen-btn {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            z-index: 10;
+            background: rgba(0, 255, 136, 0.85);
+            /* Accent color with opacity */
+            color: #000;
+            border: none;
+            border-radius: 999px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            transition: background 0.3s ease, transform 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.8;
+            /* Breathing animation */
+            animation: breathe-btn 2.5s infinite ease-in-out;
+        }
+
+        @keyframes breathe-btn {
+            0% {
+                transform: scale(1);
+                box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
+            }
+
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 6px 20px rgba(0, 255, 136, 0.6);
+            }
+
+            100% {
+                transform: scale(1);
+                box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
+            }
+        }
+
+        .gamma-fullscreen-btn i {
+            width: 16px;
+            height: 16px;
+        }
+
+        .gamma-fullscreen-btn:hover {
+            opacity: 1;
+            transform: translateY(-2px);
+            background: rgba(0, 255, 136, 1);
+            box-shadow: 0 6px 16px rgba(0, 255, 136, 0.4);
+            animation-play-state: paused;
         }
     </style>
 </head>
