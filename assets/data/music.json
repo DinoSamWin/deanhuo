@@ -1,0 +1,58 @@
+[
+    {
+        "id": "bei-wei-35-du",
+        "title": "北纬35°",
+        "artist": "Dean Huo",
+        "year": "2025",
+        "cover": "assets/images/lyrics/bei-wei-35-du.jpg",
+        "url": "assets/audio/bei-wei-35-du.mp3",
+        "genre": "Electronic",
+        "description": "A journey through digital soundscapes and ethereal melodies, exploring the intersection of technology and human emotion.",
+        "lyricId": "bei-wei-35-du"
+    },
+    {
+        "id": "an-bing-bu-dong",
+        "title": "按兵不动",
+        "artist": "Dean Huo",
+        "year": "2025",
+        "cover": "assets/images/lyrics/an-bing-bu-dong.jpg",
+        "url": "assets/audio/an-bing-bu-dong.mp3",
+        "genre": "Ambient",
+        "description": "Deep atmospheric textures and submerged rhythms, designed for deep focus and meditation.",
+        "lyricId": "an-bing-bu-dong"
+    },
+    {
+        "id": "cui-xiao",
+        "title": "翠筱",
+        "artist": "Dean Huo",
+        "year": "2024",
+        "cover": "assets/images/lyrics/cui-xiao.jpg",
+        "url": "assets/audio/cui-xiao.mp3",
+        "genre": "Synthwave",
+        "description": "A high-octane synthwave track inspired by 80s aesthetics and late-night city drives."
+    },
+    {
+        "id": "ti-zui-yang-fu-er-mo-si",
+        "title": "替罪羊 福尔摩斯",
+        "artist": "Dean Huo",
+        "year": "2024",
+        "cover": "assets/images/lyrics/ti-zui-yang-fu-er-mo-si.jpg",
+        "url": "assets/audio/ti-zui-yang-fu-er-mo-si.mp3",
+        "genre": "Synthwave",
+        "description": "A high-octane synthwave track inspired by 80s aesthetics and late-night city drives.",
+        "lyricId": "ti-zui-yang-fu-er-mo-si"
+
+    },
+    {
+        "id": "mo-er-ben-dian-che",
+        "title": "墨尔本电车",
+        "artist": "Dean Huo",
+        "year": "2024",
+        "cover": "assets/images/lyrics/mo-er-ben-dian-che.jpg",
+        "url": "assets/audio/mo-er-ben-dian-che.mp3",
+        "genre": "Synthwave",
+        "description": "A high-octane synthwave track inspired by 80s aesthetics and late-night city drives.",
+        "lyricId": "mo-er-ben-dian-che"
+
+    }
+]
