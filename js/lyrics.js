@@ -8,11 +8,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeModal = document.querySelector('.close-modal');
 
     // Fetch lyrics data
-    fetch('assets/data/lyrics.json?v=' + Date.now())
-        .then(response => response.json())
-        .then(data => {
+    Promise.all([
+        fetch('assets/data/lyrics.json?v=' + Date.now()).then(response => response.json()),
+        window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
+    ])
+        .then(([data, recommendationConfig]) => {
             // Sort data by order
             data.sort((a, b) => a.order - b.order);
+            if (window.DeanRecommendations) {
+                data = window.DeanRecommendations.prioritizeByModule(data, recommendationConfig, 'lyricsPageFeatured');
+            }
             renderLyrics(data);
         })
         .catch(error => console.error('Error loading lyrics:', error));

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>资源配置后台 | Dean Huo</title>
+    <link rel="stylesheet" href="../css/variables.css">
+    <link rel="stylesheet" href="../css/admin.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <section class="admin-login" id="login-screen">
+        <div class="login-panel">
+            <div class="login-mark">
+                <i data-lucide="database-zap"></i>
+            </div>
+            <h1>资源配置后台</h1>
+            <p>新增图片、词作、音乐和知识内容，并为每个模块配置独立推荐位。</p>
+            <label class="field">
+                <span>后台口令</span>
+                <input id="admin-token-input" type="password" placeholder="输入 ADMIN_TOKEN">
+            </label>
+            <button class="primary-action" id="login-button">
+                <i data-lucide="log-in"></i>
+                进入后台
+            </button>
+            <div class="login-note">
+                旧资源默认只读；本后台只追加新资源和更新推荐配置。
+            </div>
+        </div>
+    </section>
+
+    <div class="admin-shell is-hidden" id="admin-app">
+        <aside class="admin-sidebar">
+            <a class="brand" href="../index.html">
+                <span class="brand-dot"></span>
+                <span>Dean CMS</span>
+            </a>
+            <button class="side-link is-active" data-panel="dashboard-panel">
+                <i data-lucide="layout-dashboard"></i>
+                总览
+            </button>
+            <button class="side-link" data-panel="resources-panel">
+                <i data-lucide="plus-square"></i>
+                新增资源
+            </button>
+            <button class="side-link" data-panel="recommendations-panel">
+                <i data-lucide="list-ordered"></i>
+                推荐配置
+            </button>
+            <button class="side-link" data-panel="publish-panel">
+                <i data-lucide="send"></i>
+                保存发布
+            </button>
+            <div class="sidebar-footer">
+                <button class="ghost-action" id="reload-button">
+                    <i data-lucide="refresh-cw"></i>
+                    重新读取
+                </button>
+                <button class="ghost-action" id="logout-button">
+                    <i data-lucide="log-out"></i>
+                    退出
+                </button>
+            </div>
+        </aside>
+
+        <main class="admin-main">
+            <header class="admin-topbar">
+                <div>
+                    <p class="eyebrow">Append-only Resource Manager</p>
+                    <h1 id="panel-title">总览</h1>
+                </div>
+                <div class="topbar-actions">
+                    <span class="status-pill" id="mode-pill">读取中</span>
+                    <button class="secondary-action" id="export-button">
+                        <i data-lucide="download"></i>
+                        导出草稿
+                    </button>
+                    <button class="primary-action" id="quick-publish-button">
+                        <i data-lucide="cloud-upload"></i>
+                        保存发布
+                    </button>
+                </div>
+            </header>
+
+            <section class="panel is-active" id="dashboard-panel">
+                <div class="section-header">
+                    <div>
+                        <h2>内容库状态</h2>
+                        <p>读取现有 JSON 作为资源库，新增内容会追加到数组末尾。</p>
+                    </div>
+                </div>
+                <div class="stats-grid" id="stats-grid"></div>
+                <div class="guard-panel">
+                    <div>
+                        <i data-lucide="shield-check"></i>
+                    </div>
+                    <div>
+                        <h3>历史数据保护规则</h3>
+                        <p>发布接口会检查旧数组前缀是否完全一致。如果旧资源被删除、重排或改字段，接口会拒绝保存。</p>
+                    </div>
+                </div>
+                <div class="activity-panel">
+                    <div class="section-header compact">
+                        <h2>本次草稿</h2>
+                        <p id="draft-summary">暂无新增内容。</p>
+                    </div>
+                    <div id="draft-list" class="draft-list"></div>
+                </div>
+            </section>
+
+            <section class="panel" id="resources-panel">
+                <div class="section-header">
+                    <div>
+                        <h2>新增资源</h2>
+                        <p>选择资源类型后填写字段。旧内容不会在这里开放编辑。</p>
+                    </div>
+                    <div class="segmented-control" id="resource-type-tabs">
+                        <button class="is-active" data-resource-form="photo-form">图片</button>
+                        <button data-resource-form="lyric-form">词作</button>
+                        <button data-resource-form="music-form">音乐</button>
+                        <button data-resource-form="knowledge-form">知识</button>
+                    </div>
+                </div>
+
+                <div class="resource-form-grid">
+                    <form class="resource-form is-active" id="photo-form">
+                        <h3><i data-lucide="image"></i> 新增图片</h3>
+                        <label class="field">
+                            <span>图片文件</span>
+                            <input type="file" name="file" accept="image/*" required>
+                        </label>
+                        <label class="field">
+                            <span>标题</span>
+                            <input name="title" placeholder="例如：雨后街角" required>
+                        </label>
+                        <label class="field">
+                            <span>描述</span>
+                            <textarea name="description" rows="4" placeholder="这张图片背后的说明"></textarea>
+                        </label>
+                        <div class="field-row">
+                            <label class="field">
+                                <span>分类</span>
+                                <input name="category" value="Photography">
+                            </label>
+                            <label class="field">
+                                <span>日期</span>
+                                <input name="date" placeholder="Feb 2026">
+                            </label>
+                        </div>
+                        <label class="check-field">
+                            <input type="checkbox" name="showOnHome">
+                            <span>同时加入首页摄影推荐</span>
+                        </label>
+                        <button class="primary-action" type="submit">
+                            <i data-lucide="plus"></i>
+                            创建图片资源
+                        </button>
+                    </form>
+
+                    <form class="resource-form" id="lyric-form">
+                        <h3><i data-lucide="file-text"></i> 新增词作</h3>
+                        <div class="field-row">
+                            <label class="field">
+                                <span>标题</span>
+                                <input name="title" required>
+                            </label>
+                            <label class="field">
+                                <span>作者</span>
+                                <input name="author" value="Dean Huo">
+                            </label>
+                        </div>
+                        <div class="field-row">
+                            <label class="field">
+                                <span>日期</span>
+                                <input name="date" type="date">
+                            </label>
+                            <label class="field">
+                                <span>发行年份</span>
+                                <input name="releaseYear" placeholder="2026">
+                            </label>
+                        </div>
+                        <label class="field">
+                            <span>封面图片</span>
+                            <input type="file" name="coverFile" accept="image/*" required>
+                        </label>
+                        <label class="field">
+                            <span>音频文件</span>
+                            <input type="file" name="audioFile" accept="audio/*">
+                        </label>
+                        <label class="field">
+                            <span>摘要</span>
+                            <textarea name="summary" rows="3" required></textarea>
+                        </label>
+                        <label class="field">
+                            <span>正文 Markdown</span>
+                            <textarea name="content" rows="9" placeholder="逐行粘贴歌词或文章正文" required></textarea>
+                        </label>
+                        <label class="check-field">
+                            <input type="checkbox" name="showOnHome">
+                            <span>同时加入首页词作轮播</span>
+                        </label>
+                        <button class="primary-action" type="submit">
+                            <i data-lucide="plus"></i>
+                            创建词作资源
+                        </button>
+                    </form>
+
+                    <form class="resource-form" id="music-form">
+                        <h3><i data-lucide="music"></i> 新增音乐</h3>
+                        <div class="field-row">
+                            <label class="field">
+                                <span>标题</span>
+                                <input name="title" required>
+                            </label>
+                            <label class="field">
+                                <span>艺术家</span>
+                                <input name="artist" value="Dean Huo">
+                            </label>
+                        </div>
+                        <div class="field-row">
+                            <label class="field">
+                                <span>年份</span>
+                                <input name="year" placeholder="2026">
+                            </label>
+                            <label class="field">
+                                <span>曲风</span>
+                                <input name="genre" placeholder="Ambient">
+                            </label>
+                        </div>
+                        <label class="field">
+                            <span>封面图片</span>
+                            <input type="file" name="coverFile" accept="image/*" required>
+                        </label>
+                        <label class="field">
+                            <span>音频文件</span>
+                            <input type="file" name="audioFile" accept="audio/*" required>
+                        </label>
+                        <label class="field">
+                            <span>关联词作</span>
+                            <select name="lyricId" id="music-lyric-select"></select>
+                        </label>
+                        <label class="field">
+                            <span>描述</span>
+                            <textarea name="description" rows="4"></textarea>
+                        </label>
+                        <label class="check-field">
+                            <input type="checkbox" name="showOnHome">
+                            <span>同时加入首页音乐推荐</span>
+                        </label>
+                        <button class="primary-action" type="submit">
+                            <i data-lucide="plus"></i>
+                            创建音乐资源
+                        </button>
+                    </form>
+
+                    <form class="resource-form" id="knowledge-form">
+                        <h3><i data-lucide="book-open"></i> 新增知识</h3>
+                        <label class="field">
+                            <span>标题</span>
+                            <input name="title" required>
+                        </label>
+                        <label class="field">
+                            <span>摘要</span>
+                            <textarea name="description" rows="4" required></textarea>
+                        </label>
+                        <div class="field-row">
+                            <label class="field">
+                                <span>日期</span>
+                                <input name="date" type="date">
+                            </label>
+                            <label class="field">
+                                <span>标签</span>
+                                <input name="tags" placeholder="AI, 产品, 硬件">
+                            </label>
+                        </div>
+                        <label class="field">
+                            <span>外部链接</span>
+                            <input name="externalUrl" type="url" placeholder="https://...（可选）">
+                        </label>
+                        <label class="field">
+                            <span>正文 Markdown</span>
+                            <textarea name="content" rows="10" placeholder="没有外部链接时填写正文"></textarea>
+                        </label>
+                        <label class="check-field">
+                            <input type="checkbox" name="featured">
+                            <span>同时加入知识页推荐</span>
+                        </label>
+                        <button class="primary-action" type="submit">
+                            <i data-lucide="plus"></i>
+                            创建知识资源
+                        </button>
+                    </form>
+
+                    <div class="library-panel">
+                        <div class="library-toolbar">
+                            <label class="field compact-field">
+                                <span>资源库</span>
+                                <select id="library-source-select">
+                                    <option value="photos">图片</option>
+                                    <option value="lyrics">词作</option>
+                                    <option value="music">音乐</option>
+                                    <option value="knowledge">知识</option>
+                                </select>
+                            </label>
+                            <label class="field compact-field">
+                                <span>搜索</span>
+                                <input id="library-search" placeholder="标题 / ID / 标签">
+                            </label>
+                        </div>
+                        <div class="resource-library" id="resource-library"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel" id="recommendations-panel">
+                <div class="section-header">
+                    <div>
+                        <h2>推荐配置</h2>
+                        <p>每个模块有自己的推荐列表。这里只保存 ID 和排序，不改资源本体。</p>
+                    </div>
+                    <label class="field compact-field">
+                        <span>推荐模块</span>
+                        <select id="recommendation-module-select"></select>
+                    </label>
+                </div>
+
+                <div class="recommendation-layout">
+                    <div class="recommendation-slots">
+                        <div class="module-meta" id="module-meta"></div>
+                        <div id="selected-recommendations" class="selected-recommendations"></div>
+                    </div>
+                    <div class="recommendation-source">
+                        <label class="field compact-field">
+                            <span>从资源库添加</span>
+                            <input id="recommendation-search" placeholder="搜索可推荐资源">
+                        </label>
+                        <div id="recommendation-candidates" class="recommendation-candidates"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel" id="publish-panel">
+                <div class="section-header">
+                    <div>
+                        <h2>保存发布</h2>
+                        <p>发布前先检查改动。线上模式会提交到 GitHub，Vercel 随后自动部署。</p>
+                    </div>
+                    <button class="secondary-action" id="copy-payload-button">
+                        <i data-lucide="copy"></i>
+                        复制草稿 JSON
+                    </button>
+                </div>
+
+                <div class="publish-grid">
+                    <div class="publish-card">
+                        <h3>发布检查</h3>
+                        <div id="publish-checks" class="publish-checks"></div>
+                        <div class="publish-actions">
+                            <button class="primary-action" id="publish-button">
+                                <i data-lucide="cloud-upload"></i>
+                                保存发布
+                            </button>
+                            <button class="secondary-action" id="download-payload-button">
+                                <i data-lucide="file-down"></i>
+                                下载草稿包
+                            </button>
+                        </div>
+                    </div>
+                    <div class="publish-card">
+                        <h3>发布结果</h3>
+                        <pre id="publish-output">等待操作...</pre>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="../js/recommendations.js" data-base="../"></script>
+    <script src="../admin/admin.js"></script>
+    <script>
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    </script>
+</body>
+
+</html>

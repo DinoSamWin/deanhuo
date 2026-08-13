@@ -3,12 +3,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!grid) return;
 
-    fetch('assets/data/knowledge-index.json?v=' + Date.now())
-        .then(res => {
+    Promise.all([
+        fetch('assets/data/knowledge-index.json?v=' + Date.now()).then(res => {
             if (!res.ok) throw new Error('Network response was not ok');
             return res.json();
-        })
-        .then(data => {
+        }),
+        window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
+    ])
+        .then(([data, recommendationConfig]) => {
+            if (window.DeanRecommendations) {
+                data = window.DeanRecommendations.prioritizeByModule(data, recommendationConfig, 'knowledgePageFeatured');
+            }
             if (data.length === 0) {
                 grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding: 40px;">暂无保鲜知识，请在 knowledge-index.json 中添加。</div>';
                 return;
