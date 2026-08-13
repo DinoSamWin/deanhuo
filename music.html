@@ -166,13 +166,19 @@
         </div>
     </main>
 
+    <script src="js/recommendations.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const grid = document.getElementById('music-grid');
 
-            fetch('assets/data/music.json?v=' + Date.now())
-                .then(res => res.json())
-                .then(data => {
+            Promise.all([
+                fetch('assets/data/music.json?v=' + Date.now()).then(res => res.json()),
+                window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
+            ])
+                .then(([data, recommendationConfig]) => {
+                    if (window.DeanRecommendations) {
+                        data = window.DeanRecommendations.prioritizeByModule(data, recommendationConfig, 'musicPageFeatured');
+                    }
                     grid.innerHTML = data.map(song => `
                         <div class="album-card" onclick="location.href='music-player.html?id=${song.id}'">
                             <div class="album-cover" style="background-image: url('${song.cover}');">

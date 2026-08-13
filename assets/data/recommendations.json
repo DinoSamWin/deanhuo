@@ -1,0 +1,48 @@
+{
+    "version": 1,
+    "updatedAt": "",
+    "modules": {
+        "homeLyrics": {
+            "label": "首页词作轮播",
+            "source": "lyrics",
+            "limit": 5,
+            "items": []
+        },
+        "homeMusic": {
+            "label": "首页音乐作品",
+            "source": "music",
+            "limit": 4,
+            "items": []
+        },
+        "homePhotos": {
+            "label": "首页摄影橱窗",
+            "source": "photos",
+            "limit": 6,
+            "items": []
+        },
+        "lyricsPageFeatured": {
+            "label": "词作页优先展示",
+            "source": "lyrics",
+            "limit": 8,
+            "items": []
+        },
+        "musicPageFeatured": {
+            "label": "音乐页优先展示",
+            "source": "music",
+            "limit": 8,
+            "items": []
+        },
+        "photosPageFeatured": {
+            "label": "摄影页优先展示",
+            "source": "photos",
+            "limit": 12,
+            "items": []
+        },
+        "knowledgePageFeatured": {
+            "label": "知识页优先展示",
+            "source": "knowledge",
+            "limit": 6,
+            "items": []
+        }
+    }
+}

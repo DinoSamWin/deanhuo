@@ -139,13 +139,26 @@ async function initLyricsCarousel() {
     if (!container) return;
 
     try {
-        const response = await fetch('assets/data/lyrics.json?v=' + Date.now());
-        const lyrics = await response.json();
+        const [lyricsResponse, recommendationConfig] = await Promise.all([
+            fetch('assets/data/lyrics.json?v=' + Date.now()),
+            window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
+        ]);
+        const lyrics = await lyricsResponse.json();
 
-        const homeLyrics = lyrics
-            .filter(item => item.showOnHome)
-            .sort((a, b) => (a.homeOrder || 99) - (b.homeOrder || 99))
-            .slice(0, 5);
+        const homeLyrics = window.DeanRecommendations
+            ? window.DeanRecommendations.pickByModule(
+                lyrics,
+                recommendationConfig,
+                'homeLyrics',
+                items => items
+                    .filter(item => item.showOnHome)
+                    .sort((a, b) => (a.homeOrder || 99) - (b.homeOrder || 99))
+                    .slice(0, 5)
+            )
+            : lyrics
+                .filter(item => item.showOnHome)
+                .sort((a, b) => (a.homeOrder || 99) - (b.homeOrder || 99))
+                .slice(0, 5);
 
         if (homeLyrics.length === 0) {
             container.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-secondary);">No lyrics to display</div>';
@@ -252,10 +265,21 @@ async function initMusicModule() {
     if (!listContainer) return;
 
     try {
-        const response = await fetch('assets/data/music.json?v=' + Date.now());
-        const musicData = await response.json();
+        const [musicResponse, recommendationConfig] = await Promise.all([
+            fetch('assets/data/music.json?v=' + Date.now()),
+            window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
+        ]);
+        const musicData = await musicResponse.json();
+        const homeMusic = window.DeanRecommendations
+            ? window.DeanRecommendations.pickByModule(
+                musicData,
+                recommendationConfig,
+                'homeMusic',
+                items => items.slice(0, 4)
+            )
+            : musicData.slice(0, 4);
 
-        listContainer.innerHTML = musicData.slice(0, 4).map((item) => `
+        listContainer.innerHTML = homeMusic.map((item) => `
             <div class="music-item" onclick="location.href='music-player.html?id=${item.id}'">
                 <img src="${item.cover}" alt="${item.title}" class="music-art">
                 <div class="music-details">
@@ -279,10 +303,20 @@ async function initPhotographyModule() {
     if (!section) return;
 
     try {
-        const response = await fetch('assets/data/photos.json?v=1.0');
-        const photos = await response.json();
+        const [photosResponse, recommendationConfig] = await Promise.all([
+            fetch('assets/data/photos.json?v=1.0'),
+            window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
+        ]);
+        const photos = await photosResponse.json();
 
-        const homePhotos = photos.filter(p => p.showOnHome).sort((a, b) => (b.updateTime || 0) - (a.updateTime || 0));
+        const homePhotos = window.DeanRecommendations
+            ? window.DeanRecommendations.pickByModule(
+                photos,
+                recommendationConfig,
+                'homePhotos',
+                items => items.filter(p => p.showOnHome).sort((a, b) => (b.updateTime || 0) - (a.updateTime || 0))
+            )
+            : photos.filter(p => p.showOnHome).sort((a, b) => (b.updateTime || 0) - (a.updateTime || 0));
         if (homePhotos.length === 0) return;
 
         const thumbTrack = document.getElementById('photo-thumbnails-track');

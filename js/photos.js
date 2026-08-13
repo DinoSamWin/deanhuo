@@ -2,9 +2,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const masonryGrid = document.querySelector('.masonry-grid');
 
     // Fetch photos data - using a static version or no version to allow caching
-    fetch('assets/data/photos.json?v=1.0')
-        .then(response => response.json())
-        .then(data => {
+    Promise.all([
+        fetch('assets/data/photos.json?v=1.0').then(response => response.json()),
+        window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
+    ])
+        .then(([data, recommendationConfig]) => {
+            if (window.DeanRecommendations) {
+                data = window.DeanRecommendations.prioritizeByModule(data, recommendationConfig, 'photosPageFeatured');
+            }
             console.log('Loaded photos:', data.length);
             renderPhotos(data);
         })
