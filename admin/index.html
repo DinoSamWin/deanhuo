@@ -46,13 +46,17 @@
                 <i data-lucide="plus-square"></i>
                 新增资源
             </button>
+            <button class="side-link" data-panel="pending-panel">
+                <i data-lucide="inbox"></i>
+                待发布资源
+            </button>
             <button class="side-link" data-panel="recommendations-panel">
                 <i data-lucide="list-ordered"></i>
                 推荐配置
             </button>
             <button class="side-link" data-panel="publish-panel">
                 <i data-lucide="send"></i>
-                保存发布
+                发布检查
             </button>
             <div class="sidebar-footer">
                 <button class="ghost-action" id="reload-button">
@@ -80,7 +84,7 @@
                     </button>
                     <button class="primary-action" id="quick-publish-button">
                         <i data-lucide="cloud-upload"></i>
-                        保存发布
+                        一键发布
                     </button>
                 </div>
             </header>
@@ -104,8 +108,22 @@
                 </div>
                 <div class="activity-panel">
                     <div class="section-header compact">
-                        <h2>本次草稿</h2>
+                        <h2>待发布资源</h2>
                         <p id="draft-summary">暂无新增内容。</p>
+                    </div>
+                    <div class="inline-actions">
+                        <button class="primary-action" id="dashboard-publish-all-button">
+                            <i data-lucide="cloud-upload"></i>
+                            一键发布全部
+                        </button>
+                        <button class="secondary-action" data-panel-shortcut="pending-panel">
+                            <i data-lucide="inbox"></i>
+                            查看待发布列表
+                        </button>
+                        <button class="secondary-action" data-panel-shortcut="resources-panel">
+                            <i data-lucide="plus"></i>
+                            继续新增
+                        </button>
                     </div>
                     <div id="draft-list" class="draft-list"></div>
                 </div>
@@ -196,7 +214,11 @@
                         </label>
                         <label class="field">
                             <span>正文 Markdown</span>
-                            <textarea name="content" rows="9" placeholder="逐行粘贴歌词或文章正文" required></textarea>
+                            <input type="file" name="contentFile" accept=".md,text/markdown,text/plain">
+                        </label>
+                        <label class="field">
+                            <span>正文内容</span>
+                            <textarea name="content" rows="9" placeholder="可以粘贴歌词正文，也可以上传 Markdown 文件"></textarea>
                         </label>
                         <label class="check-field">
                             <input type="checkbox" name="showOnHome">
@@ -241,6 +263,14 @@
                         <label class="field">
                             <span>关联词作</span>
                             <select name="lyricId" id="music-lyric-select"></select>
+                        </label>
+                        <label class="field">
+                            <span>歌词 Markdown 文件</span>
+                            <input type="file" name="lyricMarkdownFile" accept=".md,text/markdown,text/plain">
+                        </label>
+                        <label class="check-field">
+                            <input type="checkbox" name="syncLyric" checked>
+                            <span>上传歌词后，同步创建词作并自动关联音乐</span>
                         </label>
                         <label class="field">
                             <span>描述</span>
@@ -315,6 +345,33 @@
                 </div>
             </section>
 
+            <section class="panel" id="pending-panel">
+                <div class="section-header">
+                    <div>
+                        <h2>待发布资源</h2>
+                        <p>新增成功后会先进入这里。可以单条发布，也可以一次发布全部。</p>
+                    </div>
+                    <div class="inline-actions">
+                        <button class="primary-action" id="pending-publish-all-button">
+                            <i data-lucide="cloud-upload"></i>
+                            一键发布全部
+                        </button>
+                        <button class="secondary-action" data-panel-shortcut="resources-panel">
+                            <i data-lucide="plus"></i>
+                            继续新增
+                        </button>
+                    </div>
+                </div>
+                <div class="pending-toolbar">
+                    <div class="pending-status" id="pending-status">暂无待发布内容。</div>
+                    <button class="secondary-action" id="pending-download-button">
+                        <i data-lucide="file-down"></i>
+                        下载草稿包
+                    </button>
+                </div>
+                <div class="pending-list" id="pending-list"></div>
+            </section>
+
             <section class="panel" id="recommendations-panel">
                 <div class="section-header">
                     <div>
@@ -345,7 +402,7 @@
             <section class="panel" id="publish-panel">
                 <div class="section-header">
                     <div>
-                        <h2>保存发布</h2>
+                        <h2>发布检查</h2>
                         <p>发布前先检查改动。线上模式会提交到 GitHub，Vercel 随后自动部署。</p>
                     </div>
                     <button class="secondary-action" id="copy-payload-button">
@@ -361,7 +418,7 @@
                         <div class="publish-actions">
                             <button class="primary-action" id="publish-button">
                                 <i data-lucide="cloud-upload"></i>
-                                保存发布
+                                一键发布全部
                             </button>
                             <button class="secondary-action" id="download-payload-button">
                                 <i data-lucide="file-down"></i>
