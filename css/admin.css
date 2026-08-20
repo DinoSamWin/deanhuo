@@ -77,6 +77,22 @@ button {
     line-height: 1.7;
 }
 
+.login-error {
+    display: none;
+    margin: -4px 0 14px;
+    padding: 10px 12px;
+    color: #ffd6d6;
+    background: rgba(255, 68, 68, 0.1);
+    border: 1px solid rgba(255, 68, 68, 0.28);
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.login-error.is-visible {
+    display: block;
+}
+
 .admin-shell {
     min-height: 100vh;
     display: grid;
