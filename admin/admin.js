@@ -101,15 +101,24 @@ function bindChrome() {
 
 async function login(token) {
     if (!token) {
+        setLoginError('请先输入后台口令');
         showToast('请先输入后台口令');
         return;
     }
 
+    setLoginError('');
+    setLoginBusy(true);
     state.token = token;
+    const loaded = await loadContent();
+    setLoginBusy(false);
+
+    if (!loaded) {
+        return;
+    }
+
     sessionStorage.setItem('deanAdminToken', token);
     $('#login-screen').classList.add('is-hidden');
     $('#admin-app').classList.remove('is-hidden');
-    await loadContent();
 }
 
 async function loadContent() {
@@ -129,11 +138,13 @@ async function loadContent() {
         state.apiStatus = apiError.status || 0;
 
         if (apiError.status === 401) {
+            state.token = '';
             sessionStorage.removeItem('deanAdminToken');
             $('#admin-app').classList.add('is-hidden');
             $('#login-screen').classList.remove('is-hidden');
-            showToast('后台口令不正确，请重新登录');
-            return;
+            setLoginError('后台口令和 Vercel 里的 ADMIN_TOKEN 不匹配，请检查后重新输入。');
+            showToast('后台口令不正确');
+            return false;
         }
 
         try {
@@ -143,17 +154,18 @@ async function loadContent() {
         } catch (staticError) {
             setPublishOutput(`读取失败：${staticError.message}`);
             showToast('读取内容库失败');
-            return;
+            return false;
         }
     }
 
     updateModePill();
     renderAll();
+    return true;
 }
 
 async function loadFromApi() {
     const response = await fetch('/api/admin/content', {
-        headers: { 'x-admin-token': state.token },
+        headers: getAuthHeaders(),
         cache: 'no-store'
     });
     const data = await response.json().catch(() => ({}));
@@ -165,6 +177,13 @@ async function loadFromApi() {
     }
 
     return data.files || {};
+}
+
+function getAuthHeaders() {
+    return {
+        'x-admin-token': state.token,
+        Authorization: `Bearer ${state.token}`
+    };
 }
 
 async function loadStaticFiles() {
@@ -533,7 +552,7 @@ async function uploadAsset(file, uploadType) {
 
     const response = await fetch('/api/admin/upload', {
         method: 'POST',
-        headers: { 'x-admin-token': state.token },
+        headers: getAuthHeaders(),
         body: formData
     });
     const data = await response.json().catch(() => ({}));
@@ -998,7 +1017,7 @@ async function publishAllDrafts() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json; charset=utf-8',
-                'x-admin-token': state.token
+                ...getAuthHeaders()
             },
             body: JSON.stringify(payload)
         });
@@ -1074,7 +1093,7 @@ async function publishSingleDraft(source, id) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json; charset=utf-8',
-                'x-admin-token': state.token
+                ...getAuthHeaders()
             },
             body: JSON.stringify(payload)
         });
@@ -1601,6 +1620,17 @@ function setMode(text, isOnline) {
 
 function setPublishOutput(text) {
     $('#publish-output').textContent = text;
+}
+
+function setLoginError(message) {
+    const error = $('#login-error');
+    error.textContent = message || '';
+    error.classList.toggle('is-visible', Boolean(message));
+}
+
+function setLoginBusy(isBusy) {
+    $('#login-button').disabled = isBusy;
+    $('#admin-token-input').disabled = isBusy;
 }
 
 function setDefaultFormValues() {
