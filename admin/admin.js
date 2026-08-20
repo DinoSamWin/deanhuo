@@ -21,6 +21,11 @@ const UPLOAD_DIRS = {
     musicAudio: 'assets/audio/admin-uploads'
 };
 
+const AUTH_STORAGE_KEY = 'deanAdminAuth';
+const LEGACY_AUTH_STORAGE_KEY = 'deanAdminToken';
+const AUTH_TTL_DAYS = 7;
+const AUTH_TTL_MS = AUTH_TTL_DAYS * 24 * 60 * 60 * 1000;
+
 const state = {
     token: '',
     online: false,
@@ -52,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bindPublishActions();
     setDefaultFormValues();
 
-    const savedToken = sessionStorage.getItem('deanAdminToken') || '';
+    const savedToken = getStoredAdminToken();
     if (savedToken) {
         $('#admin-token-input').value = savedToken;
         login(savedToken);
@@ -71,7 +76,7 @@ function bindChrome() {
     });
 
     $('#logout-button').addEventListener('click', () => {
-        sessionStorage.removeItem('deanAdminToken');
+        clearStoredAdminToken();
         window.location.reload();
     });
 
@@ -116,7 +121,7 @@ async function login(token) {
         return;
     }
 
-    sessionStorage.setItem('deanAdminToken', token);
+    saveStoredAdminToken(token);
     $('#login-screen').classList.add('is-hidden');
     $('#admin-app').classList.remove('is-hidden');
 }
@@ -139,7 +144,7 @@ async function loadContent() {
 
         if (apiError.status === 401) {
             state.token = '';
-            sessionStorage.removeItem('deanAdminToken');
+            clearStoredAdminToken();
             $('#admin-app').classList.add('is-hidden');
             $('#login-screen').classList.remove('is-hidden');
             setLoginError('后台口令和 Vercel 里的 ADMIN_TOKEN 不匹配，请检查后重新输入。');
@@ -184,6 +189,47 @@ function getAuthHeaders() {
         'x-admin-token': state.token,
         Authorization: `Bearer ${state.token}`
     };
+}
+
+function getStoredAdminToken() {
+    try {
+        const rawValue = localStorage.getItem(AUTH_STORAGE_KEY);
+        if (rawValue) {
+            const savedAuth = JSON.parse(rawValue);
+            const expiresAt = Number(savedAuth && savedAuth.expiresAt);
+            if (savedAuth && savedAuth.token && expiresAt > Date.now()) {
+                return savedAuth.token;
+            }
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+        }
+
+        return sessionStorage.getItem(LEGACY_AUTH_STORAGE_KEY) || '';
+    } catch (error) {
+        clearStoredAdminToken();
+        return '';
+    }
+}
+
+function saveStoredAdminToken(token) {
+    try {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+            token,
+            savedAt: Date.now(),
+            expiresAt: Date.now() + AUTH_TTL_MS
+        }));
+        sessionStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
+    } catch (error) {
+        sessionStorage.setItem(LEGACY_AUTH_STORAGE_KEY, token);
+    }
+}
+
+function clearStoredAdminToken() {
+    try {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch (error) {
+        // Ignore storage cleanup errors.
+    }
+    sessionStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
 }
 
 async function loadStaticFiles() {
