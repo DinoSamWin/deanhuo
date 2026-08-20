@@ -25,6 +25,7 @@ const state = {
     token: '',
     online: false,
     apiError: '',
+    apiStatus: 0,
     baseFiles: {},
     files: {},
     textFiles: {},
@@ -84,6 +85,18 @@ function bindChrome() {
     $$('.side-link').forEach(button => {
         button.addEventListener('click', () => setPanel(button.dataset.panel));
     });
+
+    document.addEventListener('click', event => {
+        const shortcut = event.target.closest('[data-panel-shortcut]');
+        if (shortcut) {
+            setPanel(shortcut.dataset.panelShortcut);
+            return;
+        }
+
+        if (event.target.closest('[data-publish-all-shortcut]')) {
+            publishAllDrafts();
+        }
+    });
 }
 
 async function login(token) {
@@ -107,16 +120,26 @@ async function loadContent() {
         const apiFiles = await loadFromApi();
         state.online = true;
         state.apiError = '';
+        state.apiStatus = 200;
         initializeFiles(apiFiles);
         showToast('已连接线上发布接口');
     } catch (apiError) {
         state.online = false;
         state.apiError = apiError.message;
+        state.apiStatus = apiError.status || 0;
+
+        if (apiError.status === 401) {
+            sessionStorage.removeItem('deanAdminToken');
+            $('#admin-app').classList.add('is-hidden');
+            $('#login-screen').classList.remove('is-hidden');
+            showToast('后台口令不正确，请重新登录');
+            return;
+        }
 
         try {
             const staticFiles = await loadStaticFiles();
             initializeFiles(staticFiles);
-            showToast('已进入草稿导出模式');
+            showToast(apiError.status >= 500 ? '线上发布配置未完成' : '已进入本地草稿模式');
         } catch (staticError) {
             setPublishOutput(`读取失败：${staticError.message}`);
             showToast('读取内容库失败');
@@ -136,7 +159,9 @@ async function loadFromApi() {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-        throw new Error(data.error || '线上接口不可用');
+        const error = new Error(data.error || '线上接口不可用');
+        error.status = response.status;
+        throw error;
     }
 
     return data.files || {};
@@ -251,10 +276,35 @@ function bindForms() {
     $('#music-form').addEventListener('submit', handleMusicSubmit);
     $('#knowledge-form').addEventListener('submit', handleKnowledgeSubmit);
 
+    $('#lyric-form').elements.contentFile.addEventListener('change', async event => {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+            $('#lyric-form').elements.content.value = await readTextFile(file);
+            showToast('Markdown 歌词已读取');
+        } catch (error) {
+            showToast('读取 Markdown 文件失败');
+        }
+    });
+
     $('#draft-list').addEventListener('click', event => {
         const button = event.target.closest('[data-remove-draft]');
         if (!button) return;
         removeDraftItem(button.dataset.source, button.dataset.id);
+    });
+
+    $('#pending-list').addEventListener('click', event => {
+        const publishButton = event.target.closest('[data-publish-draft]');
+        const removeButton = event.target.closest('[data-remove-draft]');
+
+        if (publishButton) {
+            publishSingleDraft(publishButton.dataset.source, publishButton.dataset.id);
+            return;
+        }
+
+        if (removeButton) {
+            removeDraftItem(removeButton.dataset.source, removeButton.dataset.id);
+        }
     });
 }
 
@@ -287,7 +337,7 @@ async function handlePhotoSubmit(event) {
 
         form.reset();
         setDefaultFormValues();
-        showToast('图片资源已加入草稿');
+        showToast('图片资源已加入待发布列表');
     });
 }
 
@@ -300,6 +350,15 @@ async function handleLyricSubmit(event) {
 
     await runFormTask(form, async () => {
         const title = form.elements.title.value.trim();
+        const pastedContent = form.elements.content.value.trim();
+        const fileContent = form.elements.contentFile.files[0]
+            ? (await readTextFile(form.elements.contentFile.files[0])).trim()
+            : '';
+        const content = fileContent || pastedContent;
+        if (!content) {
+            throw new Error('请上传 Markdown 文件或填写正文内容');
+        }
+
         const id = makeUniqueId('lyric', title, 'lyrics');
         state.previewUrls[id] = URL.createObjectURL(coverFile);
         const cover = await uploadAsset(coverFile, 'lyricsCover');
@@ -307,7 +366,7 @@ async function handleLyricSubmit(event) {
         const contentPath = `assets/lyrics/admin-generated/${id}.md`;
         const showOnHome = form.elements.showOnHome.checked;
 
-        state.textFiles[contentPath] = form.elements.content.value.trim();
+        state.textFiles[contentPath] = content;
         appendResource('lyrics', {
             id,
             title,
@@ -329,7 +388,7 @@ async function handleLyricSubmit(event) {
 
         form.reset();
         setDefaultFormValues();
-        showToast('词作资源已加入草稿');
+        showToast('词作资源已加入待发布列表');
     });
 }
 
@@ -344,12 +403,35 @@ async function handleMusicSubmit(event) {
     await runFormTask(form, async () => {
         const title = form.elements.title.value.trim();
         const id = makeUniqueId('music', title, 'music');
+        const lyricMarkdownFile = form.elements.lyricMarkdownFile.files[0];
+        const lyricMarkdown = lyricMarkdownFile ? (await readTextFile(lyricMarkdownFile)).trim() : '';
+        const shouldSyncLyric = Boolean(lyricMarkdown && form.elements.syncLyric.checked);
         state.previewUrls[id] = URL.createObjectURL(coverFile);
         const cover = await uploadAsset(coverFile, 'musicCover');
         const url = await uploadAsset(audioFile, 'musicAudio');
-        const lyricId = form.elements.lyricId.value;
+        let lyricId = form.elements.lyricId.value;
 
-        appendResource('music', {
+        if (shouldSyncLyric) {
+            lyricId = makeUniqueId('lyric', title, 'lyrics');
+            const contentPath = `assets/lyrics/admin-generated/${lyricId}.md`;
+            state.textFiles[contentPath] = lyricMarkdown;
+            appendResource('lyrics', {
+                id: lyricId,
+                title,
+                author: form.elements.artist.value.trim() || 'Dean Huo',
+                date: formatInputDate(new Date()),
+                cover,
+                summary: form.elements.description.value.trim() || summarizeMarkdown(lyricMarkdown),
+                contentPath,
+                audioPath: url,
+                order: getNextNumber('lyrics', 'order'),
+                showOnHome: false,
+                homeOrder: getNextHomeOrder('lyrics'),
+                releaseYear: form.elements.year.value.trim() || String(new Date().getFullYear())
+            });
+        }
+
+        const musicItem = {
             id,
             title,
             artist: form.elements.artist.value.trim() || 'Dean Huo',
@@ -359,7 +441,13 @@ async function handleMusicSubmit(event) {
             genre: form.elements.genre.value.trim() || 'Original',
             description: form.elements.description.value.trim(),
             ...(lyricId ? { lyricId } : {})
-        });
+        };
+
+        if (lyricMarkdown && !shouldSyncLyric) {
+            musicItem.lyricText = markdownToPlainText(lyricMarkdown);
+        }
+
+        appendResource('music', musicItem);
 
         if (form.elements.showOnHome.checked) {
             addRecommendation('homeMusic', id);
@@ -367,7 +455,7 @@ async function handleMusicSubmit(event) {
 
         form.reset();
         setDefaultFormValues();
-        showToast('音乐资源已加入草稿');
+        showToast(shouldSyncLyric ? '音乐和关联词作已加入待发布列表' : '音乐资源已加入待发布列表');
     });
 }
 
@@ -408,7 +496,7 @@ async function handleKnowledgeSubmit(event) {
 
         form.reset();
         setDefaultFormValues();
-        showToast('知识资源已加入草稿');
+        showToast('知识资源已加入待发布列表');
     });
 }
 
@@ -419,7 +507,7 @@ async function runFormTask(form, task) {
     try {
         await task();
         renderAll();
-        setPanel('resources-panel');
+        setPanel('pending-panel');
     } catch (error) {
         showToast(error.message || '操作失败');
     } finally {
@@ -485,7 +573,7 @@ function removeDraftItem(source, id) {
     });
 
     renderAll();
-    showToast('已从草稿移除');
+    showToast('已从待发布列表移除');
 }
 
 function bindRecommendations() {
@@ -558,6 +646,7 @@ function moveRecommendation(moduleKey, id, direction) {
 function renderAll() {
     renderStats();
     renderDraft();
+    renderPendingList();
     renderLibrary();
     renderRecommendationModuleSelect();
     renderRecommendationPanel();
@@ -583,16 +672,7 @@ function renderStats() {
 }
 
 function renderDraft() {
-    const entries = [];
-
-    Object.keys(SOURCE_META).forEach(source => {
-        getSourceItems(source)
-            .filter(item => state.newIds[source].has(String(item.id)))
-            .forEach(item => {
-                entries.push({ source, item });
-            });
-    });
-
+    const entries = getDraftEntries();
     const textCount = Object.keys(state.textFiles).length;
     const recChanged = hasFileChanged(DATA_FILES.recommendations);
     const assetCount = state.pendingAssets.length;
@@ -629,6 +709,92 @@ function renderDraft() {
     }
 
     $('#draft-list').innerHTML = rows.join('');
+}
+
+function renderPendingList() {
+    const entries = getDraftEntries();
+    const recChanged = hasFileChanged(DATA_FILES.recommendations);
+    const textCount = Object.keys(state.textFiles).length;
+    const assetCount = state.pendingAssets.length;
+    const totalChanges = entries.length + textCount + (recChanged ? 1 : 0);
+    const modeText = state.online
+        ? '已连接线上发布接口，可以直接提交到 GitHub。'
+        : `未连接线上发布接口${state.apiError ? `：${state.apiError}` : ''}。当前只能下载草稿包。`;
+
+    $('#pending-status').textContent = totalChanges === 0
+        ? `${modeText} 暂无待发布资源。`
+        : `${modeText} 待发布资源 ${entries.length} 个，生成 Markdown ${textCount} 个，待处理附件 ${assetCount} 个${recChanged ? '，推荐配置已调整' : ''}。`;
+
+    if (entries.length === 0 && !recChanged) {
+        $('#pending-list').innerHTML = `
+            <div class="pending-empty">
+                <i data-lucide="check-circle"></i>
+                <strong>没有待发布资源</strong>
+                <span>新增图片、词作、音乐或知识内容后，会立刻出现在这里。</span>
+            </div>
+        `;
+        return;
+    }
+
+    const cards = entries.map(({ source, item }) => {
+        const availability = getSinglePublishAvailability(source, item);
+        const textFiles = getTextFilePathsForItem(source, item);
+        const recommendationLabels = getRecommendationLabelsForItem(source, item.id);
+        const badges = [
+            `<span>${escapeHtml(SOURCE_META[source].label)}</span>`,
+            ...textFiles.map(() => '<span>Markdown</span>'),
+            ...recommendationLabels.map(label => `<span>${escapeHtml(label)}</span>`)
+        ].join('');
+
+        return `
+            <article class="pending-card">
+                ${renderMiniMedia(source, item)}
+                <div class="pending-card-body">
+                    <div class="pending-card-heading">
+                        <h3>${escapeHtml(item.title || item.id)}</h3>
+                        <span>${escapeHtml(item.id)}</span>
+                    </div>
+                    <p>${escapeHtml(getItemMeta(source, item))}</p>
+                    <div class="pending-badges">${badges}</div>
+                    ${availability.reason ? `<div class="pending-note">${escapeHtml(availability.reason)}</div>` : ''}
+                </div>
+                <div class="pending-card-actions">
+                    <button class="primary-action" data-publish-draft="${escapeAttribute(item.id)}" data-source="${source}" ${availability.canPublish ? '' : 'disabled'} title="${escapeAttribute(availability.reason || '发布这条资源')}">
+                        <i data-lucide="cloud-upload"></i>
+                        发布这条
+                    </button>
+                    <button class="ghost-action" data-remove-draft="${escapeAttribute(item.id)}" data-source="${source}">
+                        <i data-lucide="trash-2"></i>
+                        移除
+                    </button>
+                </div>
+            </article>
+        `;
+    });
+
+    if (recChanged) {
+        cards.push(`
+            <article class="pending-card pending-card-config">
+                <div class="resource-icon"><i data-lucide="list-ordered"></i></div>
+                <div class="pending-card-body">
+                    <div class="pending-card-heading">
+                        <h3>推荐配置改动</h3>
+                        <span>recommendations.json</span>
+                    </div>
+                    <p>推荐位和排序会跟随一键发布保存；单条发布会只带上已发布资源可用的推荐引用。</p>
+                    <div class="pending-badges"><span>推荐配置</span></div>
+                </div>
+                <div class="pending-card-actions">
+                    <button class="primary-action" data-publish-all-shortcut>
+                        <i data-lucide="cloud-upload"></i>
+                        一键发布
+                    </button>
+                </div>
+            </article>
+        `);
+    }
+
+    $('#pending-list').innerHTML = cards.join('');
 }
 
 function renderLibrary() {
@@ -749,13 +915,16 @@ function renderMusicLyricSelect() {
 }
 
 function bindPublishActions() {
-    $('#publish-button').addEventListener('click', publishDraft);
+    $('#publish-button').addEventListener('click', publishAllDrafts);
     $('#quick-publish-button').addEventListener('click', () => {
         setPanel('publish-panel');
-        publishDraft();
+        publishAllDrafts();
     });
+    $('#dashboard-publish-all-button').addEventListener('click', publishAllDrafts);
+    $('#pending-publish-all-button').addEventListener('click', publishAllDrafts);
     $('#export-button').addEventListener('click', downloadDraftBundle);
     $('#download-payload-button').addEventListener('click', downloadDraftBundle);
+    $('#pending-download-button').addEventListener('click', downloadDraftBundle);
     $('#copy-payload-button').addEventListener('click', copyDraftBundle);
 }
 
@@ -790,7 +959,7 @@ function renderPublishChecks() {
     `).join('');
 }
 
-async function publishDraft() {
+async function publishAllDrafts() {
     renderPublishChecks();
 
     const problems = getPublishProblems();
@@ -809,20 +978,20 @@ async function publishDraft() {
     if (!state.online) {
         const bundle = buildDraftBundle();
         setPublishOutput([
-            '当前是草稿导出模式，未连接线上 GitHub 发布接口。',
+            '当前未连接线上 GitHub 发布接口，所以还不能直接保存发布。',
             '',
-            '你可以下载草稿包，或把 Vercel 环境变量 ADMIN_TOKEN / GITHUB_TOKEN / GITHUB_REPO / GITHUB_BRANCH 配好后重新进入后台发布。',
+            '请确认 Vercel 已配置 ADMIN_TOKEN / GITHUB_TOKEN / GITHUB_REPO / GITHUB_BRANCH，并使用正确后台口令重新进入后台。',
+            '在配置完成前，可以先下载草稿包备份本次新增内容。',
             '',
             JSON.stringify(bundle.summary, null, 2)
         ].join('\n'));
-        showToast('当前只能导出草稿');
+        showToast('线上发布接口未连接');
         return;
     }
 
     const payload = buildPublishPayload();
     setPublishOutput('正在提交到 GitHub...');
-    $('#publish-button').disabled = true;
-    $('#quick-publish-button').disabled = true;
+    setPublishBusy(true);
 
     try {
         const response = await fetch('/api/admin/content', {
@@ -860,13 +1029,89 @@ async function publishDraft() {
             }
         }, null, 2));
         renderAll();
-        showToast('发布成功');
+        showToast('发布成功，待发布列表已清空');
     } catch (error) {
         setPublishOutput(`发布失败：${error.message}`);
         showToast('发布失败');
     } finally {
-        $('#publish-button').disabled = false;
-        $('#quick-publish-button').disabled = false;
+        setPublishBusy(false);
+    }
+}
+
+async function publishSingleDraft(source, id) {
+    const entry = getDraftEntry(source, id);
+    if (!entry) {
+        showToast('这条资源已经不在待发布列表');
+        renderAll();
+        return;
+    }
+
+    const entries = expandEntriesWithDependencies([entry]);
+    const availability = getSinglePublishAvailability(source, entry.item);
+    if (!availability.canPublish) {
+        showToast(availability.reason || '暂时不能单条发布');
+        return;
+    }
+
+    const problems = getPublishProblems();
+    if (problems.length > 0) {
+        setPublishOutput(`发布被拦截：\n${problems.join('\n')}`);
+        showToast('发布检查未通过');
+        return;
+    }
+
+    const payload = buildSinglePublishPayload(entries);
+    if (Object.keys(payload.files).length === 0 && Object.keys(payload.textFiles).length === 0) {
+        showToast('没有可发布的改动');
+        return;
+    }
+
+    setPublishOutput(`正在发布：${entries.map(item => item.item.title || item.item.id).join('、')}`);
+    setPublishBusy(true);
+
+    try {
+        const response = await fetch('/api/admin/content', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                'x-admin-token': state.token
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.error || '发布失败');
+        }
+
+        Object.entries(payload.files).forEach(([path, value]) => {
+            state.baseFiles[path] = clone(value);
+        });
+
+        entries.forEach(({ source: entrySource, item }) => {
+            state.newIds[entrySource].delete(String(item.id));
+            getTextFilePathsForItem(entrySource, item).forEach(path => {
+                delete state.textFiles[path];
+            });
+        });
+
+        setPublishOutput(JSON.stringify({
+            message: data.changed ? '这条资源已保存到 GitHub，Vercel 会自动发布' : '没有实际变更',
+            published: entries.map(({ source: entrySource, item }) => ({
+                source: SOURCE_META[entrySource].label,
+                id: item.id,
+                title: item.title
+            })),
+            commitSha: data.commitSha,
+            commitUrl: data.commitUrl
+        }, null, 2));
+        renderAll();
+        showToast('单条发布成功');
+    } catch (error) {
+        setPublishOutput(`发布失败：${error.message}`);
+        showToast('发布失败');
+    } finally {
+        setPublishBusy(false);
     }
 }
 
@@ -891,6 +1136,61 @@ function buildPublishPayload() {
         files,
         textFiles: clone(state.textFiles)
     };
+}
+
+function buildSinglePublishPayload(entries) {
+    const selectedBySource = buildSelectedIdMap(entries);
+    const files = {};
+
+    Object.entries(selectedBySource).forEach(([source, ids]) => {
+        if (ids.size === 0) return;
+
+        const path = DATA_FILES[source];
+        const baseItems = clone(state.baseFiles[path] || []);
+        const publishItems = getSourceItems(source)
+            .filter(item => state.newIds[source].has(String(item.id)) && ids.has(String(item.id)))
+            .map(clone);
+
+        if (publishItems.length > 0) {
+            files[path] = baseItems.concat(publishItems);
+        }
+    });
+
+    const recommendations = buildPublishedRecommendations(selectedBySource);
+    if (stableStringify(recommendations) !== stableStringify(state.baseFiles[DATA_FILES.recommendations])) {
+        recommendations.updatedAt = new Date().toISOString();
+        files[DATA_FILES.recommendations] = recommendations;
+    }
+
+    const textFiles = {};
+    entries.forEach(({ source, item }) => {
+        getTextFilePathsForItem(source, item).forEach(path => {
+            if (state.textFiles[path] !== undefined) {
+                textFiles[path] = state.textFiles[path];
+            }
+        });
+    });
+
+    return {
+        message: `Publish resource from admin: ${entries.map(({ item }) => item.title || item.id).join(', ')}`,
+        files,
+        textFiles
+    };
+}
+
+function buildPublishedRecommendations(selectedBySource) {
+    const recommendations = clone(getRecommendations());
+
+    Object.values(recommendations.modules).forEach(moduleConfig => {
+        const source = moduleConfig.source;
+        const baseItems = state.baseFiles[DATA_FILES[source]] || [];
+        const allowedIds = new Set(baseItems.map(item => String(item.id)));
+        const selectedIds = selectedBySource[source] || new Set();
+        selectedIds.forEach(id => allowedIds.add(String(id)));
+        moduleConfig.items = moduleConfig.items.filter(id => allowedIds.has(String(id)));
+    });
+
+    return recommendations;
 }
 
 function buildDraftBundle() {
@@ -942,6 +1242,183 @@ async function copyDraftBundle() {
     }
 }
 
+function getDraftEntries() {
+    return Object.keys(SOURCE_META).flatMap(source => {
+        return getSourceItems(source)
+            .filter(item => state.newIds[source].has(String(item.id)))
+            .map(item => ({ source, item }));
+    });
+}
+
+function getDraftEntry(source, id) {
+    if (!state.newIds[source] || !state.newIds[source].has(String(id))) {
+        return null;
+    }
+
+    const item = getSourceItems(source).find(entry => String(entry.id) === String(id));
+    return item ? { source, item } : null;
+}
+
+function expandEntriesWithDependencies(entries) {
+    const selected = new Map();
+    entries.forEach(entry => {
+        selected.set(`${entry.source}:${entry.item.id}`, entry);
+    });
+
+    entries.forEach(({ source, item }) => {
+        if (source !== 'music' || !item.lyricId || !state.newIds.lyrics.has(String(item.lyricId))) {
+            return;
+        }
+
+        const lyricEntry = getDraftEntry('lyrics', item.lyricId);
+        if (lyricEntry) {
+            selected.set(`lyrics:${lyricEntry.item.id}`, lyricEntry);
+        }
+    });
+
+    return Object.keys(SOURCE_META).flatMap(source => {
+        const ids = new Set([...selected.values()]
+            .filter(entry => entry.source === source)
+            .map(entry => String(entry.item.id)));
+        return getSourceItems(source)
+            .filter(item => ids.has(String(item.id)))
+            .map(item => ({ source, item }));
+    });
+}
+
+function buildSelectedIdMap(entries) {
+    return entries.reduce((result, { source, item }) => {
+        if (!result[source]) {
+            result[source] = new Set();
+        }
+        result[source].add(String(item.id));
+        return result;
+    }, {});
+}
+
+function getSinglePublishAvailability(source, item) {
+    if (!state.online) {
+        return {
+            canPublish: false,
+            reason: '线上发布接口未连接，先配置发布环境或下载草稿包。'
+        };
+    }
+
+    const entries = expandEntriesWithDependencies([{ source, item }]);
+    const selectedBySource = buildSelectedIdMap(entries);
+
+    for (const [entrySource, selectedIds] of Object.entries(selectedBySource)) {
+        const drafts = getSourceItems(entrySource).filter(entry => state.newIds[entrySource].has(String(entry.id)));
+        const maxSelectedIndex = drafts.reduce((max, draft, index) => {
+            return selectedIds.has(String(draft.id)) ? Math.max(max, index) : max;
+        }, -1);
+
+        for (let index = 0; index <= maxSelectedIndex; index += 1) {
+            if (!selectedIds.has(String(drafts[index].id))) {
+                return {
+                    canPublish: false,
+                    reason: `请先发布上方更早创建的${SOURCE_META[entrySource].label}草稿，或使用一键发布全部。`
+                };
+            }
+        }
+    }
+
+    const missingTextPath = entries
+        .flatMap(entry => getTextFilePathsForItem(entry.source, entry.item))
+        .find(path => state.textFiles[path] === undefined);
+
+    if (missingTextPath) {
+        return {
+            canPublish: false,
+            reason: `缺少生成的 Markdown 文件：${missingTextPath}`
+        };
+    }
+
+    return { canPublish: true, reason: '' };
+}
+
+function getTextFilePathsForItem(source, item) {
+    if (!item) return [];
+    if (source === 'lyrics' && item.contentPath) {
+        return [item.contentPath];
+    }
+    if (source === 'knowledge' && item.filename && !item.externalUrl) {
+        return [`assets/data/knowledge/${item.filename}`];
+    }
+    return [];
+}
+
+function getRecommendationLabelsForItem(source, id) {
+    return Object.values(getRecommendations().modules)
+        .filter(moduleConfig => moduleConfig.source === source && moduleConfig.items.map(String).includes(String(id)))
+        .map(moduleConfig => moduleConfig.label);
+}
+
+function setPublishBusy(isBusy) {
+    [
+        'publish-button',
+        'quick-publish-button',
+        'dashboard-publish-all-button',
+        'pending-publish-all-button'
+    ].forEach(id => {
+        const button = document.getElementById(id);
+        if (button) {
+            button.disabled = isBusy;
+        }
+    });
+
+    $$('[data-publish-draft]').forEach(button => {
+        if (isBusy) {
+            button.dataset.wasDisabled = button.disabled ? 'true' : 'false';
+            button.disabled = true;
+        } else if (button.dataset.wasDisabled !== undefined) {
+            button.disabled = button.dataset.wasDisabled === 'true';
+            delete button.dataset.wasDisabled;
+        }
+    });
+
+    $$('[data-publish-all-shortcut]').forEach(button => {
+        button.disabled = isBusy;
+    });
+}
+
+function readTextFile(file) {
+    return new Promise((resolve, reject) => {
+        if (file.size > 200 * 1024) {
+            reject(new Error('Markdown 文件不能超过 200KB'));
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('文件读取失败'));
+        reader.readAsText(file, 'utf-8');
+    });
+}
+
+function markdownToPlainText(markdown) {
+    return String(markdown || '')
+        .replace(/```[\s\S]*?```/g, '')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/!\[[^\]]*]\([^)]+\)/g, '')
+        .replace(/\[([^\]]+)]\([^)]+\)/g, '$1')
+        .replace(/^#{1,6}\s+/gm, '')
+        .replace(/^\s{0,3}>\s?/gm, '')
+        .replace(/^\s*[-*+]\s+/gm, '')
+        .replace(/^\s*\d+\.\s+/gm, '')
+        .replace(/[*_~]/g, '')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .join('\n');
+}
+
+function summarizeMarkdown(markdown) {
+    const plainText = markdownToPlainText(markdown);
+    const firstLine = plainText.split('\n').find(Boolean) || '同步上传的歌词内容';
+    return firstLine.length > 90 ? `${firstLine.slice(0, 90)}...` : firstLine;
+}
+
 function getPublishProblems() {
     const problems = [];
 
@@ -961,6 +1438,14 @@ function getPublishProblems() {
                 break;
             }
         }
+    });
+
+    getDraftEntries().forEach(({ source, item }) => {
+        getTextFilePathsForItem(source, item).forEach(path => {
+            if (state.textFiles[path] === undefined) {
+                problems.push(`${item.title || item.id} 缺少生成的 Markdown 文件：${path}`);
+            }
+        });
     });
 
     Object.entries(getRecommendations().modules).forEach(([moduleKey, moduleConfig]) => {
@@ -1094,8 +1579,9 @@ function setPanel(panelId) {
     const titleMap = {
         'dashboard-panel': '总览',
         'resources-panel': '新增资源',
+        'pending-panel': '待发布资源',
         'recommendations-panel': '推荐配置',
-        'publish-panel': '保存发布'
+        'publish-panel': '发布检查'
     };
 
     $('#panel-title').textContent = titleMap[panelId] || '资源配置后台';
