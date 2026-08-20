@@ -76,19 +76,40 @@ function createHttpError(statusCode, message) {
 }
 
 function requireAdmin(req) {
-    const expected = process.env.ADMIN_TOKEN;
-    if (!expected) {
+    const rawExpected = process.env.ADMIN_TOKEN;
+    if (!rawExpected) {
         throw createHttpError(500, '线上发布配置缺失：ADMIN_TOKEN');
     }
 
-    const headerToken = req.headers['x-admin-token'];
+    const expected = normalizeAdminToken(rawExpected);
+    if (!expected) {
+        throw createHttpError(500, '线上发布配置为空：ADMIN_TOKEN');
+    }
+
+    const headerToken = getHeaderValue(req.headers['x-admin-token']);
     const authHeader = req.headers.authorization || '';
     const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    const token = headerToken || bearerToken;
+    const token = normalizeAdminToken(headerToken || bearerToken);
 
     if (token !== expected) {
         throw createHttpError(401, '后台登录已失效，请重新登录');
     }
+}
+
+function getHeaderValue(value) {
+    return Array.isArray(value) ? value[0] : value;
+}
+
+function normalizeAdminToken(value) {
+    const trimmed = String(value || '').trim();
+    const quotePairs = [
+        ['"', '"'],
+        ["'", "'"],
+        ['“', '”'],
+        ['‘', '’']
+    ];
+    const pair = quotePairs.find(([start, end]) => trimmed.startsWith(start) && trimmed.endsWith(end));
+    return pair && trimmed.length >= 2 ? trimmed.slice(1, -1).trim() : trimmed;
 }
 
 function getGithubConfig() {

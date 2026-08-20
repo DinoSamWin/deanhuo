@@ -105,7 +105,8 @@ function bindChrome() {
 }
 
 async function login(token) {
-    if (!token) {
+    const normalizedToken = normalizeAdminToken(token);
+    if (!normalizedToken) {
         setLoginError('请先输入后台口令');
         showToast('请先输入后台口令');
         return;
@@ -113,7 +114,7 @@ async function login(token) {
 
     setLoginError('');
     setLoginBusy(true);
-    state.token = token;
+    state.token = normalizedToken;
     const loaded = await loadContent();
     setLoginBusy(false);
 
@@ -121,7 +122,7 @@ async function login(token) {
         return;
     }
 
-    saveStoredAdminToken(token);
+    saveStoredAdminToken(normalizedToken);
     $('#login-screen').classList.add('is-hidden');
     $('#admin-app').classList.remove('is-hidden');
 }
@@ -189,6 +190,18 @@ function getAuthHeaders() {
         'x-admin-token': state.token,
         Authorization: `Bearer ${state.token}`
     };
+}
+
+function normalizeAdminToken(value) {
+    const trimmed = String(value || '').trim();
+    const quotePairs = [
+        ['"', '"'],
+        ["'", "'"],
+        ['“', '”'],
+        ['‘', '’']
+    ];
+    const pair = quotePairs.find(([start, end]) => trimmed.startsWith(start) && trimmed.endsWith(end));
+    return pair && trimmed.length >= 2 ? trimmed.slice(1, -1).trim() : trimmed;
 }
 
 function getStoredAdminToken() {
