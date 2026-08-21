@@ -300,6 +300,9 @@
         "order": 22,
         "showOnHome": false,
         "homeOrder": 4,
-        "releaseYear": "2026"
+        "releaseYear": "2026",
+        "deletedAt": "2026-08-21T16:03:07.956Z",
+        "deletedBy": "admin",
+        "deletedReason": "后台软删除"
     }
 ]
