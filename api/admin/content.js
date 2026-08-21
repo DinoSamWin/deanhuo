@@ -90,7 +90,7 @@ module.exports = async function handler(req, res) {
         });
     } catch (error) {
         const status = error.statusCode || 500;
-        return sendJson(res, status, { error: error.message || 'Server error' });
+        return sendJson(res, status, buildErrorResponse(error));
     }
 };
 
@@ -106,6 +106,23 @@ function createHttpError(statusCode, message) {
     return error;
 }
 
+function buildErrorResponse(error) {
+    const response = { error: error.message || 'Server error' };
+    if (error.code) response.code = error.code;
+    if (error.details) response.details = error.details;
+    return response;
+}
+
+function createAuthError(presented) {
+    const error = createHttpError(401, '后台登录已失效，请重新登录');
+    error.code = 'ADMIN_TOKEN_MISMATCH';
+    error.details = {
+        tokenReceived: Boolean(presented.token),
+        transport: presented.transport
+    };
+    return error;
+}
+
 function requireAdmin(req) {
     const rawExpected = process.env.ADMIN_TOKEN;
     if (!rawExpected) {
@@ -117,13 +134,47 @@ function requireAdmin(req) {
         throw createHttpError(500, '线上发布配置为空：ADMIN_TOKEN');
     }
 
-    const headerToken = getHeaderValue(req.headers['x-admin-token']);
-    const authHeader = req.headers.authorization || '';
-    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    const token = normalizeAdminToken(headerToken || bearerToken);
+    const presented = getPresentedAdminToken(req);
 
-    if (token !== expected) {
-        throw createHttpError(401, '后台登录已失效，请重新登录');
+    if (presented.token !== expected) {
+        throw createAuthError(presented);
+    }
+}
+
+function getPresentedAdminToken(req) {
+    const encodedHeader = getHeaderValue(req.headers['x-admin-token-encoded']);
+    if (encodedHeader) {
+        return {
+            token: normalizeAdminToken(decodeHeaderToken(encodedHeader)),
+            transport: 'encoded-header'
+        };
+    }
+
+    const headerToken = getHeaderValue(req.headers['x-admin-token']);
+    if (headerToken) {
+        return {
+            token: normalizeAdminToken(headerToken),
+            transport: 'header'
+        };
+    }
+
+    const authHeader = getHeaderValue(req.headers.authorization) || '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (bearerToken) {
+        return {
+            token: normalizeAdminToken(bearerToken),
+            transport: 'bearer'
+        };
+    }
+
+    return { token: '', transport: 'missing' };
+}
+
+function decodeHeaderToken(value) {
+    try {
+        return decodeURIComponent(String(value || ''));
+    } catch (error) {
+        return String(value || '');
     }
 }
 
@@ -140,7 +191,8 @@ function normalizeAdminToken(value) {
         ['‘', '’']
     ];
     const pair = quotePairs.find(([start, end]) => trimmed.startsWith(start) && trimmed.endsWith(end));
-    return pair && trimmed.length >= 2 ? trimmed.slice(1, -1).trim() : trimmed;
+    const unquoted = pair && trimmed.length >= 2 ? trimmed.slice(1, -1).trim() : trimmed;
+    return unquoted.normalize('NFC');
 }
 
 function getGithubConfig() {

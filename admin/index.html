@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css">
+    <link rel="stylesheet" href="../css/admin.css?v=20260821-auth-unicode">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -20,7 +20,12 @@
             <p>输入 Vercel 里配置的 ADMIN_TOKEN 后进入后台。</p>
             <label class="field">
                 <span>后台口令</span>
-                <input id="admin-token-input" type="password" placeholder="输入 ADMIN_TOKEN">
+                <div class="password-field">
+                    <input id="admin-token-input" type="password" placeholder="输入 ADMIN_TOKEN" autocomplete="current-password">
+                    <button class="icon-action password-toggle" id="toggle-password-button" type="button" aria-label="显示密码" title="显示密码" aria-pressed="false">
+                        <i data-lucide="eye"></i>
+                    </button>
+                </div>
             </label>
             <div class="login-error" id="login-error" role="alert"></div>
             <button class="primary-action" id="login-button">
@@ -439,7 +444,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js"></script>
+    <script src="../admin/admin.js?v=20260821-auth-unicode"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();
