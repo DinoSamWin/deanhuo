@@ -288,5 +288,18 @@
         "showOnHome": false,
         "homeOrder": 4,
         "releaseYear": "2024"
+    },
+    {
+        "id": "lyric-mt33kx4v",
+        "title": "浅浅",
+        "author": "Dean Huo",
+        "date": "2026-08-21",
+        "cover": "assets/images/admin-uploads/lyrics/1787325712562-1.jpg",
+        "summary": "天平一开始就不懂孤单，它们都有另一半 | 我们是不是彼此的牵绊，我还没答案",
+        "contentPath": "assets/lyrics/admin-generated/lyric-mt33kx4v.md",
+        "order": 22,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2026"
     }
 ]
