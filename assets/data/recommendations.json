@@ -1,6 +1,6 @@
 {
     "version": 1,
-    "updatedAt": "",
+    "updatedAt": "2026-08-21T14:40:46.247Z",
     "modules": {
         "homeLyrics": {
             "label": "首页词作轮播",
@@ -12,7 +12,9 @@
             "label": "首页音乐作品",
             "source": "music",
             "limit": 4,
-            "items": []
+            "items": [
+                "music-mt323oas"
+            ]
         },
         "homePhotos": {
             "label": "首页摄影橱窗",

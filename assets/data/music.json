@@ -41,7 +41,6 @@
         "genre": "Synthwave",
         "description": "A high-octane synthwave track inspired by 80s aesthetics and late-night city drives.",
         "lyricId": "ti-zui-yang-fu-er-mo-si"
-
     },
     {
         "id": "mo-er-ben-dian-che",
@@ -53,6 +52,15 @@
         "genre": "Synthwave",
         "description": "A high-octane synthwave track inspired by 80s aesthetics and late-night city drives.",
         "lyricId": "mo-er-ben-dian-che"
-
+    },
+    {
+        "id": "music-mt323oas",
+        "title": "《浅浅》",
+        "artist": "Dean Huo",
+        "year": "2026",
+        "cover": "assets/images/admin-uploads/music/1787323228077-1.jpg",
+        "url": "assets/audio/admin-uploads/1787323235684-musicAudio.mp3",
+        "genre": "Original",
+        "description": ""
     }
 ]
