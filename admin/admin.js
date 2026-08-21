@@ -36,7 +36,6 @@ const state = {
     textFiles: {},
     pendingAssets: [],
     previewUrls: {},
-    authRequired: false,
     newIds: {
         photos: new Set(),
         lyrics: new Set(),
@@ -61,8 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedToken = getStoredAdminToken();
     if (savedToken) {
         $('#admin-token-input').value = savedToken;
+        login(savedToken);
     }
-    login(savedToken, { allowEmpty: true, automatic: true });
 });
 
 function bindChrome() {
@@ -105,9 +104,9 @@ function bindChrome() {
     });
 }
 
-async function login(token, options = {}) {
+async function login(token) {
     const normalizedToken = normalizeAdminToken(token);
-    if (!normalizedToken && !options.allowEmpty) {
+    if (!normalizedToken) {
         setLoginError('请先输入后台口令');
         showToast('请先输入后台口令');
         return;
@@ -116,23 +115,19 @@ async function login(token, options = {}) {
     setLoginError('');
     setLoginBusy(true);
     state.token = normalizedToken;
-    const loaded = await loadContent({ automatic: Boolean(options.automatic), hasToken: Boolean(normalizedToken) });
+    const loaded = await loadContent();
     setLoginBusy(false);
 
     if (!loaded) {
         return;
     }
 
-    if (normalizedToken) {
-        saveStoredAdminToken(normalizedToken);
-    } else {
-        clearStoredAdminToken();
-    }
+    saveStoredAdminToken(normalizedToken);
     $('#login-screen').classList.add('is-hidden');
     $('#admin-app').classList.remove('is-hidden');
 }
 
-async function loadContent(options = {}) {
+async function loadContent() {
     setMode('读取中', false);
     setPublishOutput('正在读取内容库...');
 
@@ -153,18 +148,14 @@ async function loadContent(options = {}) {
             clearStoredAdminToken();
             $('#admin-app').classList.add('is-hidden');
             $('#login-screen').classList.remove('is-hidden');
-            const message = options.hasToken
-                ? '后台口令和 Vercel 里的 ADMIN_TOKEN 不匹配，请检查后重新输入。'
-                : '线上后台当前需要口令，请输入 Vercel 里的 ADMIN_TOKEN。';
-            setLoginError(message);
-            showToast(options.hasToken ? '后台口令不正确' : '请输入后台口令');
+            setLoginError('后台口令和 Vercel 里的 ADMIN_TOKEN 不匹配，请检查后重新输入。');
+            showToast('后台口令不正确');
             return false;
         }
 
         try {
             const staticFiles = await loadStaticFiles();
             initializeFiles(staticFiles);
-            state.authRequired = false;
             showToast(apiError.status >= 500 ? '线上发布配置未完成' : '已进入本地草稿模式');
         } catch (staticError) {
             setPublishOutput(`读取失败：${staticError.message}`);
@@ -191,7 +182,6 @@ async function loadFromApi() {
         throw error;
     }
 
-    state.authRequired = Boolean(data.authRequired);
     return data.files || {};
 }
 
