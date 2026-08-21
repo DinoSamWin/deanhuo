@@ -1,4 +1,4 @@
-const MAX_UPLOAD_SIZE = 20 * 1024 * 1024;
+const MAX_UPLOAD_SIZE = 4 * 1024 * 1024;
 
 const UPLOAD_DIRECTORIES = {
     photos: 'assets/images/admin-uploads/photos',
@@ -197,16 +197,25 @@ function readBuffer(req) {
     return new Promise((resolve, reject) => {
         const chunks = [];
         let length = 0;
+        let rejected = false;
         req.on('data', chunk => {
+            if (rejected) return;
             length += chunk.length;
             if (length > MAX_UPLOAD_SIZE) {
-                reject(createHttpError(413, '上传文件过大'));
+                rejected = true;
+                reject(createHttpError(413, `上传文件过大，请压缩到 ${formatFileSize(MAX_UPLOAD_SIZE)} 以内后再上传`));
                 return;
             }
             chunks.push(chunk);
         });
-        req.on('end', () => resolve(Buffer.concat(chunks)));
-        req.on('error', reject);
+        req.on('end', () => {
+            if (!rejected) {
+                resolve(Buffer.concat(chunks));
+            }
+        });
+        req.on('error', error => {
+            if (!rejected) reject(error);
+        });
     });
 }
 
@@ -293,6 +302,9 @@ function validateFile(file, uploadType) {
     const isImage = !isAudio;
     const contentType = file.contentType || '';
 
+    if (file.data.length > MAX_UPLOAD_SIZE) {
+        throw createHttpError(413, `上传文件过大，请压缩到 ${formatFileSize(MAX_UPLOAD_SIZE)} 以内后再上传`);
+    }
     if (isImage && !contentType.startsWith('image/')) {
         throw createHttpError(400, '该位置只能上传图片');
     }
@@ -316,6 +328,13 @@ function sanitizeFilename(value) {
         .replace(/^-+|-+$/g, '')
         .toLowerCase()
         .slice(0, 80);
+}
+
+function formatFileSize(bytes) {
+    const size = Number(bytes) || 0;
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+    return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 async function uploadGithubFile(github, path, buffer, message) {

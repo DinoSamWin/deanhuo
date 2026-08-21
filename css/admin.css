@@ -506,6 +506,32 @@ button {
     accent-color: var(--accent-color);
 }
 
+.form-message {
+    padding: 11px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.form-message.is-info {
+    color: #dce8ff;
+    background: rgba(102, 153, 255, 0.1);
+    border-color: rgba(102, 153, 255, 0.28);
+}
+
+.form-message.is-success {
+    color: #d8ffe9;
+    background: rgba(0, 255, 136, 0.09);
+    border-color: rgba(0, 255, 136, 0.24);
+}
+
+.form-message.is-error {
+    color: #ffd6d6;
+    background: rgba(255, 68, 68, 0.1);
+    border-color: rgba(255, 68, 68, 0.3);
+}
+
 .compact-field {
     min-width: 200px;
 }
