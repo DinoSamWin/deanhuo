@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260821-trash-progress">
+    <link rel="stylesheet" href="../css/admin.css?v=20260822-relation-select">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -223,7 +223,7 @@
                             <input type="file" name="coverFile" accept="image/*" required>
                         </label>
                         <label class="field">
-                            <span>从音乐选择音频</span>
+                            <span>关联音乐（有音频时自动同步）</span>
                             <select name="musicAudioId" id="lyric-music-audio-select"></select>
                         </label>
                         <label class="field">
@@ -611,7 +611,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260821-trash-progress"></script>
+    <script src="../admin/admin.js?v=20260822-relation-select"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();
