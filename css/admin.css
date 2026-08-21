@@ -674,6 +674,92 @@ button {
     border-color: rgba(0, 255, 136, 0.28);
 }
 
+.resource-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: grid;
+    place-items: center;
+    padding: 22px;
+    background: rgba(0, 0, 0, 0.68);
+}
+
+.modal-panel {
+    width: min(720px, 100%);
+    max-height: min(820px, calc(100vh - 44px));
+    overflow: auto;
+    background: rgba(20, 22, 21, 0.98);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+}
+
+.modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h2 {
+    margin: 0 0 6px;
+    font-size: 24px;
+}
+
+.modal-header p:not(.eyebrow) {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.editor-form {
+    display: grid;
+    gap: 14px;
+    padding: 20px;
+}
+
+.editor-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.editor-meta span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 26px;
+    padding: 0 8px;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.editor-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.editor-field-wide {
+    grid-column: 1 / -1;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
 .pending-toolbar {
     display: flex;
     align-items: center;
@@ -962,6 +1048,7 @@ pre {
     }
 
     .resource-badge,
+    .resource-card-actions,
     .candidate-actions,
     .recommendation-actions,
     .pending-card-actions {
@@ -973,5 +1060,14 @@ pre {
         align-items: flex-start;
         flex-direction: column;
         gap: 2px;
+    }
+
+    .editor-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-actions {
+        justify-content: stretch;
+        flex-direction: column;
     }
 }
