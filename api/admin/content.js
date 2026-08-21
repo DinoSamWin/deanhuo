@@ -46,7 +46,6 @@ module.exports = async function handler(req, res) {
             return sendJson(res, 200, {
                 repo: github.repo,
                 branch: github.branch,
-                authRequired: isAdminPasswordRequired(),
                 files
             });
         }
@@ -108,10 +107,6 @@ function createHttpError(statusCode, message) {
 }
 
 function requireAdmin(req) {
-    if (!isAdminPasswordRequired()) {
-        return;
-    }
-
     const rawExpected = process.env.ADMIN_TOKEN;
     if (!rawExpected) {
         throw createHttpError(500, '线上发布配置缺失：ADMIN_TOKEN');
@@ -130,12 +125,6 @@ function requireAdmin(req) {
     if (token !== expected) {
         throw createHttpError(401, '后台登录已失效，请重新登录');
     }
-}
-
-function isAdminPasswordRequired() {
-    return ['1', 'true', 'yes', 'on', 'required'].includes(
-        normalizeAdminToken(process.env.ADMIN_REQUIRE_TOKEN).toLowerCase()
-    );
 }
 
 function getHeaderValue(value) {

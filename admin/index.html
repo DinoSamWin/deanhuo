@@ -17,10 +17,10 @@
                 <i data-lucide="database-zap"></i>
             </div>
             <h1>资源配置后台</h1>
-            <p>正在连接后台。默认免密进入；如果线上开启了口令保护，这里会提示输入口令。</p>
+            <p>输入 Vercel 里配置的 ADMIN_TOKEN 后进入后台。</p>
             <label class="field">
                 <span>后台口令</span>
-                <input id="admin-token-input" type="password" placeholder="仅在开启口令保护时填写">
+                <input id="admin-token-input" type="password" placeholder="输入 ADMIN_TOKEN">
             </label>
             <div class="login-error" id="login-error" role="alert"></div>
             <button class="primary-action" id="login-button">
@@ -28,7 +28,7 @@
                 进入后台
             </button>
             <div class="login-note">
-                当前版本默认不需要密码。旧资源默认只读；本后台只追加新资源和更新推荐配置。
+                登录成功后，本设备 7 天内刷新页面会自动进入后台。旧资源默认只读；本后台只追加新资源和更新推荐配置。
             </div>
         </div>
     </section>
