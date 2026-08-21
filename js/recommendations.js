@@ -55,29 +55,39 @@
         return normalizeConfig(config);
     }
 
+    function isVisibleItem(item) {
+        return Boolean(item) && !item.deletedAt;
+    }
+
+    function filterVisible(items) {
+        return Array.isArray(items) ? items.filter(isVisibleItem) : [];
+    }
+
     function pickByModule(items, config, moduleKey, fallbackPicker) {
+        const visibleItems = filterVisible(items);
         const moduleConfig = config && config.modules ? config.modules[moduleKey] : null;
         const ids = normalizeItems(moduleConfig && moduleConfig.items);
         const limit = moduleConfig && moduleConfig.limit ? Number(moduleConfig.limit) : undefined;
 
         if (ids.length > 0) {
-            const itemMap = new Map(items.map(item => [String(item.id), item]));
+            const itemMap = new Map(visibleItems.map(item => [String(item.id), item]));
             return ids
                 .map(id => itemMap.get(String(id)))
                 .filter(Boolean)
                 .slice(0, limit || ids.length);
         }
 
-        return typeof fallbackPicker === 'function' ? fallbackPicker(items) : items;
+        return typeof fallbackPicker === 'function' ? fallbackPicker(visibleItems) : visibleItems;
     }
 
     function prioritizeByModule(items, config, moduleKey) {
+        const visibleItems = filterVisible(items);
         const moduleConfig = config && config.modules ? config.modules[moduleKey] : null;
         const ids = normalizeItems(moduleConfig && moduleConfig.items);
-        if (ids.length === 0) return items;
+        if (ids.length === 0) return visibleItems;
 
         const rank = new Map(ids.map((id, index) => [String(id), index]));
-        return [...items].sort((a, b) => {
+        return [...visibleItems].sort((a, b) => {
             const aRank = rank.has(String(a.id)) ? rank.get(String(a.id)) : Number.MAX_SAFE_INTEGER;
             const bRank = rank.has(String(b.id)) ? rank.get(String(b.id)) : Number.MAX_SAFE_INTEGER;
             if (aRank !== bRank) return aRank - bRank;
@@ -88,6 +98,7 @@
     window.DeanRecommendations = {
         defaultModules: DEFAULT_MODULES,
         loadConfig,
+        filterVisible,
         pickByModule,
         prioritizeByModule
     };

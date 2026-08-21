@@ -67,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch('assets/data/lyrics.json?v=' + Date.now())
         .then(res => res.json())
         .then(data => {
+            data = getVisibleResources(data);
             const index = data.findIndex(item => String(item.id).trim() === String(lyricId).trim());
             if (index === -1) {
                 elements.body.innerHTML = '<h2>未找到该内容</h2>';
@@ -202,5 +203,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function navigateTo(id) {
         localStorage.setItem('currentLyricId', id);
         window.location.href = `lyric-detail.html?id=${id}`;
+    }
+
+    function getVisibleResources(items) {
+        if (window.DeanRecommendations && window.DeanRecommendations.filterVisible) {
+            return window.DeanRecommendations.filterVisible(items);
+        }
+
+        return Array.isArray(items) ? items.filter(item => item && !item.deletedAt) : [];
     }
 });

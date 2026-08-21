@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
     ])
         .then(([data, recommendationConfig]) => {
+            data = getVisibleResources(data);
             if (window.DeanRecommendations) {
                 data = window.DeanRecommendations.prioritizeByModule(data, recommendationConfig, 'knowledgePageFeatured');
             }
@@ -59,4 +60,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 lucide.createIcons();
             }
         });
+
+    function getVisibleResources(items) {
+        if (window.DeanRecommendations && window.DeanRecommendations.filterVisible) {
+            return window.DeanRecommendations.filterVisible(items);
+        }
+
+        return Array.isArray(items) ? items.filter(item => item && !item.deletedAt) : [];
+    }
 });

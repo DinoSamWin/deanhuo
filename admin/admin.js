@@ -97,6 +97,7 @@ const state = {
     activePanel: 'dashboard-panel',
     activeLibrary: 'all',
     activeResourceList: 'all',
+    activeTrashList: 'all',
     activeRecommendation: 'homeLyrics'
 };
 
@@ -441,8 +442,14 @@ function bindForms() {
     });
     $('#resource-list-search').addEventListener('input', renderResourceList);
     $('#resource-list').addEventListener('click', handleResourceCardClick);
+    $('#trash-source-select').addEventListener('change', event => {
+        state.activeTrashList = event.target.value;
+        renderTrashList();
+    });
+    $('#trash-search').addEventListener('input', renderTrashList);
+    $('#trash-list').addEventListener('click', handleTrashListClick);
     $('#lyric-music-audio-select').addEventListener('change', event => {
-        const music = getSourceItems('music').find(item => String(item.id) === String(event.target.value));
+        const music = getVisibleSourceItems('music').find(item => String(item.id) === String(event.target.value));
         if (music) {
             setFormMessage($('#lyric-form'), `已选择音乐音频：${music.title || music.id}`, 'info');
         }
@@ -455,6 +462,8 @@ function bindForms() {
     $('#resource-editor-form').addEventListener('submit', handleResourceEditorSubmit);
     $('#resource-editor-close-button').addEventListener('click', closeResourceEditor);
     $('#resource-editor-cancel-button').addEventListener('click', closeResourceEditor);
+    $('#resource-editor-delete-button').addEventListener('click', handleResourceEditorDelete);
+    $('#resource-editor-restore-button').addEventListener('click', handleResourceEditorRestore);
     $('#resource-editor-modal').addEventListener('click', event => {
         if (event.target.id === 'resource-editor-modal') {
             closeResourceEditor();
@@ -470,6 +479,10 @@ function bindForms() {
         const button = $('#resource-viewer-edit-button');
         closeResourceViewer();
         openResourceEditor(button.dataset.source, button.dataset.resourceId);
+    });
+    $('#resource-viewer-restore-button').addEventListener('click', () => {
+        const button = $('#resource-viewer-restore-button');
+        restoreResource(button.dataset.source, button.dataset.resourceId);
     });
     bindUploadInputFeedback();
 
@@ -985,6 +998,10 @@ function removeDraftItem(source, id) {
         }
     }
 
+    if (entry.kind === 'delete') {
+        restoreBaseRecommendationReferences(source, id);
+    }
+
     if (entry.kind === 'new' && item && item.contentPath) {
         delete state.textFiles[item.contentPath];
     }
@@ -999,7 +1016,144 @@ function removeDraftItem(source, id) {
     }
 
     renderAll();
-    showToast(entry.kind === 'new' ? '已从待发布列表移除' : '已撤销这条修改');
+    showToast(entry.kind === 'new' ? '已从待发布列表移除' : `已撤销${getDraftKindLabel(entry.kind)}`);
+}
+
+function softDeleteResource(source, id) {
+    const filePath = DATA_FILES[source];
+    const index = getSourceItems(source).findIndex(item => String(item.id) === String(id));
+    const item = index !== -1 ? state.files[filePath][index] : null;
+
+    if (!item) {
+        showToast('没有找到这条资源');
+        return;
+    }
+
+    if (isResourceDeleted(item)) {
+        showToast('这条资源已经在回收站');
+        return;
+    }
+
+    const title = item.title || item.id;
+    const confirmed = window.confirm(`确认把「${title}」移入回收站吗？\n\n这会做软删除：资源仍保留在 JSON 里，发布后前台会隐藏它。`);
+    if (!confirmed) return;
+
+    if (!confirmAdminAccessToken('请输入 ADMIN_TOKEN 确认删除')) {
+        return;
+    }
+
+    if (state.newIds[source].has(String(id))) {
+        removeNewDraftResource(source, id);
+        closeResourceEditor();
+        closeResourceViewer();
+        renderAll();
+        setPanel('pending-panel');
+        showToast('本次新增资源尚未发布，已从待发布列表移除');
+        return;
+    }
+
+    state.files[filePath][index] = {
+        ...clone(item),
+        deletedAt: new Date().toISOString(),
+        deletedBy: 'admin',
+        deletedReason: '后台软删除'
+    };
+
+    removeResourceFromRecommendations(source, id);
+    closeResourceEditor();
+    closeResourceViewer();
+    renderAll();
+    setPanel('trash-panel');
+    showToast('已移入回收站，发布后前台会隐藏这条资源');
+}
+
+function restoreResource(source, id) {
+    const filePath = DATA_FILES[source];
+    const index = getSourceItems(source).findIndex(item => String(item.id) === String(id));
+    const item = index !== -1 ? state.files[filePath][index] : null;
+
+    if (!item) {
+        showToast('没有找到这条资源');
+        return;
+    }
+
+    if (!isResourceDeleted(item)) {
+        showToast('这条资源不在回收站');
+        return;
+    }
+
+    const title = item.title || item.id;
+    if (!window.confirm(`确认恢复「${title}」到资源列表吗？\n\n恢复后需要发布才会同步到线上。`)) {
+        return;
+    }
+
+    const restored = clone(item);
+    delete restored.deletedAt;
+    delete restored.deletedBy;
+    delete restored.deletedReason;
+    state.files[filePath][index] = restored;
+
+    const baseItem = getBaseResourceItem(source, id);
+    if (baseItem && !isResourceDeleted(baseItem)) {
+        restoreBaseRecommendationReferences(source, id);
+    }
+
+    closeResourceEditor();
+    closeResourceViewer();
+    renderAll();
+    setPanel('pending-panel');
+    showToast('已恢复到资源列表，记得发布这条恢复改动');
+}
+
+function removeNewDraftResource(source, id) {
+    const filePath = DATA_FILES[source];
+    const item = getSourceItems(source).find(entry => String(entry.id) === String(id));
+    state.files[filePath] = state.files[filePath].filter(entry => String(entry.id) !== String(id));
+    state.newIds[source].delete(String(id));
+
+    if (item && item.contentPath) {
+        delete state.textFiles[item.contentPath];
+    }
+    if (item && item.filename) {
+        delete state.textFiles[`assets/data/knowledge/${item.filename}`];
+    }
+
+    removeResourceFromRecommendations(source, id);
+}
+
+function removeResourceFromRecommendations(source, id) {
+    Object.values(getRecommendations().modules).forEach(moduleConfig => {
+        if (moduleConfig.source !== source) return;
+        moduleConfig.items = moduleConfig.items.filter(itemId => String(itemId) !== String(id));
+    });
+}
+
+function restoreBaseRecommendationReferences(source, id) {
+    const currentModules = getRecommendations().modules;
+    const baseModules = (state.baseFiles[DATA_FILES.recommendations] || {}).modules || {};
+
+    Object.entries(baseModules).forEach(([moduleKey, baseModule]) => {
+        const currentModule = currentModules[moduleKey];
+        if (!currentModule || currentModule.source !== source || !Array.isArray(baseModule.items)) return;
+        const baseIndex = baseModule.items.map(String).indexOf(String(id));
+        if (baseIndex === -1 || currentModule.items.map(String).includes(String(id))) return;
+
+        const nextItems = currentModule.items.slice();
+        nextItems.splice(Math.min(baseIndex, nextItems.length), 0, String(id));
+        currentModule.items = nextItems;
+    });
+}
+
+function confirmAdminAccessToken(message) {
+    const input = window.prompt(`${message}\n资源不会真正删除，只会进入回收站。`);
+    if (input === null) return false;
+
+    if (normalizeAdminToken(input) !== state.token) {
+        showToast('ADMIN_TOKEN 校验失败，删除已取消');
+        return false;
+    }
+
+    return true;
 }
 
 function bindRecommendations() {
@@ -1075,6 +1229,7 @@ function renderAll() {
     renderPendingList();
     renderLibrary();
     renderResourceList();
+    renderTrashList();
     renderRecommendationModuleSelect();
     renderRecommendationPanel();
     renderRelationSelects();
@@ -1084,19 +1239,16 @@ function renderAll() {
 
 function renderStats() {
     const stats = Object.entries(SOURCE_META).map(([source, meta]) => {
-        const total = getSourceItems(source).length;
+        const total = getVisibleSourceItems(source).length;
+        const deleted = getTrashSourceItems(source).length;
         const entries = getDraftEntries().filter(entry => entry.source === source);
-        const added = entries.filter(entry => entry.kind === 'new').length;
-        const edited = entries.filter(entry => entry.kind === 'edit').length;
-        const summary = [
-            added > 0 ? `新增 ${added}` : '',
-            edited > 0 ? `修改 ${edited}` : ''
-        ].filter(Boolean).join('，');
+        const summary = summarizeDraftEntries(entries);
+        const detail = [deleted > 0 ? `回收站 ${deleted}` : '', summary].filter(Boolean).join('，');
         return `
             <div class="stat-card">
                 <span>${escapeHtml(meta.label)}</span>
                 <strong>${total}</strong>
-                <p>${summary || '无待发布改动'}</p>
+                <p>${detail || '无待发布改动'}</p>
             </div>
         `;
     }).join('');
@@ -1106,16 +1258,15 @@ function renderStats() {
 
 function renderDraft() {
     const entries = getDraftEntries();
-    const newCount = entries.filter(entry => entry.kind === 'new').length;
-    const editCount = entries.filter(entry => entry.kind === 'edit').length;
     const textCount = Object.keys(state.textFiles).length;
     const recChanged = hasFileChanged(DATA_FILES.recommendations);
     const assetCount = state.pendingAssets.length;
     const totalChanges = entries.length + textCount + (recChanged ? 1 : 0);
+    const entrySummary = summarizeDraftEntries(entries);
 
     $('#draft-summary').textContent = totalChanges === 0
         ? '暂无新增内容。'
-        : `新增资源 ${newCount} 个，修改资源 ${editCount} 个，生成 Markdown ${textCount} 个，待处理附件 ${assetCount} 个${recChanged ? '，推荐配置已调整' : ''}。`;
+        : `${entrySummary || '资源改动 0 个'}，生成 Markdown ${textCount} 个，待处理附件 ${assetCount} 个${recChanged ? '，推荐配置已调整' : ''}。`;
 
     if (entries.length === 0 && !recChanged && textCount === 0) {
         $('#draft-list').innerHTML = '<div class="draft-item"><span>还没有草稿内容</span><span>安全</span></div>';
@@ -1126,11 +1277,11 @@ function renderDraft() {
         <div class="draft-item">
             <div>
                 <strong>${escapeHtml(item.title || item.id)}</strong>
-                <div>${escapeHtml(SOURCE_META[source].label)} · ${escapeHtml(item.id)} · ${kind === 'new' ? '新增' : '修改'}</div>
+                <div>${escapeHtml(SOURCE_META[source].label)} · ${escapeHtml(item.id)} · ${getDraftKindLabel(kind)}</div>
             </div>
             <button class="ghost-action" data-remove-draft="${escapeAttribute(item.id)}" data-source="${source}">
-                <i data-lucide="${kind === 'new' ? 'trash-2' : 'rotate-ccw'}"></i>
-                ${kind === 'new' ? '移除' : '撤销'}
+                <i data-lucide="${getDraftUndoIcon(kind)}"></i>
+                ${getDraftUndoLabel(kind)}
             </button>
         </div>
     `);
@@ -1148,19 +1299,18 @@ function renderDraft() {
 
 function renderPendingList() {
     const entries = getDraftEntries();
-    const newCount = entries.filter(entry => entry.kind === 'new').length;
-    const editCount = entries.filter(entry => entry.kind === 'edit').length;
     const recChanged = hasFileChanged(DATA_FILES.recommendations);
     const textCount = Object.keys(state.textFiles).length;
     const assetCount = state.pendingAssets.length;
     const totalChanges = entries.length + textCount + (recChanged ? 1 : 0);
+    const entrySummary = summarizeDraftEntries(entries);
     const modeText = state.online
         ? '已连接线上发布接口，可以直接提交到 GitHub。'
         : `未连接线上发布接口${state.apiError ? `：${state.apiError}` : ''}。当前只能下载草稿包。`;
 
     $('#pending-status').textContent = totalChanges === 0
         ? `${modeText} 暂无待发布资源。`
-        : `${modeText} 新增资源 ${newCount} 个，修改资源 ${editCount} 个，生成 Markdown ${textCount} 个，待处理附件 ${assetCount} 个${recChanged ? '，推荐配置已调整' : ''}。`;
+        : `${modeText} ${entrySummary || '资源改动 0 个'}，生成 Markdown ${textCount} 个，待处理附件 ${assetCount} 个${recChanged ? '，推荐配置已调整' : ''}。`;
 
     if (entries.length === 0 && !recChanged) {
         $('#pending-list').innerHTML = `
@@ -1179,13 +1329,13 @@ function renderPendingList() {
         const recommendationLabels = getRecommendationLabelsForItem(source, item.id);
         const badges = [
             `<span>${escapeHtml(SOURCE_META[source].label)}</span>`,
-            `<span>${kind === 'new' ? '新增' : '修改'}</span>`,
+            `<span>${getDraftKindLabel(kind)}</span>`,
             ...textFiles.map(() => '<span>Markdown</span>'),
             ...recommendationLabels.map(label => `<span>${escapeHtml(label)}</span>`)
         ].join('');
 
         return `
-            <article class="pending-card">
+            <article class="pending-card ${kind === 'delete' ? 'is-delete-draft' : ''}">
                 ${renderMiniMedia(source, item)}
                 <div class="pending-card-body">
                     <div class="pending-card-heading">
@@ -1202,8 +1352,8 @@ function renderPendingList() {
                         发布这条
                     </button>
                     <button class="ghost-action" data-remove-draft="${escapeAttribute(item.id)}" data-source="${source}">
-                        <i data-lucide="${kind === 'new' ? 'trash-2' : 'rotate-ccw'}"></i>
-                        ${kind === 'new' ? '移除' : '撤销修改'}
+                        <i data-lucide="${getDraftUndoIcon(kind)}"></i>
+                        ${getDraftUndoLabel(kind)}
                     </button>
                 </div>
             </article>
@@ -1239,9 +1389,9 @@ function renderLibrary() {
     const source = state.activeLibrary;
     const query = $('#library-search').value.trim().toLowerCase();
     const entries = source === 'all'
-        ? Object.keys(SOURCE_META).flatMap(itemSource => filterItems(getSourceItems(itemSource), query)
+        ? Object.keys(SOURCE_META).flatMap(itemSource => filterItems(getVisibleSourceItems(itemSource), query)
             .map(item => ({ source: itemSource, item })))
-        : filterItems(getSourceItems(source), query).map(item => ({ source, item }));
+        : filterItems(getVisibleSourceItems(source), query).map(item => ({ source, item }));
 
     $('#resource-library').innerHTML = entries.map(({ source: itemSource, item }) => renderResourceCard(itemSource, item)).join('')
         || '<div class="draft-item"><span>没有匹配资源</span></div>';
@@ -1251,29 +1401,46 @@ function renderResourceList() {
     const source = state.activeResourceList;
     const query = $('#resource-list-search').value.trim().toLowerCase();
     const entries = source === 'all'
-        ? Object.keys(SOURCE_META).flatMap(itemSource => filterItems(getSourceItems(itemSource), query)
+        ? Object.keys(SOURCE_META).flatMap(itemSource => filterItems(getVisibleSourceItems(itemSource), query)
             .map(item => ({ source: itemSource, item })))
-        : filterItems(getSourceItems(source), query).map(item => ({ source, item }));
+        : filterItems(getVisibleSourceItems(source), query).map(item => ({ source, item }));
 
     const summary = entries.length > 0
-        ? `<div class="resource-list-summary">共 ${entries.length} 条资源，点击卡片查看详情。</div>`
+        ? `<div class="resource-list-summary">共 ${entries.length} 条可见资源，点击卡片查看详情。</div>`
         : '';
 
     $('#resource-list').innerHTML = summary + (entries.map(({ source: itemSource, item }) => renderResourceCard(itemSource, item, true)).join('')
         || '<div class="pending-empty"><i data-lucide="search-x"></i><strong>没有匹配资源</strong><span>换一个关键词或模块再试。</span></div>');
 }
 
+function renderTrashList() {
+    const source = state.activeTrashList;
+    const query = $('#trash-search').value.trim().toLowerCase();
+    const entries = source === 'all'
+        ? Object.keys(SOURCE_META).flatMap(itemSource => filterItems(getTrashSourceItems(itemSource), query)
+            .map(item => ({ source: itemSource, item })))
+        : filterItems(getTrashSourceItems(source), query).map(item => ({ source, item }));
+
+    const summary = entries.length > 0
+        ? `<div class="resource-list-summary">共 ${entries.length} 条回收站资源，恢复或继续编辑后需要发布才会生效。</div>`
+        : '';
+
+    $('#trash-list').innerHTML = summary + (entries.map(({ source: itemSource, item }) => renderResourceCard(itemSource, item, true)).join('')
+        || '<div class="pending-empty"><i data-lucide="archive-x"></i><strong>回收站为空</strong><span>在资源编辑里软删除后，会出现在这里。</span></div>');
+}
+
 function renderResourceCard(source, item, isLarge = false) {
     const image = getItemImage(source, item);
     const kind = getResourceChangeKind(source, item);
+    const isDeleted = isResourceDeleted(item);
     const media = image
         ? `<img class="resource-thumb" src="${escapeAttribute(resolveAssetUrl(state.previewUrls[item.id] || image))}" alt="${escapeAttribute(item.title || item.id)}">`
         : `<div class="resource-icon"><i data-lucide="${SOURCE_META[source].icon}"></i></div>`;
-    const badgeText = kind === 'new' ? '本次新增' : kind === 'edit' ? '已修改' : '可编辑';
+    const badgeText = kind ? getDraftKindLabel(kind) : isDeleted ? '回收站' : '可编辑';
     const detailText = isLarge ? `<div class="resource-card-extra">${escapeHtml(getResourcePreviewText(source, item))}</div>` : '';
 
     return `
-        <article class="resource-card ${isLarge ? 'resource-card-large' : ''}" data-view-resource="${escapeAttribute(item.id)}" data-source="${source}">
+        <article class="resource-card ${isLarge ? 'resource-card-large' : ''} ${isDeleted ? 'is-deleted' : ''}" data-view-resource="${escapeAttribute(item.id)}" data-source="${source}">
             ${media}
             <div>
                 <h4>${escapeHtml(item.title || item.id)}</h4>
@@ -1281,7 +1448,12 @@ function renderResourceCard(source, item, isLarge = false) {
                 ${detailText}
             </div>
             <div class="resource-card-actions">
-                <span class="resource-badge ${kind ? 'is-new' : ''}">${badgeText}</span>
+                <span class="resource-badge ${getDraftKindClass(kind, isDeleted)}">${badgeText}</span>
+                ${isDeleted ? `
+                    <button class="icon-action" type="button" title="恢复" data-restore-resource="${escapeAttribute(item.id)}" data-source="${source}">
+                        <i data-lucide="rotate-ccw"></i>
+                    </button>
+                ` : ''}
                 <button class="icon-action" type="button" title="查看" data-view-button="${escapeAttribute(item.id)}" data-source="${source}">
                     <i data-lucide="eye"></i>
                 </button>
@@ -1312,6 +1484,16 @@ function handleResourceCardClick(event) {
     }
 }
 
+function handleTrashListClick(event) {
+    const restoreButton = event.target.closest('[data-restore-resource]');
+    if (restoreButton) {
+        restoreResource(restoreButton.dataset.source, restoreButton.dataset.restoreResource);
+        return;
+    }
+
+    handleResourceCardClick(event);
+}
+
 function openResourceViewer(source, id) {
     const item = getSourceItems(source).find(entry => String(entry.id) === String(id));
     if (!item) {
@@ -1321,11 +1503,16 @@ function openResourceViewer(source, id) {
 
     const title = item.title || item.id;
     const publicUrl = getResourcePublicUrl(source, item);
+    const isDeleted = isResourceDeleted(item);
     $('#resource-viewer-title').textContent = title;
-    $('#resource-viewer-subtitle').textContent = `${SOURCE_META[source].label} · ${item.id}`;
+    $('#resource-viewer-subtitle').textContent = `${SOURCE_META[source].label} · ${item.id}${isDeleted ? ' · 回收站' : ''}`;
     $('#resource-viewer-public-link').href = publicUrl;
+    $('#resource-viewer-public-link').classList.toggle('is-hidden', isDeleted);
     $('#resource-viewer-edit-button').dataset.source = source;
     $('#resource-viewer-edit-button').dataset.resourceId = item.id;
+    $('#resource-viewer-restore-button').dataset.source = source;
+    $('#resource-viewer-restore-button').dataset.resourceId = item.id;
+    $('#resource-viewer-restore-button').classList.toggle('is-hidden', !isDeleted);
     $('#resource-viewer-body').innerHTML = renderResourceDetail(source, item);
     $('#resource-viewer-modal').classList.remove('is-hidden');
     $('#resource-viewer-modal').setAttribute('aria-hidden', 'false');
@@ -1351,7 +1538,7 @@ function renderResourceDetail(source, item) {
                 <div class="editor-meta">
                     <span>${escapeHtml(SOURCE_META[source].label)}</span>
                     <span>ID：${escapeHtml(item.id)}</span>
-                    <span>${getResourceChangeKind(source, item) === 'edit' ? '已修改待发布' : getResourceChangeKind(source, item) === 'new' ? '本次新增' : '线上资源'}</span>
+                    <span>${escapeHtml(getResourceStatusLabel(source, item))}</span>
                 </div>
                 <p>${escapeHtml(getResourcePreviewText(source, item) || getItemMeta(source, item))}</p>
                 ${audioPath ? `
@@ -1374,6 +1561,10 @@ function getResourceDetailFields(source, item) {
     const schema = RESOURCE_EDIT_SCHEMAS[source] || [];
     return [
         { label: '资源 ID', value: item.id || '' },
+        ...(isResourceDeleted(item) ? [
+            { label: '删除时间', value: item.deletedAt || '' },
+            { label: '删除方式', value: item.deletedReason || item.deletedBy || '后台软删除' }
+        ] : []),
         ...schema.map(field => ({
             label: field.label,
             value: formatResourceFieldValue(item[field.key])
@@ -1431,6 +1622,7 @@ function renderRecommendationPanel() {
 
     const source = moduleConfig.source;
     const items = getSourceItems(source);
+    const visibleItems = getVisibleSourceItems(source);
     const itemMap = new Map(items.map(item => [String(item.id), item]));
     const selectedIds = moduleConfig.items.map(String);
 
@@ -1443,7 +1635,7 @@ function renderRecommendationPanel() {
                 ${renderMiniMedia(source, item)}
                 <div>
                     <h4>${escapeHtml(item ? item.title || id : id)}</h4>
-                    <p>${item ? escapeHtml(getItemMeta(source, item)) : '资源不存在，请移除'}</p>
+                    <p>${item ? escapeHtml(isResourceDeleted(item) ? '资源已在回收站，请移除' : getItemMeta(source, item)) : '资源不存在，请移除'}</p>
                 </div>
                 <div class="recommendation-actions">
                     <button class="icon-action" title="上移" data-rec-move="${escapeAttribute(id)}" data-direction="up" ${index === 0 ? 'disabled' : ''}>
@@ -1462,7 +1654,7 @@ function renderRecommendationPanel() {
 
     const query = $('#recommendation-search').value.trim().toLowerCase();
     const selectedSet = new Set(selectedIds);
-    const candidates = filterItems(items, query).slice(0, 80);
+    const candidates = filterItems(visibleItems, query).slice(0, 80);
 
     $('#recommendation-candidates').innerHTML = candidates.map(item => {
         const isSelected = selectedSet.has(String(item.id));
@@ -1500,7 +1692,7 @@ function renderRelationSelects() {
 }
 
 function renderMusicLyricSelect() {
-    const lyrics = getSourceItems('lyrics');
+    const lyrics = getVisibleSourceItems('lyrics');
     $('#music-lyric-select').innerHTML = [
         '<option value="">不关联词作</option>',
         ...lyrics.map(item => `<option value="${escapeAttribute(item.id)}">${escapeHtml(item.title || item.id)}</option>`)
@@ -1512,7 +1704,7 @@ function renderLyricMusicAudioSelect() {
     if (!select) return;
 
     const selectedValue = select.value;
-    const options = getSourceItems('music')
+    const options = getVisibleSourceItems('music')
         .filter(item => item.url)
         .map(item => `
             <option value="${escapeAttribute(item.id)}">
@@ -1532,7 +1724,7 @@ function renderLyricMusicAudioSelect() {
 
 function getMusicAudioPath(id) {
     if (!id) return '';
-    const item = getSourceItems('music').find(entry => String(entry.id) === String(id));
+    const item = getVisibleSourceItems('music').find(entry => String(entry.id) === String(id));
     return item && item.url ? item.url : '';
 }
 
@@ -1582,17 +1774,21 @@ function renderPublishChecks() {
 }
 
 async function publishAllDrafts() {
+    setPanel('publish-panel');
+    setPublishProgress(6, '正在检查待发布内容');
     renderPublishChecks();
 
     const problems = getPublishProblems();
     if (problems.length > 0) {
         setPublishOutput(`发布被拦截：\n${problems.join('\n')}`);
+        setPublishProgress(100, '发布检查未通过', 'error');
         showToast('发布检查未通过');
         return;
     }
 
     if (!hasChanges()) {
         setPublishOutput('没有待发布改动。');
+        setPublishProgress(100, '没有待发布改动');
         showToast('没有待发布改动');
         return;
     }
@@ -1607,15 +1803,18 @@ async function publishAllDrafts() {
             '',
             JSON.stringify(bundle.summary, null, 2)
         ].join('\n'));
+        setPublishProgress(100, '线上发布接口未连接', 'error');
         showToast('线上发布接口未连接');
         return;
     }
 
     const payload = buildPublishPayload();
     setPublishOutput('正在提交到 GitHub...');
+    setPublishProgress(28, '正在准备提交到 GitHub');
     setPublishBusy(true);
 
     try {
+        setPublishProgress(58, '正在提交到 GitHub');
         const response = await fetch(buildAdminApiUrl('/api/admin/content'), {
             method: 'POST',
             headers: {
@@ -1624,6 +1823,7 @@ async function publishAllDrafts() {
             },
             body: JSON.stringify(payload)
         });
+        setPublishProgress(84, '正在读取 GitHub 返回结果');
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
@@ -1650,10 +1850,12 @@ async function publishAllDrafts() {
                 knowledge: '../knowledge.html'
             }
         }, null, 2));
+        setPublishProgress(100, data.changed ? '发布成功，Vercel 会自动部署' : '没有实际变更', 'success');
         renderAll();
         showToast('发布成功，待发布列表已清空');
     } catch (error) {
         setPublishOutput(`发布失败：${error.message}`);
+        setPublishProgress(100, '发布失败', 'error');
         showToast('发布失败');
     } finally {
         setPublishBusy(false);
@@ -1661,8 +1863,11 @@ async function publishAllDrafts() {
 }
 
 async function publishSingleDraft(source, id) {
+    setPanel('publish-panel');
+    setPublishProgress(6, '正在检查这条资源');
     const entry = getDraftEntry(source, id);
     if (!entry) {
+        setPublishProgress(100, '这条资源已经不在待发布列表');
         showToast('这条资源已经不在待发布列表');
         renderAll();
         return;
@@ -1671,6 +1876,7 @@ async function publishSingleDraft(source, id) {
     const entries = expandEntriesWithDependencies([entry]);
     const availability = getSinglePublishAvailability(source, entry.item);
     if (!availability.canPublish) {
+        setPublishProgress(100, availability.reason || '暂时不能单条发布', 'error');
         showToast(availability.reason || '暂时不能单条发布');
         return;
     }
@@ -1678,20 +1884,24 @@ async function publishSingleDraft(source, id) {
     const problems = getPublishProblems();
     if (problems.length > 0) {
         setPublishOutput(`发布被拦截：\n${problems.join('\n')}`);
+        setPublishProgress(100, '发布检查未通过', 'error');
         showToast('发布检查未通过');
         return;
     }
 
     const payload = buildSinglePublishPayload(entries);
     if (Object.keys(payload.files).length === 0 && Object.keys(payload.textFiles).length === 0) {
+        setPublishProgress(100, '没有可发布的改动');
         showToast('没有可发布的改动');
         return;
     }
 
     setPublishOutput(`正在发布：${entries.map(item => item.item.title || item.item.id).join('、')}`);
+    setPublishProgress(30, '正在准备单条发布');
     setPublishBusy(true);
 
     try {
+        setPublishProgress(60, '正在提交这条资源到 GitHub');
         const response = await fetch(buildAdminApiUrl('/api/admin/content'), {
             method: 'POST',
             headers: {
@@ -1700,6 +1910,7 @@ async function publishSingleDraft(source, id) {
             },
             body: JSON.stringify(payload)
         });
+        setPublishProgress(86, '正在读取 GitHub 返回结果');
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
@@ -1729,10 +1940,12 @@ async function publishSingleDraft(source, id) {
             commitSha: data.commitSha,
             commitUrl: data.commitUrl
         }, null, 2));
+        setPublishProgress(100, data.changed ? '单条发布成功，Vercel 会自动部署' : '没有实际变更', 'success');
         renderAll();
         showToast('单条发布成功');
     } catch (error) {
         setPublishOutput(`发布失败：${error.message}`);
+        setPublishProgress(100, '发布失败', 'error');
         showToast('发布失败');
     } finally {
         setPublishBusy(false);
@@ -1777,7 +1990,7 @@ function buildSinglePublishPayload(entries) {
         const path = DATA_FILES[source];
         const baseItems = clone(state.baseFiles[path] || []);
         const nextItems = clone(baseItems);
-        const editEntries = sourceEntries.filter(entry => entry.kind === 'edit');
+        const editEntries = sourceEntries.filter(entry => isUpdateDraftKind(entry.kind));
         const newIds = new Set(sourceEntries
             .filter(entry => entry.kind === 'new')
             .map(entry => String(entry.item.id)));
@@ -1830,10 +2043,14 @@ function buildPublishedRecommendations(selectedBySource) {
     Object.values(recommendations.modules).forEach(moduleConfig => {
         const source = moduleConfig.source;
         const baseItems = state.baseFiles[DATA_FILES[source]] || [];
+        const currentItemMap = new Map(getSourceItems(source).map(item => [String(item.id), item]));
         const allowedIds = new Set(baseItems.map(item => String(item.id)));
         const selectedIds = selectedBySource[source] || new Set();
         selectedIds.forEach(id => allowedIds.add(String(id)));
-        moduleConfig.items = moduleConfig.items.filter(id => allowedIds.has(String(id)));
+        moduleConfig.items = moduleConfig.items.filter(id => {
+            const currentItem = currentItemMap.get(String(id));
+            return allowedIds.has(String(id)) && !isResourceDeleted(currentItem);
+        });
     });
 
     return recommendations;
@@ -1900,12 +2117,21 @@ function openResourceEditor(source, id) {
     const form = $('#resource-editor-form');
     form.elements.source.value = source;
     form.elements.resourceId.value = item.id;
+    const isDeleted = isResourceDeleted(item);
+    const deleteButton = $('#resource-editor-delete-button');
+    const restoreButton = $('#resource-editor-restore-button');
+    deleteButton.dataset.source = source;
+    deleteButton.dataset.resourceId = item.id;
+    restoreButton.dataset.source = source;
+    restoreButton.dataset.resourceId = item.id;
+    deleteButton.classList.toggle('is-hidden', isDeleted);
+    restoreButton.classList.toggle('is-hidden', !isDeleted);
     $('#resource-editor-title').textContent = `编辑${SOURCE_META[source].label}资源`;
     $('#resource-editor-subtitle').textContent = item.title || item.id;
     $('#resource-editor-meta').innerHTML = `
         <span>${escapeHtml(SOURCE_META[source].label)}</span>
         <span>ID：${escapeHtml(item.id)}</span>
-        <span>${getResourceChangeKind(source, item) === 'new' ? '本次新增' : '线上资源'}</span>
+        <span>${escapeHtml(getResourceStatusLabel(source, item))}</span>
     `;
     $('#resource-editor-fields').innerHTML = `
         <label class="field">
@@ -2007,6 +2233,16 @@ function handleResourceEditorSubmit(event) {
     }
 }
 
+function handleResourceEditorDelete() {
+    const button = $('#resource-editor-delete-button');
+    softDeleteResource(button.dataset.source, button.dataset.resourceId);
+}
+
+function handleResourceEditorRestore() {
+    const button = $('#resource-editor-restore-button');
+    restoreResource(button.dataset.source, button.dataset.resourceId);
+}
+
 function applyEditorFieldValue(item, field, input) {
     if (!input) return;
 
@@ -2070,12 +2306,83 @@ function getResourceChangeKind(source, item) {
 
     const baseItem = getBaseResourceItem(source, id);
     if (!baseItem) return '';
+    const baseDeleted = isResourceDeleted(baseItem);
+    const currentDeleted = isResourceDeleted(item);
+    if (!baseDeleted && currentDeleted) return 'delete';
+    if (baseDeleted && !currentDeleted) return 'restore';
     return stableStringify(baseItem) === stableStringify(item) ? '' : 'edit';
 }
 
 function getBaseResourceItem(source, id) {
     return (state.baseFiles[DATA_FILES[source]] || [])
         .find(item => String(item.id) === String(id));
+}
+
+function getVisibleSourceItems(source) {
+    return getSourceItems(source).filter(item => !isResourceDeleted(item));
+}
+
+function getTrashSourceItems(source) {
+    return getSourceItems(source).filter(isResourceDeleted);
+}
+
+function isResourceDeleted(item) {
+    return Boolean(item && item.deletedAt);
+}
+
+function getResourceStatusLabel(source, item) {
+    const kind = getResourceChangeKind(source, item);
+    if (kind) {
+        return kind === 'new' ? '本次新增' : `待发布${getDraftKindLabel(kind)}`;
+    }
+    return isResourceDeleted(item) ? '回收站' : '线上资源';
+}
+
+function getDraftKindLabel(kind) {
+    const labels = {
+        new: '新增',
+        edit: '修改',
+        delete: '删除',
+        restore: '恢复'
+    };
+    return labels[kind] || '修改';
+}
+
+function getDraftUndoLabel(kind) {
+    if (kind === 'new') return '移除';
+    if (kind === 'delete') return '撤销删除';
+    if (kind === 'restore') return '撤销恢复';
+    return '撤销修改';
+}
+
+function getDraftUndoIcon(kind) {
+    return kind === 'new' ? 'trash-2' : 'rotate-ccw';
+}
+
+function getDraftKindClass(kind, isDeleted = false) {
+    if (kind === 'delete' || isDeleted) return 'is-deleted';
+    if (kind) return 'is-new';
+    return '';
+}
+
+function summarizeDraftEntries(entries) {
+    const labels = [
+        ['new', '新增'],
+        ['edit', '修改'],
+        ['delete', '删除'],
+        ['restore', '恢复']
+    ];
+    return labels
+        .map(([kind, label]) => {
+            const count = entries.filter(entry => entry.kind === kind).length;
+            return count > 0 ? `${label} ${count}` : '';
+        })
+        .filter(Boolean)
+        .join('，');
+}
+
+function isUpdateDraftKind(kind) {
+    return kind === 'edit' || kind === 'delete' || kind === 'restore';
 }
 
 function expandEntriesWithDependencies(entries) {
@@ -2417,6 +2724,7 @@ function setPanel(panelId) {
         'dashboard-panel': '总览',
         'resources-panel': '新增资源',
         'resource-list-panel': '资源列表',
+        'trash-panel': '回收站',
         'pending-panel': '待发布资源',
         'recommendations-panel': '推荐配置',
         'publish-panel': '发布检查'
@@ -2439,6 +2747,17 @@ function setMode(text, isOnline) {
 
 function setPublishOutput(text) {
     $('#publish-output').textContent = text;
+}
+
+function setPublishProgress(value, label, tone = 'info') {
+    const progressNode = $('#publish-progress');
+    if (!progressNode) return;
+
+    const percent = Math.max(0, Math.min(Math.round(Number(value) || 0), 100));
+    progressNode.className = `publish-progress is-${tone}`;
+    progressNode.querySelector('.publish-progress-label').textContent = label || '正在处理';
+    progressNode.querySelector('.publish-progress-value').textContent = `${percent}%`;
+    progressNode.querySelector('.publish-progress-bar').style.width = `${percent}%`;
 }
 
 function setLoginError(message) {

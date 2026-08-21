@@ -32,10 +32,15 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch(`assets/data/music.json?t=${new Date().getTime()}`)
         .then(res => res.json())
         .then(data => {
-            songs = data;
+            songs = getVisibleResources(data);
             if (songs.length === 0) return;
 
             currentIndex = songs.findIndex(s => s.id === initialId);
+            if (initialId && currentIndex === -1) {
+                elements.title.textContent = '音乐未找到';
+                elements.artist.textContent = '这条资源已下线或不存在';
+                return;
+            }
             if (currentIndex === -1) currentIndex = 0;
 
             initPlayer();
@@ -202,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     lyrics = song.lyricText.split('\n').filter(l => l.trim()).map(l => ({ text: l, time: 0 }));
                 } else if (song.lyricId) {
                     const res = await fetch('assets/data/lyrics.json');
-                    const data = await res.json();
+                    const data = getVisibleResources(await res.json());
                     const entry = data.find(d => d.id === song.lyricId);
                     if (entry && entry.contentPath) {
                         const lRes = await fetch(entry.contentPath);
@@ -344,5 +349,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const m = Math.floor(s / 60);
         const sec = Math.floor(s % 60);
         return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+    }
+
+    function getVisibleResources(items) {
+        if (window.DeanRecommendations && window.DeanRecommendations.filterVisible) {
+            return window.DeanRecommendations.filterVisible(items);
+        }
+
+        return Array.isArray(items) ? items.filter(item => item && !item.deletedAt) : [];
     }
 });

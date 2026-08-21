@@ -146,6 +146,7 @@ button {
 
 .side-link,
 .ghost-action,
+.danger-action,
 .primary-action,
 .secondary-action,
 .icon-action {
@@ -179,6 +180,7 @@ button {
 
 .side-link svg,
 .ghost-action svg,
+.danger-action svg,
 .primary-action svg,
 .secondary-action svg,
 .icon-action svg {
@@ -199,8 +201,18 @@ button {
     padding: 10px 12px;
 }
 
+.danger-action {
+    min-height: 40px;
+    padding: 0 14px;
+    color: #ffd6d6;
+    background: rgba(255, 68, 68, 0.09);
+    border: 1px solid rgba(255, 68, 68, 0.34);
+    font-weight: 650;
+}
+
 .ghost-action:hover,
-.secondary-action:hover {
+.secondary-action:hover,
+.danger-action:hover {
     color: var(--text-primary);
     border-color: rgba(255, 255, 255, 0.32);
 }
@@ -271,7 +283,8 @@ button {
 }
 
 .primary-action:disabled,
-.secondary-action:disabled {
+.secondary-action:disabled,
+.danger-action:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     transform: none;
@@ -650,6 +663,11 @@ button {
     background: rgba(255, 255, 255, 0.065);
 }
 
+.resource-card.is-deleted {
+    border-color: rgba(255, 68, 68, 0.28);
+    background: rgba(255, 68, 68, 0.055);
+}
+
 .resource-card-large {
     grid-template-columns: 72px minmax(0, 1fr) auto;
     padding: 14px;
@@ -718,6 +736,11 @@ button {
 .resource-badge.is-new {
     color: var(--accent-color);
     border-color: rgba(0, 255, 136, 0.28);
+}
+
+.resource-badge.is-deleted {
+    color: #ffd6d6;
+    border-color: rgba(255, 68, 68, 0.34);
 }
 
 .resource-card-actions {
@@ -809,6 +832,18 @@ button {
 
 .editor-form .modal-actions {
     padding: 0;
+}
+
+.editor-actions {
+    align-items: center;
+    justify-content: space-between;
+}
+
+.editor-danger-actions,
+.editor-save-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .resource-detail {
@@ -921,6 +956,10 @@ button {
     background: rgba(26, 26, 26, 0.82);
     border: 1px solid var(--border-color);
     border-radius: 8px;
+}
+
+.pending-card.is-delete-draft {
+    border-color: rgba(255, 68, 68, 0.3);
 }
 
 .pending-card-heading {
@@ -1076,6 +1115,54 @@ button {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
+}
+
+.publish-progress {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.publish-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.publish-progress-value {
+    flex: 0 0 auto;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.publish-progress-track {
+    height: 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+}
+
+.publish-progress-bar {
+    width: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #5eead4, var(--accent-color));
+    transition: width 160ms ease;
+}
+
+.publish-progress.is-success .publish-progress-bar {
+    background: var(--accent-color);
+}
+
+.publish-progress.is-error .publish-progress-bar {
+    background: #ff6b6b;
+}
+
+.publish-progress.is-error .publish-progress-value {
+    color: #ffd6d6;
 }
 
 pre {

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260821-resource-list">
+    <link rel="stylesheet" href="../css/admin.css?v=20260821-trash-progress">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -55,6 +55,10 @@
             <button class="side-link" data-panel="resource-list-panel">
                 <i data-lucide="folder-search"></i>
                 资源列表
+            </button>
+            <button class="side-link" data-panel="trash-panel">
+                <i data-lucide="archive"></i>
+                回收站
             </button>
             <button class="side-link" data-panel="pending-panel">
                 <i data-lucide="inbox"></i>
@@ -113,7 +117,7 @@
                     </div>
                     <div>
                         <h3>历史数据保护规则</h3>
-                        <p>发布接口允许编辑资源字段，但会阻止删除资源、重排资源或修改资源 ID。</p>
+                        <p>发布接口允许编辑字段和软删除资源；资源会保留在 JSON 里，重排、修改 ID 或真正删除历史资源仍会被阻止。</p>
                     </div>
                 </div>
                 <div class="activity-panel">
@@ -402,6 +406,36 @@
                 <div class="resource-list" id="resource-list"></div>
             </section>
 
+            <section class="panel" id="trash-panel">
+                <div class="section-header">
+                    <div>
+                        <h2>回收站</h2>
+                        <p>这里显示已软删除的资源。恢复、编辑或发布后，线上内容才会同步变化。</p>
+                    </div>
+                    <button class="secondary-action" data-panel-shortcut="resource-list-panel">
+                        <i data-lucide="folder-search"></i>
+                        返回资源列表
+                    </button>
+                </div>
+                <div class="resource-list-toolbar">
+                    <label class="field compact-field">
+                        <span>资源模块</span>
+                        <select id="trash-source-select">
+                            <option value="all">全部资源</option>
+                            <option value="photos">图片</option>
+                            <option value="lyrics">词作</option>
+                            <option value="music">音乐</option>
+                            <option value="knowledge">知识</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>搜索回收站</span>
+                        <input id="trash-search" placeholder="标题 / ID / 作者 / 标签">
+                    </label>
+                </div>
+                <div class="resource-list trash-list" id="trash-list"></div>
+            </section>
+
             <section class="panel" id="pending-panel">
                 <div class="section-header">
                     <div>
@@ -485,6 +519,15 @@
                     </div>
                     <div class="publish-card">
                         <h3>发布结果</h3>
+                        <div class="publish-progress is-hidden" id="publish-progress" role="status" aria-live="polite">
+                            <div class="publish-progress-header">
+                                <span class="publish-progress-label">等待操作</span>
+                                <span class="publish-progress-value">0%</span>
+                            </div>
+                            <div class="publish-progress-track">
+                                <div class="publish-progress-bar"></div>
+                            </div>
+                        </div>
                         <pre id="publish-output">等待操作...</pre>
                     </div>
                 </div>
@@ -514,6 +557,10 @@
                     <i data-lucide="pencil"></i>
                     编辑资源
                 </button>
+                <button class="primary-action is-hidden" id="resource-viewer-restore-button" type="button">
+                    <i data-lucide="rotate-ccw"></i>
+                    恢复资源
+                </button>
             </div>
         </div>
     </div>
@@ -535,15 +582,27 @@
                 <input type="hidden" name="resourceId">
                 <div class="editor-meta" id="resource-editor-meta"></div>
                 <div class="editor-fields" id="resource-editor-fields"></div>
-                <div class="modal-actions">
-                    <button class="secondary-action" id="resource-editor-cancel-button" type="button">
-                        <i data-lucide="x"></i>
-                        取消
-                    </button>
-                    <button class="primary-action" type="submit">
-                        <i data-lucide="save"></i>
-                        保存到待发布
-                    </button>
+                <div class="modal-actions editor-actions">
+                    <div class="editor-danger-actions">
+                        <button class="danger-action" id="resource-editor-delete-button" type="button">
+                            <i data-lucide="archive"></i>
+                            移入回收站
+                        </button>
+                        <button class="secondary-action is-hidden" id="resource-editor-restore-button" type="button">
+                            <i data-lucide="rotate-ccw"></i>
+                            恢复资源
+                        </button>
+                    </div>
+                    <div class="editor-save-actions">
+                        <button class="secondary-action" id="resource-editor-cancel-button" type="button">
+                            <i data-lucide="x"></i>
+                            取消
+                        </button>
+                        <button class="primary-action" type="submit">
+                            <i data-lucide="save"></i>
+                            保存到待发布
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -552,7 +611,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260821-resource-list"></script>
+    <script src="../admin/admin.js?v=20260821-trash-progress"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();
