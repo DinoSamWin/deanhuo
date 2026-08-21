@@ -6,7 +6,7 @@ const JSON_FILES = {
     recommendations: 'assets/data/recommendations.json'
 };
 
-const APPEND_ONLY_FILES = new Set([
+const EDITABLE_RESOURCE_FILES = new Set([
     JSON_FILES.photos,
     JSON_FILES.lyrics,
     JSON_FILES.music,
@@ -291,9 +291,9 @@ function validateIncomingJsonFiles(incomingFiles, currentFiles) {
         }
     }
 
-    for (const path of APPEND_ONLY_FILES) {
+    for (const path of EDITABLE_RESOURCE_FILES) {
         if (incomingFiles[path] === undefined) continue;
-        assertAppendOnly(path, currentFiles[path], incomingFiles[path]);
+        assertEditableResourceList(path, currentFiles[path], incomingFiles[path]);
     }
 
     if (incomingFiles[JSON_FILES.recommendations] !== undefined) {
@@ -301,7 +301,7 @@ function validateIncomingJsonFiles(incomingFiles, currentFiles) {
     }
 }
 
-function assertAppendOnly(path, currentValue, incomingValue) {
+function assertEditableResourceList(path, currentValue, incomingValue) {
     if (!Array.isArray(currentValue) || !Array.isArray(incomingValue)) {
         throw createHttpError(400, `${path} 必须保持数组结构`);
     }
@@ -310,8 +310,10 @@ function assertAppendOnly(path, currentValue, incomingValue) {
     }
 
     for (let index = 0; index < currentValue.length; index += 1) {
-        if (stableStringify(currentValue[index]) !== stableStringify(incomingValue[index])) {
-            throw createHttpError(409, `${path} 的历史资源不能被修改或重排：第 ${index + 1} 项`);
+        const currentId = currentValue[index] && currentValue[index].id;
+        const incomingId = incomingValue[index] && incomingValue[index].id;
+        if (String(currentId || '') !== String(incomingId || '')) {
+            throw createHttpError(409, `${path} 不能删除、重排或修改历史资源 ID：第 ${index + 1} 项`);
         }
     }
 

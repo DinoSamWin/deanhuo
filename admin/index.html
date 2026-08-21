@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260821-upload-progress">
+    <link rel="stylesheet" href="../css/admin.css?v=20260821-edit-resources">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -33,7 +33,7 @@
                 进入后台
             </button>
             <div class="login-note">
-                登录成功后，本设备 7 天内刷新页面会自动进入后台。旧资源默认只读；本后台只追加新资源和更新推荐配置。
+                登录成功后，本设备 7 天内刷新页面会自动进入后台。后台允许编辑线上资源字段，也可以追加新资源和更新推荐配置。
             </div>
         </div>
     </section>
@@ -109,7 +109,7 @@
                     </div>
                     <div>
                         <h3>历史数据保护规则</h3>
-                        <p>发布接口会检查旧数组前缀是否完全一致。如果旧资源被删除、重排或改字段，接口会拒绝保存。</p>
+                        <p>发布接口允许编辑资源字段，但会阻止删除资源、重排资源或修改资源 ID。</p>
                     </div>
                 </div>
                 <div class="activity-panel">
@@ -139,7 +139,7 @@
                 <div class="section-header">
                     <div>
                         <h2>新增资源</h2>
-                        <p>选择资源类型后填写字段。旧内容不会在这里开放编辑。</p>
+                        <p>选择资源类型后填写字段；右侧资源库可以搜索和编辑线上资源。</p>
                     </div>
                     <div class="segmented-control" id="resource-type-tabs">
                         <button class="is-active" data-resource-form="photo-form">图片</button>
@@ -343,6 +343,7 @@
                             <label class="field compact-field">
                                 <span>资源库</span>
                                 <select id="library-source-select">
+                                    <option value="all">全部资源</option>
                                     <option value="photos">图片</option>
                                     <option value="lyrics">词作</option>
                                     <option value="music">音乐</option>
@@ -449,10 +450,41 @@
         </main>
     </div>
 
+    <div class="modal-backdrop is-hidden" id="resource-editor-modal" aria-hidden="true">
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="resource-editor-title">
+            <div class="modal-header">
+                <div>
+                    <p class="eyebrow">Resource Editor</p>
+                    <h2 id="resource-editor-title">编辑资源</h2>
+                    <p id="resource-editor-subtitle"></p>
+                </div>
+                <button class="icon-action" id="resource-editor-close-button" type="button" aria-label="关闭" title="关闭">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form class="editor-form" id="resource-editor-form">
+                <input type="hidden" name="source">
+                <input type="hidden" name="resourceId">
+                <div class="editor-meta" id="resource-editor-meta"></div>
+                <div class="editor-fields" id="resource-editor-fields"></div>
+                <div class="modal-actions">
+                    <button class="secondary-action" id="resource-editor-cancel-button" type="button">
+                        <i data-lucide="x"></i>
+                        取消
+                    </button>
+                    <button class="primary-action" type="submit">
+                        <i data-lucide="save"></i>
+                        保存到待发布
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260821-upload-progress"></script>
+    <script src="../admin/admin.js?v=20260821-edit-resources"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();

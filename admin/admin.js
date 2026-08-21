@@ -35,6 +35,48 @@ const UPLOAD_LABELS = {
     musicAudio: '音乐音频'
 };
 
+const RESOURCE_EDIT_SCHEMAS = {
+    photos: [
+        { key: 'title', label: '标题', required: true },
+        { key: 'description', label: '描述', type: 'textarea' },
+        { key: 'src', label: '图片路径/URL', empty: 'delete' },
+        { key: 'category', label: '分类' },
+        { key: 'date', label: '日期' },
+        { key: 'showOnHome', label: '首页显示标记', type: 'checkbox' }
+    ],
+    lyrics: [
+        { key: 'title', label: '标题', required: true },
+        { key: 'author', label: '作者' },
+        { key: 'date', label: '日期' },
+        { key: 'releaseYear', label: '发行年份' },
+        { key: 'cover', label: '封面路径/URL', empty: 'delete' },
+        { key: 'summary', label: '摘要', type: 'textarea' },
+        { key: 'audioPath', label: '音频路径/URL', empty: 'delete' },
+        { key: 'contentPath', label: '正文 Markdown 路径', empty: 'delete' },
+        { key: 'order', label: '词作排序', type: 'number', empty: 'delete' },
+        { key: 'showOnHome', label: '首页显示标记', type: 'checkbox' },
+        { key: 'homeOrder', label: '首页排序', type: 'number', empty: 'delete' }
+    ],
+    music: [
+        { key: 'title', label: '标题', required: true },
+        { key: 'artist', label: '艺术家' },
+        { key: 'year', label: '年份' },
+        { key: 'genre', label: '曲风' },
+        { key: 'cover', label: '封面路径/URL', empty: 'delete' },
+        { key: 'url', label: '音频路径/URL', empty: 'delete' },
+        { key: 'description', label: '描述', type: 'textarea' },
+        { key: 'lyricId', label: '关联词作 ID', empty: 'delete' }
+    ],
+    knowledge: [
+        { key: 'title', label: '标题', required: true },
+        { key: 'description', label: '摘要', type: 'textarea' },
+        { key: 'date', label: '日期' },
+        { key: 'tags', label: '标签', type: 'tags' },
+        { key: 'externalUrl', label: '外部链接', empty: 'delete' },
+        { key: 'filename', label: '正文 Markdown 文件', empty: 'delete' }
+    ]
+};
+
 const state = {
     token: '',
     online: false,
@@ -52,7 +94,7 @@ const state = {
         knowledge: new Set()
     },
     activePanel: 'dashboard-panel',
-    activeLibrary: 'photos',
+    activeLibrary: 'all',
     activeRecommendation: 'homeLyrics'
 };
 
@@ -390,11 +432,24 @@ function bindForms() {
     });
 
     $('#library-search').addEventListener('input', renderLibrary);
+    $('#resource-library').addEventListener('click', event => {
+        const editButton = event.target.closest('[data-edit-resource]');
+        if (!editButton) return;
+        openResourceEditor(editButton.dataset.source, editButton.dataset.editResource);
+    });
 
     $('#photo-form').addEventListener('submit', handlePhotoSubmit);
     $('#lyric-form').addEventListener('submit', handleLyricSubmit);
     $('#music-form').addEventListener('submit', handleMusicSubmit);
     $('#knowledge-form').addEventListener('submit', handleKnowledgeSubmit);
+    $('#resource-editor-form').addEventListener('submit', handleResourceEditorSubmit);
+    $('#resource-editor-close-button').addEventListener('click', closeResourceEditor);
+    $('#resource-editor-cancel-button').addEventListener('click', closeResourceEditor);
+    $('#resource-editor-modal').addEventListener('click', event => {
+        if (event.target.id === 'resource-editor-modal') {
+            closeResourceEditor();
+        }
+    });
     bindUploadInputFeedback();
 
     $('#lyric-form').elements.contentFile.addEventListener('change', async event => {
@@ -887,29 +942,40 @@ function appendResource(source, item) {
 }
 
 function removeDraftItem(source, id) {
-    if (!state.newIds[source] || !state.newIds[source].has(String(id))) {
-        showToast('历史资源不能在后台删除');
+    const entry = getDraftEntry(source, id);
+    if (!entry) {
+        showToast('这条资源没有待发布修改');
         return;
     }
 
     const filePath = DATA_FILES[source];
     const item = state.files[filePath].find(entry => String(entry.id) === String(id));
-    state.files[filePath] = state.files[filePath].filter(entry => String(entry.id) !== String(id));
-    state.newIds[source].delete(String(id));
+    if (entry.kind === 'new') {
+        state.files[filePath] = state.files[filePath].filter(entry => String(entry.id) !== String(id));
+        state.newIds[source].delete(String(id));
+    } else {
+        const baseItem = getBaseResourceItem(source, id);
+        const index = state.files[filePath].findIndex(entry => String(entry.id) === String(id));
+        if (baseItem && index !== -1) {
+            state.files[filePath][index] = clone(baseItem);
+        }
+    }
 
-    if (item && item.contentPath) {
+    if (entry.kind === 'new' && item && item.contentPath) {
         delete state.textFiles[item.contentPath];
     }
-    if (item && item.filename) {
+    if (entry.kind === 'new' && item && item.filename) {
         delete state.textFiles[`assets/data/knowledge/${item.filename}`];
     }
 
-    Object.values(getRecommendations().modules).forEach(moduleConfig => {
-        moduleConfig.items = moduleConfig.items.filter(itemId => String(itemId) !== String(id));
-    });
+    if (entry.kind === 'new') {
+        Object.values(getRecommendations().modules).forEach(moduleConfig => {
+            moduleConfig.items = moduleConfig.items.filter(itemId => String(itemId) !== String(id));
+        });
+    }
 
     renderAll();
-    showToast('已从待发布列表移除');
+    showToast(entry.kind === 'new' ? '已从待发布列表移除' : '已撤销这条修改');
 }
 
 function bindRecommendations() {
@@ -994,12 +1060,18 @@ function renderAll() {
 function renderStats() {
     const stats = Object.entries(SOURCE_META).map(([source, meta]) => {
         const total = getSourceItems(source).length;
-        const added = state.newIds[source].size;
+        const entries = getDraftEntries().filter(entry => entry.source === source);
+        const added = entries.filter(entry => entry.kind === 'new').length;
+        const edited = entries.filter(entry => entry.kind === 'edit').length;
+        const summary = [
+            added > 0 ? `新增 ${added}` : '',
+            edited > 0 ? `修改 ${edited}` : ''
+        ].filter(Boolean).join('，');
         return `
             <div class="stat-card">
                 <span>${escapeHtml(meta.label)}</span>
                 <strong>${total}</strong>
-                <p>${added > 0 ? `本次新增 ${added}` : '无新增草稿'}</p>
+                <p>${summary || '无待发布改动'}</p>
             </div>
         `;
     }).join('');
@@ -1009,6 +1081,8 @@ function renderStats() {
 
 function renderDraft() {
     const entries = getDraftEntries();
+    const newCount = entries.filter(entry => entry.kind === 'new').length;
+    const editCount = entries.filter(entry => entry.kind === 'edit').length;
     const textCount = Object.keys(state.textFiles).length;
     const recChanged = hasFileChanged(DATA_FILES.recommendations);
     const assetCount = state.pendingAssets.length;
@@ -1016,22 +1090,22 @@ function renderDraft() {
 
     $('#draft-summary').textContent = totalChanges === 0
         ? '暂无新增内容。'
-        : `新增资源 ${entries.length} 个，生成 Markdown ${textCount} 个，待处理附件 ${assetCount} 个${recChanged ? '，推荐配置已调整' : ''}。`;
+        : `新增资源 ${newCount} 个，修改资源 ${editCount} 个，生成 Markdown ${textCount} 个，待处理附件 ${assetCount} 个${recChanged ? '，推荐配置已调整' : ''}。`;
 
     if (entries.length === 0 && !recChanged && textCount === 0) {
         $('#draft-list').innerHTML = '<div class="draft-item"><span>还没有草稿内容</span><span>安全</span></div>';
         return;
     }
 
-    const rows = entries.map(({ source, item }) => `
+    const rows = entries.map(({ source, item, kind }) => `
         <div class="draft-item">
             <div>
                 <strong>${escapeHtml(item.title || item.id)}</strong>
-                <div>${escapeHtml(SOURCE_META[source].label)} · ${escapeHtml(item.id)}</div>
+                <div>${escapeHtml(SOURCE_META[source].label)} · ${escapeHtml(item.id)} · ${kind === 'new' ? '新增' : '修改'}</div>
             </div>
             <button class="ghost-action" data-remove-draft="${escapeAttribute(item.id)}" data-source="${source}">
-                <i data-lucide="trash-2"></i>
-                移除
+                <i data-lucide="${kind === 'new' ? 'trash-2' : 'rotate-ccw'}"></i>
+                ${kind === 'new' ? '移除' : '撤销'}
             </button>
         </div>
     `);
@@ -1049,6 +1123,8 @@ function renderDraft() {
 
 function renderPendingList() {
     const entries = getDraftEntries();
+    const newCount = entries.filter(entry => entry.kind === 'new').length;
+    const editCount = entries.filter(entry => entry.kind === 'edit').length;
     const recChanged = hasFileChanged(DATA_FILES.recommendations);
     const textCount = Object.keys(state.textFiles).length;
     const assetCount = state.pendingAssets.length;
@@ -1059,25 +1135,26 @@ function renderPendingList() {
 
     $('#pending-status').textContent = totalChanges === 0
         ? `${modeText} 暂无待发布资源。`
-        : `${modeText} 待发布资源 ${entries.length} 个，生成 Markdown ${textCount} 个，待处理附件 ${assetCount} 个${recChanged ? '，推荐配置已调整' : ''}。`;
+        : `${modeText} 新增资源 ${newCount} 个，修改资源 ${editCount} 个，生成 Markdown ${textCount} 个，待处理附件 ${assetCount} 个${recChanged ? '，推荐配置已调整' : ''}。`;
 
     if (entries.length === 0 && !recChanged) {
         $('#pending-list').innerHTML = `
             <div class="pending-empty">
                 <i data-lucide="check-circle"></i>
                 <strong>没有待发布资源</strong>
-                <span>新增图片、词作、音乐或知识内容后，会立刻出现在这里。</span>
+                <span>新增或编辑图片、词作、音乐、知识内容后，会立刻出现在这里。</span>
             </div>
         `;
         return;
     }
 
-    const cards = entries.map(({ source, item }) => {
+    const cards = entries.map(({ source, item, kind }) => {
         const availability = getSinglePublishAvailability(source, item);
-        const textFiles = getTextFilePathsForItem(source, item);
+        const textFiles = kind === 'new' ? getTextFilePathsForItem(source, item) : [];
         const recommendationLabels = getRecommendationLabelsForItem(source, item.id);
         const badges = [
             `<span>${escapeHtml(SOURCE_META[source].label)}</span>`,
+            `<span>${kind === 'new' ? '新增' : '修改'}</span>`,
             ...textFiles.map(() => '<span>Markdown</span>'),
             ...recommendationLabels.map(label => `<span>${escapeHtml(label)}</span>`)
         ].join('');
@@ -1100,8 +1177,8 @@ function renderPendingList() {
                         发布这条
                     </button>
                     <button class="ghost-action" data-remove-draft="${escapeAttribute(item.id)}" data-source="${source}">
-                        <i data-lucide="trash-2"></i>
-                        移除
+                        <i data-lucide="${kind === 'new' ? 'trash-2' : 'rotate-ccw'}"></i>
+                        ${kind === 'new' ? '移除' : '撤销修改'}
                     </button>
                 </div>
             </article>
@@ -1136,18 +1213,22 @@ function renderPendingList() {
 function renderLibrary() {
     const source = state.activeLibrary;
     const query = $('#library-search').value.trim().toLowerCase();
-    const items = filterItems(getSourceItems(source), query);
+    const entries = source === 'all'
+        ? Object.keys(SOURCE_META).flatMap(itemSource => filterItems(getSourceItems(itemSource), query)
+            .map(item => ({ source: itemSource, item })))
+        : filterItems(getSourceItems(source), query).map(item => ({ source, item }));
 
-    $('#resource-library').innerHTML = items.map(item => renderResourceCard(source, item)).join('')
+    $('#resource-library').innerHTML = entries.map(({ source: itemSource, item }) => renderResourceCard(itemSource, item)).join('')
         || '<div class="draft-item"><span>没有匹配资源</span></div>';
 }
 
 function renderResourceCard(source, item) {
     const image = getItemImage(source, item);
-    const isNew = state.newIds[source].has(String(item.id));
+    const kind = getResourceChangeKind(source, item);
     const media = image
         ? `<img class="resource-thumb" src="${escapeAttribute(resolveAssetUrl(state.previewUrls[item.id] || image))}" alt="${escapeAttribute(item.title || item.id)}">`
         : `<div class="resource-icon"><i data-lucide="${SOURCE_META[source].icon}"></i></div>`;
+    const badgeText = kind === 'new' ? '本次新增' : kind === 'edit' ? '已修改' : '可编辑';
 
     return `
         <article class="resource-card">
@@ -1156,7 +1237,12 @@ function renderResourceCard(source, item) {
                 <h4>${escapeHtml(item.title || item.id)}</h4>
                 <p>${escapeHtml(getItemMeta(source, item))}</p>
             </div>
-            <span class="resource-badge ${isNew ? 'is-new' : ''}">${isNew ? '本次新增' : '历史只读'}</span>
+            <div class="resource-card-actions">
+                <span class="resource-badge ${kind ? 'is-new' : ''}">${badgeText}</span>
+                <button class="icon-action" type="button" title="编辑" data-edit-resource="${escapeAttribute(item.id)}" data-source="${source}">
+                    <i data-lucide="pencil"></i>
+                </button>
+            </div>
         </article>
     `;
 }
@@ -1269,7 +1355,7 @@ function renderPublishChecks() {
     const checks = [
         {
             icon: problems.length === 0 ? 'shield-check' : 'alert-triangle',
-            text: problems.length === 0 ? '历史数据保护检查通过' : problems[0]
+            text: problems.length === 0 ? '资源结构检查通过' : problems[0]
         },
         {
             icon: state.online ? 'cloud' : 'file-json',
@@ -1424,11 +1510,13 @@ async function publishSingleDraft(source, id) {
             state.baseFiles[path] = clone(value);
         });
 
-        entries.forEach(({ source: entrySource, item }) => {
-            state.newIds[entrySource].delete(String(item.id));
-            getTextFilePathsForItem(entrySource, item).forEach(path => {
-                delete state.textFiles[path];
-            });
+        entries.forEach(({ source: entrySource, item, kind }) => {
+            if (kind === 'new') {
+                state.newIds[entrySource].delete(String(item.id));
+                getTextFilePathsForItem(entrySource, item).forEach(path => {
+                    delete state.textFiles[path];
+                });
+            }
         });
 
         setPublishOutput(JSON.stringify({
@@ -1475,20 +1563,42 @@ function buildPublishPayload() {
 }
 
 function buildSinglePublishPayload(entries) {
-    const selectedBySource = buildSelectedIdMap(entries);
     const files = {};
+    const selectedBySource = buildSelectedIdMap(entries);
+    const entriesBySource = entries.reduce((result, entry) => {
+        if (!result[entry.source]) {
+            result[entry.source] = [];
+        }
+        result[entry.source].push(entry);
+        return result;
+    }, {});
 
-    Object.entries(selectedBySource).forEach(([source, ids]) => {
-        if (ids.size === 0) return;
-
+    Object.entries(entriesBySource).forEach(([source, sourceEntries]) => {
         const path = DATA_FILES[source];
         const baseItems = clone(state.baseFiles[path] || []);
+        const nextItems = clone(baseItems);
+        const editEntries = sourceEntries.filter(entry => entry.kind === 'edit');
+        const newIds = new Set(sourceEntries
+            .filter(entry => entry.kind === 'new')
+            .map(entry => String(entry.item.id)));
+
+        editEntries.forEach(({ item }) => {
+            const index = nextItems.findIndex(baseItem => String(baseItem.id) === String(item.id));
+            if (index !== -1) {
+                nextItems[index] = clone(item);
+            }
+        });
+
         const publishItems = getSourceItems(source)
-            .filter(item => state.newIds[source].has(String(item.id)) && ids.has(String(item.id)))
+            .filter(item => state.newIds[source].has(String(item.id)) && newIds.has(String(item.id)))
             .map(clone);
 
         if (publishItems.length > 0) {
-            files[path] = baseItems.concat(publishItems);
+            nextItems.push(...publishItems);
+        }
+
+        if (stableStringify(nextItems) !== stableStringify(baseItems)) {
+            files[path] = nextItems;
         }
     });
 
@@ -1578,21 +1688,194 @@ async function copyDraftBundle() {
     }
 }
 
+function openResourceEditor(source, id) {
+    const item = getSourceItems(source).find(entry => String(entry.id) === String(id));
+    const schema = RESOURCE_EDIT_SCHEMAS[source];
+
+    if (!item || !schema) {
+        showToast('没有找到可编辑资源');
+        return;
+    }
+
+    const form = $('#resource-editor-form');
+    form.elements.source.value = source;
+    form.elements.resourceId.value = item.id;
+    $('#resource-editor-title').textContent = `编辑${SOURCE_META[source].label}资源`;
+    $('#resource-editor-subtitle').textContent = item.title || item.id;
+    $('#resource-editor-meta').innerHTML = `
+        <span>${escapeHtml(SOURCE_META[source].label)}</span>
+        <span>ID：${escapeHtml(item.id)}</span>
+        <span>${getResourceChangeKind(source, item) === 'new' ? '本次新增' : '线上资源'}</span>
+    `;
+    $('#resource-editor-fields').innerHTML = `
+        <label class="field">
+            <span>资源 ID</span>
+            <input value="${escapeAttribute(item.id)}" disabled>
+        </label>
+        ${schema.map(field => renderEditorField(field, item)).join('')}
+    `;
+
+    $('#resource-editor-modal').classList.remove('is-hidden');
+    $('#resource-editor-modal').setAttribute('aria-hidden', 'false');
+    renderIcons();
+
+    const firstInput = $('#resource-editor-fields input:not([disabled]), #resource-editor-fields textarea');
+    if (firstInput) {
+        firstInput.focus();
+        firstInput.select();
+    }
+}
+
+function closeResourceEditor() {
+    $('#resource-editor-modal').classList.add('is-hidden');
+    $('#resource-editor-modal').setAttribute('aria-hidden', 'true');
+}
+
+function renderEditorField(field, item) {
+    const value = getEditorFieldValue(field, item);
+    if (field.type === 'checkbox') {
+        return `
+            <label class="check-field editor-field-wide">
+                <input type="checkbox" name="${escapeAttribute(field.key)}" ${value ? 'checked' : ''}>
+                <span>${escapeHtml(field.label)}</span>
+            </label>
+        `;
+    }
+
+    if (field.type === 'textarea') {
+        return `
+            <label class="field editor-field-wide">
+                <span>${escapeHtml(field.label)}</span>
+                <textarea name="${escapeAttribute(field.key)}" rows="4" ${field.required ? 'required' : ''}>${escapeHtml(value)}</textarea>
+            </label>
+        `;
+    }
+
+    return `
+        <label class="field">
+            <span>${escapeHtml(field.label)}</span>
+            <input name="${escapeAttribute(field.key)}" value="${escapeAttribute(value)}" ${field.required ? 'required' : ''} ${field.type === 'number' ? 'inputmode="decimal"' : ''}>
+        </label>
+    `;
+}
+
+function getEditorFieldValue(field, item) {
+    const value = item[field.key];
+    if (field.type === 'checkbox') return Boolean(value);
+    if (field.type === 'tags') return Array.isArray(value) ? value.join('，') : String(value || '');
+    return value === undefined || value === null ? '' : String(value);
+}
+
+function handleResourceEditorSubmit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const source = form.elements.source.value;
+    const id = form.elements.resourceId.value;
+    const schema = RESOURCE_EDIT_SCHEMAS[source] || [];
+    const path = DATA_FILES[source];
+    const index = getSourceItems(source).findIndex(item => String(item.id) === String(id));
+
+    if (index === -1) {
+        showToast('这条资源已经不在资源库里');
+        closeResourceEditor();
+        renderAll();
+        return;
+    }
+
+    const original = getSourceItems(source)[index];
+    const updated = clone(original);
+
+    try {
+        schema.forEach(field => {
+            applyEditorFieldValue(updated, field, form.elements[field.key]);
+        });
+    } catch (error) {
+        showToast(error.message || '保存失败');
+        return;
+    }
+
+    updated.id = original.id;
+    state.files[path][index] = updated;
+    closeResourceEditor();
+    renderAll();
+
+    if (getResourceChangeKind(source, updated)) {
+        setPanel('pending-panel');
+        showToast('修改已保存到待发布列表');
+    } else {
+        showToast('没有检测到修改');
+    }
+}
+
+function applyEditorFieldValue(item, field, input) {
+    if (!input) return;
+
+    if (field.type === 'checkbox') {
+        item[field.key] = input.checked;
+        return;
+    }
+
+    const rawValue = String(input.value || '').trim();
+    if (field.required && !rawValue) {
+        throw new Error(`${field.label}不能为空`);
+    }
+
+    if (!rawValue && field.empty === 'delete') {
+        delete item[field.key];
+        return;
+    }
+
+    if (field.type === 'number') {
+        if (!rawValue) {
+            delete item[field.key];
+            return;
+        }
+        const numberValue = Number(rawValue);
+        if (!Number.isFinite(numberValue)) {
+            throw new Error(`${field.label}必须是数字`);
+        }
+        item[field.key] = numberValue;
+        return;
+    }
+
+    if (field.type === 'tags') {
+        item[field.key] = splitTags(rawValue);
+        return;
+    }
+
+    item[field.key] = rawValue;
+}
+
 function getDraftEntries() {
-    return Object.keys(SOURCE_META).flatMap(source => {
-        return getSourceItems(source)
-            .filter(item => state.newIds[source].has(String(item.id)))
-            .map(item => ({ source, item }));
-    });
+    return Object.keys(SOURCE_META).flatMap(source => getSourceItems(source)
+        .map(item => {
+            const kind = getResourceChangeKind(source, item);
+            return kind ? { source, item, kind } : null;
+        })
+        .filter(Boolean));
 }
 
 function getDraftEntry(source, id) {
-    if (!state.newIds[source] || !state.newIds[source].has(String(id))) {
-        return null;
+    const item = getSourceItems(source).find(entry => String(entry.id) === String(id));
+    const kind = item ? getResourceChangeKind(source, item) : '';
+    return item && kind ? { source, item, kind } : null;
+}
+
+function getResourceChangeKind(source, item) {
+    if (!item) return '';
+    const id = String(item.id);
+    if (state.newIds[source] && state.newIds[source].has(id)) {
+        return 'new';
     }
 
-    const item = getSourceItems(source).find(entry => String(entry.id) === String(id));
-    return item ? { source, item } : null;
+    const baseItem = getBaseResourceItem(source, id);
+    if (!baseItem) return '';
+    return stableStringify(baseItem) === stableStringify(item) ? '' : 'edit';
+}
+
+function getBaseResourceItem(source, id) {
+    return (state.baseFiles[DATA_FILES[source]] || [])
+        .find(item => String(item.id) === String(id));
 }
 
 function expandEntriesWithDependencies(entries) {
@@ -1618,7 +1901,7 @@ function expandEntriesWithDependencies(entries) {
             .map(entry => String(entry.item.id)));
         return getSourceItems(source)
             .filter(item => ids.has(String(item.id)))
-            .map(item => ({ source, item }));
+            .map(item => ({ source, item, kind: getResourceChangeKind(source, item) }));
     });
 }
 
@@ -1660,6 +1943,7 @@ function getSinglePublishAvailability(source, item) {
     }
 
     const missingTextPath = entries
+        .filter(entry => entry.kind === 'new')
         .flatMap(entry => getTextFilePathsForItem(entry.source, entry.item))
         .find(path => state.textFiles[path] === undefined);
 
@@ -1769,14 +2053,25 @@ function getPublishProblems() {
         }
 
         for (let index = 0; index < base.length; index += 1) {
-            if (stableStringify(base[index]) !== stableStringify(current[index])) {
-                problems.push(`${SOURCE_META[source].label}第 ${index + 1} 个历史资源被修改或重排`);
+            if (!current[index] || String(base[index].id || '') !== String(current[index].id || '')) {
+                problems.push(`${SOURCE_META[source].label}第 ${index + 1} 个资源被删除、重排或修改 ID`);
                 break;
             }
         }
+
+        const seen = new Set();
+        current.forEach(item => {
+            if (!item || !item.id) return;
+            const id = String(item.id);
+            if (seen.has(id)) {
+                problems.push(`${SOURCE_META[source].label}存在重复 ID：${id}`);
+            }
+            seen.add(id);
+        });
     });
 
     getDraftEntries().forEach(({ source, item }) => {
+        if (!state.newIds[source].has(String(item.id))) return;
         getTextFilePathsForItem(source, item).forEach(path => {
             if (state.textFiles[path] === undefined) {
                 problems.push(`${item.title || item.id} 缺少生成的 Markdown 文件：${path}`);
