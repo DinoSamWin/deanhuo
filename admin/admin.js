@@ -52,7 +52,7 @@ const RESOURCE_EDIT_SCHEMAS = {
         { key: 'cover', label: '封面路径/URL', empty: 'delete' },
         { key: 'summary', label: '摘要', type: 'textarea' },
         { key: 'audioPath', label: '音频路径/URL', empty: 'delete' },
-        { key: 'linkedMusicId', label: '关联音乐 ID', empty: 'delete' },
+        { key: 'linkedMusicId', label: '关联音乐', type: 'resourceSelect', source: 'music', empty: 'delete' },
         { key: 'contentPath', label: '正文 Markdown 路径', empty: 'delete' },
         { key: 'order', label: '词作排序', type: 'number', empty: 'delete' },
         { key: 'showOnHome', label: '首页显示标记', type: 'checkbox' },
@@ -66,7 +66,7 @@ const RESOURCE_EDIT_SCHEMAS = {
         { key: 'cover', label: '封面路径/URL', empty: 'delete' },
         { key: 'url', label: '音频路径/URL', empty: 'delete' },
         { key: 'description', label: '描述', type: 'textarea' },
-        { key: 'lyricId', label: '关联词作 ID', empty: 'delete' }
+        { key: 'lyricId', label: '关联词作', type: 'resourceSelect', source: 'lyrics', empty: 'delete' }
     ],
     knowledge: [
         { key: 'title', label: '标题', required: true },
@@ -451,7 +451,10 @@ function bindForms() {
     $('#lyric-music-audio-select').addEventListener('change', event => {
         const music = getVisibleSourceItems('music').find(item => String(item.id) === String(event.target.value));
         if (music) {
-            setFormMessage($('#lyric-form'), `已选择音乐音频：${music.title || music.id}`, 'info');
+            const message = music.url
+                ? `已关联音乐并同步音频：${music.title || music.id}`
+                : `已关联音乐：${music.title || music.id}。这首音乐暂无音频路径，词作可不填音频。`;
+            setFormMessage($('#lyric-form'), message, 'info');
         }
     });
 
@@ -1705,15 +1708,14 @@ function renderLyricMusicAudioSelect() {
 
     const selectedValue = select.value;
     const options = getVisibleSourceItems('music')
-        .filter(item => item.url)
         .map(item => `
             <option value="${escapeAttribute(item.id)}">
-                ${escapeHtml(item.title || item.id)}${item.artist ? ` · ${escapeHtml(item.artist)}` : ''}
+                ${escapeHtml(formatRelationOptionLabel('music', item))}${item.url ? ' · 可同步音频' : ' · 无音频'}
             </option>
         `);
 
     select.innerHTML = [
-        '<option value="">不从音乐选择</option>',
+        '<option value="">不关联音乐</option>',
         ...options
     ].join('');
 
@@ -2145,10 +2147,12 @@ function openResourceEditor(source, id) {
     $('#resource-editor-modal').setAttribute('aria-hidden', 'false');
     renderIcons();
 
-    const firstInput = $('#resource-editor-fields input:not([disabled]), #resource-editor-fields textarea');
+    const firstInput = $('#resource-editor-fields input:not([disabled]), #resource-editor-fields select, #resource-editor-fields textarea');
     if (firstInput) {
         firstInput.focus();
-        firstInput.select();
+        if (typeof firstInput.select === 'function') {
+            firstInput.select();
+        }
     }
 }
 
@@ -2177,12 +2181,60 @@ function renderEditorField(field, item) {
         `;
     }
 
+    if (field.type === 'resourceSelect') {
+        return renderResourceSelectField(field, item, value);
+    }
+
     return `
         <label class="field">
             <span>${escapeHtml(field.label)}</span>
             <input name="${escapeAttribute(field.key)}" value="${escapeAttribute(value)}" ${field.required ? 'required' : ''} ${field.type === 'number' ? 'inputmode="decimal"' : ''}>
         </label>
     `;
+}
+
+function renderResourceSelectField(field, item, value) {
+    const relatedSource = field.source;
+    const selectedValue = String(value || '');
+    const items = getRelationOptions(relatedSource, selectedValue);
+    const options = [
+        `<option value="">不关联${escapeHtml(SOURCE_META[relatedSource].label)}</option>`,
+        ...items.map(optionItem => `
+            <option value="${escapeAttribute(optionItem.id)}" ${String(optionItem.id) === selectedValue ? 'selected' : ''}>
+                ${escapeHtml(formatRelationOptionLabel(relatedSource, optionItem))}
+            </option>
+        `)
+    ].join('');
+
+    return `
+        <label class="field">
+            <span>${escapeHtml(field.label)}</span>
+            <select name="${escapeAttribute(field.key)}">
+                ${options}
+            </select>
+        </label>
+    `;
+}
+
+function getRelationOptions(source, selectedValue) {
+    const visibleItems = getVisibleSourceItems(source);
+    if (!selectedValue || visibleItems.some(item => String(item.id) === selectedValue)) {
+        return visibleItems;
+    }
+
+    const currentItem = getSourceItems(source).find(item => String(item.id) === selectedValue);
+    return currentItem ? [currentItem, ...visibleItems] : visibleItems;
+}
+
+function formatRelationOptionLabel(source, item) {
+    if (!item) return '';
+    const title = item.title || item.id;
+    const parts = [];
+    if (source === 'music' && item.artist) parts.push(item.artist);
+    if (source === 'lyrics' && item.author) parts.push(item.author);
+    if (isResourceDeleted(item)) parts.push('回收站');
+    parts.push(item.id);
+    return `${title} · ${parts.filter(Boolean).join(' · ')}`;
 }
 
 function getEditorFieldValue(field, item) {
