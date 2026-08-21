@@ -69,6 +69,8 @@ function bindChrome() {
         login($('#admin-token-input').value.trim());
     });
 
+    $('#toggle-password-button').addEventListener('click', togglePasswordVisibility);
+
     $('#admin-token-input').addEventListener('keydown', event => {
         if (event.key === 'Enter') {
             login($('#admin-token-input').value.trim());
@@ -148,7 +150,7 @@ async function loadContent() {
             clearStoredAdminToken();
             $('#admin-app').classList.add('is-hidden');
             $('#login-screen').classList.remove('is-hidden');
-            setLoginError('后台口令和 Vercel 里的 ADMIN_TOKEN 不匹配，请检查后重新输入。');
+            setLoginError(buildAuthErrorMessage(apiError));
             showToast('后台口令不正确');
             return false;
         }
@@ -179,6 +181,8 @@ async function loadFromApi() {
     if (!response.ok) {
         const error = new Error(data.error || '线上接口不可用');
         error.status = response.status;
+        error.code = data.code || '';
+        error.details = data.details || {};
         throw error;
     }
 
@@ -186,10 +190,16 @@ async function loadFromApi() {
 }
 
 function getAuthHeaders() {
-    return {
-        'x-admin-token': state.token,
-        Authorization: `Bearer ${state.token}`
+    const headers = {
+        'x-admin-token-encoded': encodeURIComponent(state.token)
     };
+
+    if (isAsciiHeaderValue(state.token)) {
+        headers['x-admin-token'] = state.token;
+        headers.Authorization = `Bearer ${state.token}`;
+    }
+
+    return headers;
 }
 
 function normalizeAdminToken(value) {
@@ -201,7 +211,20 @@ function normalizeAdminToken(value) {
         ['‘', '’']
     ];
     const pair = quotePairs.find(([start, end]) => trimmed.startsWith(start) && trimmed.endsWith(end));
-    return pair && trimmed.length >= 2 ? trimmed.slice(1, -1).trim() : trimmed;
+    const unquoted = pair && trimmed.length >= 2 ? trimmed.slice(1, -1).trim() : trimmed;
+    return unquoted.normalize('NFC');
+}
+
+function buildAuthErrorMessage(error) {
+    const details = error && error.details ? error.details : {};
+    const receivedText = details.tokenReceived
+        ? '服务端已经收到你输入的密码，但它和 Vercel Production 里的 ADMIN_TOKEN 不一致。'
+        : '服务端没有收到有效密码。';
+    return `${receivedText} 可以点眼睛按钮核对输入；如果确认是 123456，请检查 Vercel 的 Production 环境变量并重新部署。`;
+}
+
+function isAsciiHeaderValue(value) {
+    return /^[\x20-\x7e]*$/.test(String(value || ''));
 }
 
 function getStoredAdminToken() {
@@ -1690,6 +1713,21 @@ function setLoginError(message) {
 function setLoginBusy(isBusy) {
     $('#login-button').disabled = isBusy;
     $('#admin-token-input').disabled = isBusy;
+    $('#toggle-password-button').disabled = isBusy;
+}
+
+function togglePasswordVisibility() {
+    const input = $('#admin-token-input');
+    const button = $('#toggle-password-button');
+    const willShow = input.type === 'password';
+
+    input.type = willShow ? 'text' : 'password';
+    button.setAttribute('aria-label', willShow ? '隐藏密码' : '显示密码');
+    button.setAttribute('aria-pressed', String(willShow));
+    button.title = willShow ? '隐藏密码' : '显示密码';
+    button.innerHTML = `<i data-lucide="${willShow ? 'eye-off' : 'eye'}"></i>`;
+    renderIcons();
+    input.focus();
 }
 
 function setDefaultFormValues() {

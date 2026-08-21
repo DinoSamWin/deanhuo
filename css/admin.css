@@ -77,6 +77,22 @@ button {
     line-height: 1.7;
 }
 
+.password-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 42px;
+    gap: 8px;
+}
+
+.password-field input {
+    min-width: 0;
+}
+
+.password-toggle {
+    width: 42px;
+    min-height: 42px;
+    align-self: stretch;
+}
+
 .login-error {
     display: none;
     margin: -4px 0 14px;
