@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260821-edit-resources">
+    <link rel="stylesheet" href="../css/admin.css?v=20260821-resource-list">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -52,6 +52,10 @@
                 <i data-lucide="plus-square"></i>
                 新增资源
             </button>
+            <button class="side-link" data-panel="resource-list-panel">
+                <i data-lucide="folder-search"></i>
+                资源列表
+            </button>
             <button class="side-link" data-panel="pending-panel">
                 <i data-lucide="inbox"></i>
                 待发布资源
@@ -79,7 +83,7 @@
         <main class="admin-main">
             <header class="admin-topbar">
                 <div>
-                    <p class="eyebrow">Append-only Resource Manager</p>
+                    <p class="eyebrow">Resource Manager</p>
                     <h1 id="panel-title">总览</h1>
                 </div>
                 <div class="topbar-actions">
@@ -125,6 +129,10 @@
                         <button class="secondary-action" data-panel-shortcut="pending-panel">
                             <i data-lucide="inbox"></i>
                             查看待发布列表
+                        </button>
+                        <button class="secondary-action" data-panel-shortcut="resource-list-panel">
+                            <i data-lucide="folder-search"></i>
+                            查看资源列表
                         </button>
                         <button class="secondary-action" data-panel-shortcut="resources-panel">
                             <i data-lucide="plus"></i>
@@ -209,6 +217,10 @@
                         <label class="field">
                             <span>封面图片</span>
                             <input type="file" name="coverFile" accept="image/*" required>
+                        </label>
+                        <label class="field">
+                            <span>从音乐选择音频</span>
+                            <select name="musicAudioId" id="lyric-music-audio-select"></select>
                         </label>
                         <label class="field">
                             <span>音频文件</span>
@@ -360,11 +372,41 @@
                 </div>
             </section>
 
+            <section class="panel" id="resource-list-panel">
+                <div class="section-header">
+                    <div>
+                        <h2>资源列表</h2>
+                        <p>按模块查看线上资源，点击任意资源进入详情，也可以继续编辑后发布。</p>
+                    </div>
+                    <button class="secondary-action" data-panel-shortcut="resources-panel">
+                        <i data-lucide="plus"></i>
+                        新增资源
+                    </button>
+                </div>
+                <div class="resource-list-toolbar">
+                    <label class="field compact-field">
+                        <span>资源模块</span>
+                        <select id="resource-list-source-select">
+                            <option value="all">全部资源</option>
+                            <option value="photos">图片</option>
+                            <option value="lyrics">词作</option>
+                            <option value="music">音乐</option>
+                            <option value="knowledge">知识</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>搜索资源</span>
+                        <input id="resource-list-search" placeholder="标题 / ID / 作者 / 标签">
+                    </label>
+                </div>
+                <div class="resource-list" id="resource-list"></div>
+            </section>
+
             <section class="panel" id="pending-panel">
                 <div class="section-header">
                     <div>
                         <h2>待发布资源</h2>
-                        <p>新增成功后会先进入这里。可以单条发布，也可以一次发布全部。</p>
+                        <p>新增或编辑成功后会先进入这里。可以单条发布，也可以一次发布全部。</p>
                     </div>
                     <div class="inline-actions">
                         <button class="primary-action" id="pending-publish-all-button">
@@ -450,6 +492,32 @@
         </main>
     </div>
 
+    <div class="modal-backdrop is-hidden" id="resource-viewer-modal" aria-hidden="true">
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="resource-viewer-title">
+            <div class="modal-header">
+                <div>
+                    <p class="eyebrow">Resource Detail</p>
+                    <h2 id="resource-viewer-title">资源详情</h2>
+                    <p id="resource-viewer-subtitle"></p>
+                </div>
+                <button class="icon-action" id="resource-viewer-close-button" type="button" aria-label="关闭" title="关闭">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="resource-detail" id="resource-viewer-body"></div>
+            <div class="modal-actions resource-detail-actions">
+                <a class="secondary-action" id="resource-viewer-public-link" href="../index.html" target="_blank" rel="noopener">
+                    <i data-lucide="external-link"></i>
+                    查看前台
+                </a>
+                <button class="primary-action" id="resource-viewer-edit-button" type="button">
+                    <i data-lucide="pencil"></i>
+                    编辑资源
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-backdrop is-hidden" id="resource-editor-modal" aria-hidden="true">
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="resource-editor-title">
             <div class="modal-header">
@@ -484,7 +552,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260821-edit-resources"></script>
+    <script src="../admin/admin.js?v=20260821-resource-list"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();

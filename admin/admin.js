@@ -52,6 +52,7 @@ const RESOURCE_EDIT_SCHEMAS = {
         { key: 'cover', label: '封面路径/URL', empty: 'delete' },
         { key: 'summary', label: '摘要', type: 'textarea' },
         { key: 'audioPath', label: '音频路径/URL', empty: 'delete' },
+        { key: 'linkedMusicId', label: '关联音乐 ID', empty: 'delete' },
         { key: 'contentPath', label: '正文 Markdown 路径', empty: 'delete' },
         { key: 'order', label: '词作排序', type: 'number', empty: 'delete' },
         { key: 'showOnHome', label: '首页显示标记', type: 'checkbox' },
@@ -95,6 +96,7 @@ const state = {
     },
     activePanel: 'dashboard-panel',
     activeLibrary: 'all',
+    activeResourceList: 'all',
     activeRecommendation: 'homeLyrics'
 };
 
@@ -432,10 +434,18 @@ function bindForms() {
     });
 
     $('#library-search').addEventListener('input', renderLibrary);
-    $('#resource-library').addEventListener('click', event => {
-        const editButton = event.target.closest('[data-edit-resource]');
-        if (!editButton) return;
-        openResourceEditor(editButton.dataset.source, editButton.dataset.editResource);
+    $('#resource-library').addEventListener('click', handleResourceCardClick);
+    $('#resource-list-source-select').addEventListener('change', event => {
+        state.activeResourceList = event.target.value;
+        renderResourceList();
+    });
+    $('#resource-list-search').addEventListener('input', renderResourceList);
+    $('#resource-list').addEventListener('click', handleResourceCardClick);
+    $('#lyric-music-audio-select').addEventListener('change', event => {
+        const music = getSourceItems('music').find(item => String(item.id) === String(event.target.value));
+        if (music) {
+            setFormMessage($('#lyric-form'), `已选择音乐音频：${music.title || music.id}`, 'info');
+        }
     });
 
     $('#photo-form').addEventListener('submit', handlePhotoSubmit);
@@ -449,6 +459,17 @@ function bindForms() {
         if (event.target.id === 'resource-editor-modal') {
             closeResourceEditor();
         }
+    });
+    $('#resource-viewer-close-button').addEventListener('click', closeResourceViewer);
+    $('#resource-viewer-modal').addEventListener('click', event => {
+        if (event.target.id === 'resource-viewer-modal') {
+            closeResourceViewer();
+        }
+    });
+    $('#resource-viewer-edit-button').addEventListener('click', () => {
+        const button = $('#resource-viewer-edit-button');
+        closeResourceViewer();
+        openResourceEditor(button.dataset.source, button.dataset.resourceId);
     });
     bindUploadInputFeedback();
 
@@ -526,6 +547,8 @@ async function handleLyricSubmit(event) {
     const form = event.currentTarget;
     const coverFile = form.elements.coverFile.files[0];
     const audioFile = form.elements.audioFile.files[0];
+    const selectedMusicId = form.elements.musicAudioId.value;
+    const selectedMusicAudioPath = getMusicAudioPath(selectedMusicId);
     const audioUrl = normalizeAssetInput(form.elements.audioUrl.value);
     if (!coverFile) return showFormError(form, '请选择封面图片');
 
@@ -533,7 +556,7 @@ async function handleLyricSubmit(event) {
         progress.set(8, '正在读取词作内容');
         validateUploads([
             { file: coverFile, uploadType: 'lyricsCover' },
-            ...(audioFile && !audioUrl ? [{ file: audioFile, uploadType: 'lyricAudio' }] : [])
+            ...(audioFile && !audioUrl && !selectedMusicAudioPath ? [{ file: audioFile, uploadType: 'lyricAudio' }] : [])
         ]);
 
         const title = form.elements.title.value.trim();
@@ -550,10 +573,10 @@ async function handleLyricSubmit(event) {
         state.previewUrls[id] = URL.createObjectURL(coverFile);
         const uploaded = await uploadFiles([
             { key: 'cover', file: coverFile, uploadType: 'lyricsCover', label: '词作封面' },
-            ...(audioFile && !audioUrl ? [{ key: 'audioPath', file: audioFile, uploadType: 'lyricAudio', label: '词作音频' }] : [])
+            ...(audioFile && !audioUrl && !selectedMusicAudioPath ? [{ key: 'audioPath', file: audioFile, uploadType: 'lyricAudio', label: '词作音频' }] : [])
         ], progress, 24, 78);
         const cover = uploaded.cover;
-        const audioPath = audioUrl || uploaded.audioPath || '';
+        const audioPath = selectedMusicAudioPath || audioUrl || uploaded.audioPath || '';
         const contentPath = `assets/lyrics/admin-generated/${id}.md`;
         const showOnHome = form.elements.showOnHome.checked;
 
@@ -571,7 +594,8 @@ async function handleLyricSubmit(event) {
             order: getNextNumber('lyrics', 'order'),
             showOnHome,
             homeOrder: getNextHomeOrder('lyrics'),
-            releaseYear: form.elements.releaseYear.value.trim() || String(new Date().getFullYear())
+            releaseYear: form.elements.releaseYear.value.trim() || String(new Date().getFullYear()),
+            ...(selectedMusicId ? { linkedMusicId: selectedMusicId } : {})
         });
 
         if (showOnHome) {
@@ -1050,9 +1074,10 @@ function renderAll() {
     renderDraft();
     renderPendingList();
     renderLibrary();
+    renderResourceList();
     renderRecommendationModuleSelect();
     renderRecommendationPanel();
-    renderMusicLyricSelect();
+    renderRelationSelects();
     renderPublishChecks();
     renderIcons();
 }
@@ -1222,29 +1247,170 @@ function renderLibrary() {
         || '<div class="draft-item"><span>没有匹配资源</span></div>';
 }
 
-function renderResourceCard(source, item) {
+function renderResourceList() {
+    const source = state.activeResourceList;
+    const query = $('#resource-list-search').value.trim().toLowerCase();
+    const entries = source === 'all'
+        ? Object.keys(SOURCE_META).flatMap(itemSource => filterItems(getSourceItems(itemSource), query)
+            .map(item => ({ source: itemSource, item })))
+        : filterItems(getSourceItems(source), query).map(item => ({ source, item }));
+
+    const summary = entries.length > 0
+        ? `<div class="resource-list-summary">共 ${entries.length} 条资源，点击卡片查看详情。</div>`
+        : '';
+
+    $('#resource-list').innerHTML = summary + (entries.map(({ source: itemSource, item }) => renderResourceCard(itemSource, item, true)).join('')
+        || '<div class="pending-empty"><i data-lucide="search-x"></i><strong>没有匹配资源</strong><span>换一个关键词或模块再试。</span></div>');
+}
+
+function renderResourceCard(source, item, isLarge = false) {
     const image = getItemImage(source, item);
     const kind = getResourceChangeKind(source, item);
     const media = image
         ? `<img class="resource-thumb" src="${escapeAttribute(resolveAssetUrl(state.previewUrls[item.id] || image))}" alt="${escapeAttribute(item.title || item.id)}">`
         : `<div class="resource-icon"><i data-lucide="${SOURCE_META[source].icon}"></i></div>`;
     const badgeText = kind === 'new' ? '本次新增' : kind === 'edit' ? '已修改' : '可编辑';
+    const detailText = isLarge ? `<div class="resource-card-extra">${escapeHtml(getResourcePreviewText(source, item))}</div>` : '';
 
     return `
-        <article class="resource-card">
+        <article class="resource-card ${isLarge ? 'resource-card-large' : ''}" data-view-resource="${escapeAttribute(item.id)}" data-source="${source}">
             ${media}
             <div>
                 <h4>${escapeHtml(item.title || item.id)}</h4>
                 <p>${escapeHtml(getItemMeta(source, item))}</p>
+                ${detailText}
             </div>
             <div class="resource-card-actions">
                 <span class="resource-badge ${kind ? 'is-new' : ''}">${badgeText}</span>
+                <button class="icon-action" type="button" title="查看" data-view-button="${escapeAttribute(item.id)}" data-source="${source}">
+                    <i data-lucide="eye"></i>
+                </button>
                 <button class="icon-action" type="button" title="编辑" data-edit-resource="${escapeAttribute(item.id)}" data-source="${source}">
                     <i data-lucide="pencil"></i>
                 </button>
             </div>
         </article>
     `;
+}
+
+function handleResourceCardClick(event) {
+    const editButton = event.target.closest('[data-edit-resource]');
+    if (editButton) {
+        openResourceEditor(editButton.dataset.source, editButton.dataset.editResource);
+        return;
+    }
+
+    const viewButton = event.target.closest('[data-view-button]');
+    if (viewButton) {
+        openResourceViewer(viewButton.dataset.source, viewButton.dataset.viewButton);
+        return;
+    }
+
+    const card = event.target.closest('[data-view-resource]');
+    if (card) {
+        openResourceViewer(card.dataset.source, card.dataset.viewResource);
+    }
+}
+
+function openResourceViewer(source, id) {
+    const item = getSourceItems(source).find(entry => String(entry.id) === String(id));
+    if (!item) {
+        showToast('没有找到这条资源');
+        return;
+    }
+
+    const title = item.title || item.id;
+    const publicUrl = getResourcePublicUrl(source, item);
+    $('#resource-viewer-title').textContent = title;
+    $('#resource-viewer-subtitle').textContent = `${SOURCE_META[source].label} · ${item.id}`;
+    $('#resource-viewer-public-link').href = publicUrl;
+    $('#resource-viewer-edit-button').dataset.source = source;
+    $('#resource-viewer-edit-button').dataset.resourceId = item.id;
+    $('#resource-viewer-body').innerHTML = renderResourceDetail(source, item);
+    $('#resource-viewer-modal').classList.remove('is-hidden');
+    $('#resource-viewer-modal').setAttribute('aria-hidden', 'false');
+    renderIcons();
+}
+
+function closeResourceViewer() {
+    $('#resource-viewer-modal').classList.add('is-hidden');
+    $('#resource-viewer-modal').setAttribute('aria-hidden', 'true');
+}
+
+function renderResourceDetail(source, item) {
+    const image = getItemImage(source, item);
+    const audioPath = getItemAudioPath(source, item);
+    const fields = getResourceDetailFields(source, item);
+
+    return `
+        <div class="resource-detail-hero">
+            ${image
+                ? `<img class="resource-detail-image" src="${escapeAttribute(resolveAssetUrl(state.previewUrls[item.id] || image))}" alt="${escapeAttribute(item.title || item.id)}">`
+                : `<div class="resource-detail-icon"><i data-lucide="${SOURCE_META[source].icon}"></i></div>`}
+            <div>
+                <div class="editor-meta">
+                    <span>${escapeHtml(SOURCE_META[source].label)}</span>
+                    <span>ID：${escapeHtml(item.id)}</span>
+                    <span>${getResourceChangeKind(source, item) === 'edit' ? '已修改待发布' : getResourceChangeKind(source, item) === 'new' ? '本次新增' : '线上资源'}</span>
+                </div>
+                <p>${escapeHtml(getResourcePreviewText(source, item) || getItemMeta(source, item))}</p>
+                ${audioPath ? `
+                    <audio class="resource-detail-audio" src="${escapeAttribute(resolveAssetUrl(audioPath))}" controls></audio>
+                ` : ''}
+            </div>
+        </div>
+        <div class="resource-detail-grid">
+            ${fields.map(({ label, value }) => `
+                <div class="resource-detail-row">
+                    <span>${escapeHtml(label)}</span>
+                    <strong>${escapeHtml(value)}</strong>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function getResourceDetailFields(source, item) {
+    const schema = RESOURCE_EDIT_SCHEMAS[source] || [];
+    return [
+        { label: '资源 ID', value: item.id || '' },
+        ...schema.map(field => ({
+            label: field.label,
+            value: formatResourceFieldValue(item[field.key])
+        }))
+    ].filter(field => field.value !== '');
+}
+
+function formatResourceFieldValue(value) {
+    if (Array.isArray(value)) return value.join('，');
+    if (typeof value === 'boolean') return value ? '是' : '否';
+    if (value === undefined || value === null) return '';
+    return String(value);
+}
+
+function getResourcePreviewText(source, item) {
+    if (!item) return '';
+    if (source === 'photos') return item.description || item.src || '';
+    if (source === 'lyrics') return item.summary || item.contentPath || '';
+    if (source === 'music') return item.description || item.url || '';
+    if (source === 'knowledge') return item.description || item.externalUrl || item.filename || '';
+    return '';
+}
+
+function getItemAudioPath(source, item) {
+    if (!item) return '';
+    if (source === 'music') return item.url || '';
+    if (source === 'lyrics') return item.audioPath || '';
+    return '';
+}
+
+function getResourcePublicUrl(source, item) {
+    const id = encodeURIComponent(item && item.id ? item.id : '');
+    if (source === 'lyrics') return `../lyric-detail.html?id=${id}`;
+    if (source === 'music') return `../music-player.html?id=${id}`;
+    if (source === 'knowledge') return `../knowledge-detail.html?id=${id}`;
+    if (source === 'photos') return '../photos.html';
+    return '../index.html';
 }
 
 function renderRecommendationModuleSelect() {
@@ -1328,12 +1494,46 @@ function renderMiniMedia(source, item) {
         : `<div class="resource-icon"><i data-lucide="${SOURCE_META[source].icon}"></i></div>`;
 }
 
+function renderRelationSelects() {
+    renderMusicLyricSelect();
+    renderLyricMusicAudioSelect();
+}
+
 function renderMusicLyricSelect() {
     const lyrics = getSourceItems('lyrics');
     $('#music-lyric-select').innerHTML = [
         '<option value="">不关联词作</option>',
         ...lyrics.map(item => `<option value="${escapeAttribute(item.id)}">${escapeHtml(item.title || item.id)}</option>`)
     ].join('');
+}
+
+function renderLyricMusicAudioSelect() {
+    const select = $('#lyric-music-audio-select');
+    if (!select) return;
+
+    const selectedValue = select.value;
+    const options = getSourceItems('music')
+        .filter(item => item.url)
+        .map(item => `
+            <option value="${escapeAttribute(item.id)}">
+                ${escapeHtml(item.title || item.id)}${item.artist ? ` · ${escapeHtml(item.artist)}` : ''}
+            </option>
+        `);
+
+    select.innerHTML = [
+        '<option value="">不从音乐选择</option>',
+        ...options
+    ].join('');
+
+    if ([...select.options].some(option => option.value === selectedValue)) {
+        select.value = selectedValue;
+    }
+}
+
+function getMusicAudioPath(id) {
+    if (!id) return '';
+    const item = getSourceItems('music').find(entry => String(entry.id) === String(id));
+    return item && item.url ? item.url : '';
 }
 
 function bindPublishActions() {
@@ -2137,6 +2337,8 @@ function filterItems(items, query) {
             item.author,
             item.artist,
             item.genre,
+            item.linkedMusicId,
+            item.lyricId,
             Array.isArray(item.tags) ? item.tags.join(' ') : ''
         ].join(' ').toLowerCase();
         return haystack.includes(query);
@@ -2214,6 +2416,7 @@ function setPanel(panelId) {
     const titleMap = {
         'dashboard-panel': '总览',
         'resources-panel': '新增资源',
+        'resource-list-panel': '资源列表',
         'pending-panel': '待发布资源',
         'recommendations-panel': '推荐配置',
         'publish-panel': '发布检查'
