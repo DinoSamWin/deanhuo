@@ -25,6 +25,15 @@ const AUTH_STORAGE_KEY = 'deanAdminAuth';
 const LEGACY_AUTH_STORAGE_KEY = 'deanAdminToken';
 const AUTH_TTL_DAYS = 7;
 const AUTH_TTL_MS = AUTH_TTL_DAYS * 24 * 60 * 60 * 1000;
+const ONLINE_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
+
+const UPLOAD_LABELS = {
+    photos: '图片文件',
+    lyricsCover: '词作封面',
+    lyricAudio: '词作音频',
+    musicCover: '音乐封面',
+    musicAudio: '音乐音频'
+};
 
 const state = {
     token: '',
@@ -386,6 +395,7 @@ function bindForms() {
     $('#lyric-form').addEventListener('submit', handleLyricSubmit);
     $('#music-form').addEventListener('submit', handleMusicSubmit);
     $('#knowledge-form').addEventListener('submit', handleKnowledgeSubmit);
+    bindUploadInputFeedback();
 
     $('#lyric-form').elements.contentFile.addEventListener('change', async event => {
         const file = event.target.files[0];
@@ -423,9 +433,11 @@ async function handlePhotoSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const file = form.elements.file.files[0];
-    if (!file) return showToast('请选择图片文件');
+    if (!file) return showFormError(form, '请选择图片文件');
 
     await runFormTask(form, async () => {
+        validateUploads([{ file, uploadType: 'photos' }]);
+
         const title = form.elements.title.value.trim();
         const id = makeUniqueId('img', title || file.name, 'photos');
         state.previewUrls[id] = URL.createObjectURL(file);
@@ -448,7 +460,7 @@ async function handlePhotoSubmit(event) {
 
         form.reset();
         setDefaultFormValues();
-        showToast('图片资源已加入待发布列表');
+        return '图片资源创建成功，已进入待发布列表。';
     });
 }
 
@@ -457,9 +469,15 @@ async function handleLyricSubmit(event) {
     const form = event.currentTarget;
     const coverFile = form.elements.coverFile.files[0];
     const audioFile = form.elements.audioFile.files[0];
-    if (!coverFile) return showToast('请选择封面图片');
+    const audioUrl = normalizeAssetInput(form.elements.audioUrl.value);
+    if (!coverFile) return showFormError(form, '请选择封面图片');
 
     await runFormTask(form, async () => {
+        validateUploads([
+            { file: coverFile, uploadType: 'lyricsCover' },
+            ...(audioFile && !audioUrl ? [{ file: audioFile, uploadType: 'lyricAudio' }] : [])
+        ]);
+
         const title = form.elements.title.value.trim();
         const pastedContent = form.elements.content.value.trim();
         const fileContent = form.elements.contentFile.files[0]
@@ -473,7 +491,7 @@ async function handleLyricSubmit(event) {
         const id = makeUniqueId('lyric', title, 'lyrics');
         state.previewUrls[id] = URL.createObjectURL(coverFile);
         const cover = await uploadAsset(coverFile, 'lyricsCover');
-        const audioPath = audioFile ? await uploadAsset(audioFile, 'lyricAudio') : '';
+        const audioPath = audioUrl || (audioFile ? await uploadAsset(audioFile, 'lyricAudio') : '');
         const contentPath = `assets/lyrics/admin-generated/${id}.md`;
         const showOnHome = form.elements.showOnHome.checked;
 
@@ -499,7 +517,7 @@ async function handleLyricSubmit(event) {
 
         form.reset();
         setDefaultFormValues();
-        showToast('词作资源已加入待发布列表');
+        return '词作资源创建成功，已进入待发布列表。';
     });
 }
 
@@ -508,10 +526,16 @@ async function handleMusicSubmit(event) {
     const form = event.currentTarget;
     const coverFile = form.elements.coverFile.files[0];
     const audioFile = form.elements.audioFile.files[0];
-    if (!coverFile) return showToast('请选择封面图片');
-    if (!audioFile) return showToast('请选择音频文件');
+    const audioUrl = normalizeAssetInput(form.elements.audioUrl.value);
+    if (!coverFile) return showFormError(form, '请选择封面图片');
+    if (!audioFile && !audioUrl) return showFormError(form, '请选择音频文件，或填写音频外链/已上传路径');
 
     await runFormTask(form, async () => {
+        validateUploads([
+            { file: coverFile, uploadType: 'musicCover' },
+            ...(audioFile && !audioUrl ? [{ file: audioFile, uploadType: 'musicAudio' }] : [])
+        ]);
+
         const title = form.elements.title.value.trim();
         const id = makeUniqueId('music', title, 'music');
         const lyricMarkdownFile = form.elements.lyricMarkdownFile.files[0];
@@ -519,7 +543,7 @@ async function handleMusicSubmit(event) {
         const shouldSyncLyric = Boolean(lyricMarkdown && form.elements.syncLyric.checked);
         state.previewUrls[id] = URL.createObjectURL(coverFile);
         const cover = await uploadAsset(coverFile, 'musicCover');
-        const url = await uploadAsset(audioFile, 'musicAudio');
+        const url = audioUrl || await uploadAsset(audioFile, 'musicAudio');
         let lyricId = form.elements.lyricId.value;
 
         if (shouldSyncLyric) {
@@ -566,7 +590,9 @@ async function handleMusicSubmit(event) {
 
         form.reset();
         setDefaultFormValues();
-        showToast(shouldSyncLyric ? '音乐和关联词作已加入待发布列表' : '音乐资源已加入待发布列表');
+        return shouldSyncLyric
+            ? '音乐和关联词作创建成功，已进入待发布列表。'
+            : '音乐资源创建成功，已进入待发布列表。';
     });
 }
 
@@ -613,20 +639,36 @@ async function handleKnowledgeSubmit(event) {
 
 async function runFormTask(form, task) {
     const submitButton = form.querySelector('button[type="submit"]');
+    const originalButtonHtml = submitButton.innerHTML;
     submitButton.disabled = true;
+    submitButton.innerHTML = '<i data-lucide="loader-circle"></i> 正在处理';
+    setFormMessage(form, '正在检查并上传素材，请稍候...', 'info');
+    renderIcons();
 
     try {
-        await task();
+        const result = await task();
+        const message = typeof result === 'string' && result ? result : '资源创建成功，已进入待发布列表。';
+        setFormMessage(form, message, 'success');
+        showToast(message);
         renderAll();
         setPanel('pending-panel');
     } catch (error) {
-        showToast(error.message || '操作失败');
+        const message = error.message || '操作失败';
+        setFormMessage(form, message, 'error');
+        showToast(message);
     } finally {
         submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonHtml;
+        renderIcons();
     }
 }
 
 async function uploadAsset(file, uploadType) {
+    const uploadProblem = getUploadFileProblem(file, uploadType);
+    if (uploadProblem) {
+        throw new Error(uploadProblem);
+    }
+
     if (!state.online) {
         const path = suggestAssetPath(uploadType, file.name);
         state.pendingAssets.push({
@@ -650,10 +692,85 @@ async function uploadAsset(file, uploadType) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-        throw new Error(data.error || '上传失败');
+        throw new Error(buildUploadErrorMessage(response, data, file, uploadType));
     }
 
     return data.path;
+}
+
+function bindUploadInputFeedback() {
+    [
+        { formId: 'photo-form', field: 'file', uploadType: 'photos' },
+        { formId: 'lyric-form', field: 'coverFile', uploadType: 'lyricsCover' },
+        { formId: 'lyric-form', field: 'audioFile', uploadType: 'lyricAudio' },
+        { formId: 'music-form', field: 'coverFile', uploadType: 'musicCover' },
+        { formId: 'music-form', field: 'audioFile', uploadType: 'musicAudio' }
+    ].forEach(({ formId, field, uploadType }) => {
+        const form = document.getElementById(formId);
+        if (!form || !form.elements[field]) return;
+
+        form.elements[field].addEventListener('change', event => {
+            const file = event.target.files[0];
+            if (!file) {
+                setFormMessage(form, '');
+                return;
+            }
+
+            const problem = getUploadFileProblem(file, uploadType);
+            if (problem) {
+                setFormMessage(form, problem, 'error');
+                return;
+            }
+
+            if (isAudioUpload(uploadType)) {
+                setFormMessage(form, `${UPLOAD_LABELS[uploadType]}已选择：${file.name}（${formatFileSize(file.size)}）`, 'info');
+            } else {
+                setFormMessage(form, '');
+            }
+        });
+    });
+}
+
+function validateUploads(items) {
+    items.forEach(({ file, uploadType }) => {
+        const problem = getUploadFileProblem(file, uploadType);
+        if (problem) {
+            throw new Error(problem);
+        }
+    });
+}
+
+function getUploadFileProblem(file, uploadType) {
+    if (!file || !state.online || file.size <= ONLINE_UPLOAD_LIMIT_BYTES) {
+        return '';
+    }
+
+    const label = UPLOAD_LABELS[uploadType] || '上传文件';
+    const nextStep = isAudioUpload(uploadType)
+        ? '请先压缩成更小的 mp3/m4a，或填写音频外链/已上传路径后再创建。'
+        : '请先压缩后再上传。';
+
+    return `${label}「${file.name}」大小为 ${formatFileSize(file.size)}，超过线上上传安全上限 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}。${nextStep}`;
+}
+
+function buildUploadErrorMessage(response, data, file, uploadType) {
+    if (response.status === 413) {
+        const label = UPLOAD_LABELS[uploadType] || '上传文件';
+        return `${label}「${file.name}」上传被线上服务拒绝，文件大小 ${formatFileSize(file.size)}。请压缩到 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)} 以内，或改用外链/云存储方案。`;
+    }
+
+    return data.error || `上传失败（HTTP ${response.status}）`;
+}
+
+function isAudioUpload(uploadType) {
+    return uploadType === 'musicAudio' || uploadType === 'lyricAudio';
+}
+
+function formatFileSize(bytes) {
+    const size = Number(bytes) || 0;
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+    return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function appendResource(source, item) {
@@ -1682,6 +1799,10 @@ function resolveAssetUrl(path) {
     return `../${path}`;
 }
 
+function normalizeAssetInput(value) {
+    return String(value || '').trim().replace(/^\.\.\//, '');
+}
+
 function setPanel(panelId) {
     state.activePanel = panelId;
     $$('.panel').forEach(panel => panel.classList.toggle('is-active', panel.id === panelId));
@@ -1724,6 +1845,27 @@ function setLoginBusy(isBusy) {
     $('#login-button').disabled = isBusy;
     $('#admin-token-input').disabled = isBusy;
     $('#toggle-password-button').disabled = isBusy;
+}
+
+function showFormError(form, message) {
+    setFormMessage(form, message, 'error');
+    showToast(message);
+}
+
+function setFormMessage(form, message, tone = 'info') {
+    let messageNode = form.querySelector('.form-message');
+    if (!messageNode) {
+        messageNode = document.createElement('div');
+        messageNode.className = 'form-message';
+        messageNode.setAttribute('role', 'status');
+        messageNode.setAttribute('aria-live', 'polite');
+        const submitButton = form.querySelector('button[type="submit"]');
+        form.insertBefore(messageNode, submitButton || null);
+    }
+
+    messageNode.textContent = message || '';
+    messageNode.hidden = !message;
+    messageNode.className = `form-message is-${tone}`;
 }
 
 function togglePasswordVisibility() {

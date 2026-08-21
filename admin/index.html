@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260821-auth-unicode">
+    <link rel="stylesheet" href="../css/admin.css?v=20260821-upload-guard">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -215,6 +215,10 @@
                             <input type="file" name="audioFile" accept="audio/*">
                         </label>
                         <label class="field">
+                            <span>音频外链/已上传路径</span>
+                            <input name="audioUrl" placeholder="https://... 或 assets/audio/xxx.mp3">
+                        </label>
+                        <label class="field">
                             <span>摘要</span>
                             <textarea name="summary" rows="3" required></textarea>
                         </label>
@@ -264,7 +268,11 @@
                         </label>
                         <label class="field">
                             <span>音频文件</span>
-                            <input type="file" name="audioFile" accept="audio/*" required>
+                            <input type="file" name="audioFile" accept="audio/*">
+                        </label>
+                        <label class="field">
+                            <span>音频外链/已上传路径</span>
+                            <input name="audioUrl" placeholder="https://... 或 assets/audio/xxx.mp3">
                         </label>
                         <label class="field">
                             <span>关联词作</span>
@@ -444,7 +452,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260821-auth-unicode"></script>
+    <script src="../admin/admin.js?v=20260821-upload-guard"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();
