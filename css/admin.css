@@ -506,6 +506,55 @@ button {
     accent-color: var(--accent-color);
 }
 
+.form-progress {
+    display: grid;
+    gap: 8px;
+    padding: 10px 0 2px;
+}
+
+.form-progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.form-progress-value {
+    flex: 0 0 auto;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.form-progress-track {
+    height: 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+}
+
+.form-progress-bar {
+    width: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #5eead4, var(--accent-color));
+    transition: width 160ms ease;
+}
+
+.form-progress.is-success .form-progress-bar {
+    background: var(--accent-color);
+}
+
+.form-progress.is-error .form-progress-bar {
+    background: #ff6b6b;
+}
+
+.form-progress.is-error .form-progress-value {
+    color: #ffd6d6;
+}
+
 .form-message {
     padding: 11px 12px;
     border: 1px solid var(--border-color);

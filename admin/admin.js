@@ -411,7 +411,7 @@ function bindForms() {
     $('#draft-list').addEventListener('click', event => {
         const button = event.target.closest('[data-remove-draft]');
         if (!button) return;
-        removeDraftItem(button.dataset.source, button.dataset.id);
+        removeDraftItem(button.dataset.source, button.dataset.removeDraft);
     });
 
     $('#pending-list').addEventListener('click', event => {
@@ -419,12 +419,12 @@ function bindForms() {
         const removeButton = event.target.closest('[data-remove-draft]');
 
         if (publishButton) {
-            publishSingleDraft(publishButton.dataset.source, publishButton.dataset.id);
+            publishSingleDraft(publishButton.dataset.source, publishButton.dataset.publishDraft);
             return;
         }
 
         if (removeButton) {
-            removeDraftItem(removeButton.dataset.source, removeButton.dataset.id);
+            removeDraftItem(removeButton.dataset.source, removeButton.dataset.removeDraft);
         }
     });
 }
@@ -435,19 +435,21 @@ async function handlePhotoSubmit(event) {
     const file = form.elements.file.files[0];
     if (!file) return showFormError(form, '请选择图片文件');
 
-    await runFormTask(form, async () => {
-        validateUploads([{ file, uploadType: 'photos' }]);
-
+    await runFormTask(form, async progress => {
+        progress.set(8, '正在检查图片文件');
         const title = form.elements.title.value.trim();
         const id = makeUniqueId('img', title || file.name, 'photos');
         state.previewUrls[id] = URL.createObjectURL(file);
-        const src = await uploadAsset(file, 'photos');
+        const uploaded = await uploadFiles([
+            { key: 'src', file, uploadType: 'photos', label: '图片文件' }
+        ], progress, 16, 82);
 
+        progress.set(90, '正在生成图片草稿');
         appendResource('photos', {
             id,
             title: title || id,
             description: form.elements.description.value.trim(),
-            src,
+            src: uploaded.src,
             showOnHome: form.elements.showOnHome.checked,
             category: form.elements.category.value.trim() || 'Photography',
             date: form.elements.date.value.trim() || formatMonthYear(new Date()),
@@ -472,7 +474,8 @@ async function handleLyricSubmit(event) {
     const audioUrl = normalizeAssetInput(form.elements.audioUrl.value);
     if (!coverFile) return showFormError(form, '请选择封面图片');
 
-    await runFormTask(form, async () => {
+    await runFormTask(form, async progress => {
+        progress.set(8, '正在读取词作内容');
         validateUploads([
             { file: coverFile, uploadType: 'lyricsCover' },
             ...(audioFile && !audioUrl ? [{ file: audioFile, uploadType: 'lyricAudio' }] : [])
@@ -490,11 +493,16 @@ async function handleLyricSubmit(event) {
 
         const id = makeUniqueId('lyric', title, 'lyrics');
         state.previewUrls[id] = URL.createObjectURL(coverFile);
-        const cover = await uploadAsset(coverFile, 'lyricsCover');
-        const audioPath = audioUrl || (audioFile ? await uploadAsset(audioFile, 'lyricAudio') : '');
+        const uploaded = await uploadFiles([
+            { key: 'cover', file: coverFile, uploadType: 'lyricsCover', label: '词作封面' },
+            ...(audioFile && !audioUrl ? [{ key: 'audioPath', file: audioFile, uploadType: 'lyricAudio', label: '词作音频' }] : [])
+        ], progress, 24, 78);
+        const cover = uploaded.cover;
+        const audioPath = audioUrl || uploaded.audioPath || '';
         const contentPath = `assets/lyrics/admin-generated/${id}.md`;
         const showOnHome = form.elements.showOnHome.checked;
 
+        progress.set(88, '正在生成词作草稿');
         state.textFiles[contentPath] = content;
         appendResource('lyrics', {
             id,
@@ -530,7 +538,8 @@ async function handleMusicSubmit(event) {
     if (!coverFile) return showFormError(form, '请选择封面图片');
     if (!audioFile && !audioUrl) return showFormError(form, '请选择音频文件，或填写音频外链/已上传路径');
 
-    await runFormTask(form, async () => {
+    await runFormTask(form, async progress => {
+        progress.set(8, '正在读取音乐信息');
         validateUploads([
             { file: coverFile, uploadType: 'musicCover' },
             ...(audioFile && !audioUrl ? [{ file: audioFile, uploadType: 'musicAudio' }] : [])
@@ -542,10 +551,15 @@ async function handleMusicSubmit(event) {
         const lyricMarkdown = lyricMarkdownFile ? (await readTextFile(lyricMarkdownFile)).trim() : '';
         const shouldSyncLyric = Boolean(lyricMarkdown && form.elements.syncLyric.checked);
         state.previewUrls[id] = URL.createObjectURL(coverFile);
-        const cover = await uploadAsset(coverFile, 'musicCover');
-        const url = audioUrl || await uploadAsset(audioFile, 'musicAudio');
+        const uploaded = await uploadFiles([
+            { key: 'cover', file: coverFile, uploadType: 'musicCover', label: '音乐封面' },
+            ...(audioFile && !audioUrl ? [{ key: 'url', file: audioFile, uploadType: 'musicAudio', label: '音乐音频' }] : [])
+        ], progress, 22, 78);
+        const cover = uploaded.cover;
+        const url = audioUrl || uploaded.url;
         let lyricId = form.elements.lyricId.value;
 
+        progress.set(86, shouldSyncLyric ? '正在生成音乐和关联词作草稿' : '正在生成音乐草稿');
         if (shouldSyncLyric) {
             lyricId = makeUniqueId('lyric', title, 'lyrics');
             const contentPath = `assets/lyrics/admin-generated/${lyricId}.md`;
@@ -600,7 +614,8 @@ async function handleKnowledgeSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
 
-    await runFormTask(form, async () => {
+    await runFormTask(form, async progress => {
+        progress.set(20, '正在检查知识内容');
         const title = form.elements.title.value.trim();
         const externalUrl = form.elements.externalUrl.value.trim();
         const content = form.elements.content.value.trim();
@@ -618,6 +633,7 @@ async function handleKnowledgeSubmit(event) {
             tags: splitTags(form.elements.tags.value)
         };
 
+        progress.set(68, '正在生成知识草稿');
         if (externalUrl) {
             item.externalUrl = externalUrl;
         } else {
@@ -633,27 +649,31 @@ async function handleKnowledgeSubmit(event) {
 
         form.reset();
         setDefaultFormValues();
-        showToast('知识资源已加入待发布列表');
+        return '知识资源创建成功，已进入待发布列表。';
     });
 }
 
 async function runFormTask(form, task) {
     const submitButton = form.querySelector('button[type="submit"]');
     const originalButtonHtml = submitButton.innerHTML;
+    const progress = createFormProgress(form);
     submitButton.disabled = true;
     submitButton.innerHTML = '<i data-lucide="loader-circle"></i> 正在处理';
+    progress.set(3, '正在准备创建资源');
     setFormMessage(form, '正在检查并上传素材，请稍候...', 'info');
     renderIcons();
 
     try {
-        const result = await task();
+        const result = await task(progress);
         const message = typeof result === 'string' && result ? result : '资源创建成功，已进入待发布列表。';
+        progress.set(100, '创建成功，正在进入待发布列表', 'success');
         setFormMessage(form, message, 'success');
         showToast(message);
         renderAll();
         setPanel('pending-panel');
     } catch (error) {
         const message = error.message || '操作失败';
+        progress.set(100, '创建失败', 'error');
         setFormMessage(form, message, 'error');
         showToast(message);
     } finally {
@@ -663,7 +683,37 @@ async function runFormTask(form, task) {
     }
 }
 
-async function uploadAsset(file, uploadType) {
+async function uploadFiles(uploadItems, progress, startPercent = 12, endPercent = 82) {
+    const items = uploadItems.filter(item => item.file);
+    validateUploads(items);
+
+    if (items.length === 0) {
+        progress.set(endPercent, '无需上传素材');
+        return {};
+    }
+
+    const results = {};
+    const span = (endPercent - startPercent) / items.length;
+
+    for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        const label = item.label || UPLOAD_LABELS[item.uploadType] || '素材';
+        const itemStart = startPercent + span * index;
+        const itemEnd = startPercent + span * (index + 1);
+
+        progress.set(itemStart, `准备上传${label}`);
+        results[item.key] = await uploadAsset(item.file, item.uploadType, ratio => {
+            const safeRatio = Math.max(0, Math.min(Number(ratio) || 0, 1));
+            const percent = Math.round(safeRatio * 100);
+            progress.set(itemStart + (itemEnd - itemStart) * safeRatio, `正在上传${label}（${percent}%）`);
+        });
+        progress.set(itemEnd, `${label}上传完成`);
+    }
+
+    return results;
+}
+
+async function uploadAsset(file, uploadType, onProgress) {
     const uploadProblem = getUploadFileProblem(file, uploadType);
     if (uploadProblem) {
         throw new Error(uploadProblem);
@@ -677,12 +727,17 @@ async function uploadAsset(file, uploadType) {
             size: file.size,
             type: file.type
         });
+        if (onProgress) onProgress(1);
         return path;
     }
 
     const formData = new FormData();
     formData.append('uploadType', uploadType);
     formData.append('file', file);
+
+    if (onProgress && window.XMLHttpRequest) {
+        return uploadAssetWithProgress(file, uploadType, formData, onProgress);
+    }
 
     const response = await fetch(buildAdminApiUrl('/api/admin/upload'), {
         method: 'POST',
@@ -696,6 +751,59 @@ async function uploadAsset(file, uploadType) {
     }
 
     return data.path;
+}
+
+function uploadAssetWithProgress(file, uploadType, formData, onProgress) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', buildAdminApiUrl('/api/admin/upload'), true);
+
+        Object.entries(getAuthHeaders()).forEach(([name, value]) => {
+            xhr.setRequestHeader(name, value);
+        });
+
+        xhr.upload.addEventListener('progress', event => {
+            if (event.lengthComputable && event.total > 0) {
+                onProgress(Math.min(event.loaded / event.total, 0.98));
+            } else {
+                onProgress(0.5);
+            }
+        });
+
+        xhr.addEventListener('load', () => {
+            const data = parseJsonSafely(xhr.responseText);
+            if (xhr.status < 200 || xhr.status >= 300) {
+                reject(new Error(buildUploadErrorMessage({ status: xhr.status }, data, file, uploadType)));
+                return;
+            }
+
+            if (!data.path) {
+                reject(new Error(data.error || '上传成功但没有返回文件路径'));
+                return;
+            }
+
+            onProgress(1);
+            resolve(data.path);
+        });
+
+        xhr.addEventListener('error', () => {
+            reject(new Error('上传失败，请检查网络后重试'));
+        });
+
+        xhr.addEventListener('abort', () => {
+            reject(new Error('上传已取消'));
+        });
+
+        xhr.send(formData);
+    });
+}
+
+function parseJsonSafely(text) {
+    try {
+        return JSON.parse(text || '{}');
+    } catch (error) {
+        return {};
+    }
 }
 
 function bindUploadInputFeedback() {
@@ -1850,6 +1958,40 @@ function setLoginBusy(isBusy) {
 function showFormError(form, message) {
     setFormMessage(form, message, 'error');
     showToast(message);
+}
+
+function createFormProgress(form) {
+    return {
+        set(value, label, tone = 'info') {
+            setFormProgress(form, value, label, tone);
+        }
+    };
+}
+
+function setFormProgress(form, value, label, tone = 'info') {
+    let progressNode = form.querySelector('.form-progress');
+    if (!progressNode) {
+        progressNode = document.createElement('div');
+        progressNode.className = 'form-progress';
+        progressNode.innerHTML = `
+            <div class="form-progress-header">
+                <span class="form-progress-label"></span>
+                <span class="form-progress-value"></span>
+            </div>
+            <div class="form-progress-track">
+                <div class="form-progress-bar"></div>
+            </div>
+        `;
+        const submitButton = form.querySelector('button[type="submit"]');
+        form.insertBefore(progressNode, submitButton || null);
+    }
+
+    const percent = Math.max(0, Math.min(Math.round(Number(value) || 0), 100));
+    progressNode.hidden = false;
+    progressNode.className = `form-progress is-${tone}`;
+    progressNode.querySelector('.form-progress-label').textContent = label || '正在处理';
+    progressNode.querySelector('.form-progress-value').textContent = `${percent}%`;
+    progressNode.querySelector('.form-progress-bar').style.width = `${percent}%`;
 }
 
 function setFormMessage(form, message, tone = 'info') {
