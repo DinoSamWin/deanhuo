@@ -105,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch('assets/data/knowledge-index.json?v=' + Date.now())
         .then(res => res.json())
         .then(data => {
+            data = getVisibleResources(data);
             const articleMeta = data.find(item => item.id === articleId);
             if (!articleMeta) {
                 document.getElementById('article-title').innerText = "文章未找到";
@@ -191,4 +192,12 @@ document.addEventListener('DOMContentLoaded', () => {
             iframe.msRequestFullscreen();
         }
     });
+
+    function getVisibleResources(items) {
+        if (window.DeanRecommendations && window.DeanRecommendations.filterVisible) {
+            return window.DeanRecommendations.filterVisible(items);
+        }
+
+        return Array.isArray(items) ? items.filter(item => item && !item.deletedAt) : [];
+    }
 });

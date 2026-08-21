@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
     ])
         .then(([data, recommendationConfig]) => {
+            data = getVisibleResources(data);
             if (window.DeanRecommendations) {
                 data = window.DeanRecommendations.prioritizeByModule(data, recommendationConfig, 'photosPageFeatured');
             }
@@ -45,5 +46,13 @@ document.addEventListener('DOMContentLoaded', () => {
             item.appendChild(img);
             masonryGrid.appendChild(item);
         });
+    }
+
+    function getVisibleResources(items) {
+        if (window.DeanRecommendations && window.DeanRecommendations.filterVisible) {
+            return window.DeanRecommendations.filterVisible(items);
+        }
+
+        return Array.isArray(items) ? items.filter(item => item && !item.deletedAt) : [];
     }
 });

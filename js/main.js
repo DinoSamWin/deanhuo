@@ -14,6 +14,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let isFlipping = false;
 
+function getVisibleResources(items) {
+    if (window.DeanRecommendations && window.DeanRecommendations.filterVisible) {
+        return window.DeanRecommendations.filterVisible(items);
+    }
+
+    return Array.isArray(items) ? items.filter(item => item && !item.deletedAt) : [];
+}
+
 function initHeroInteractive() {
     const chatBtn = document.getElementById('chat-btn');
     const backBtn = document.getElementById('back-to-hero');
@@ -143,7 +151,7 @@ async function initLyricsCarousel() {
             fetch('assets/data/lyrics.json?v=' + Date.now()),
             window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
         ]);
-        const lyrics = await lyricsResponse.json();
+        const lyrics = getVisibleResources(await lyricsResponse.json());
 
         const homeLyrics = window.DeanRecommendations
             ? window.DeanRecommendations.pickByModule(
@@ -269,7 +277,7 @@ async function initMusicModule() {
             fetch('assets/data/music.json?v=' + Date.now()),
             window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
         ]);
-        const musicData = await musicResponse.json();
+        const musicData = getVisibleResources(await musicResponse.json());
         const homeMusic = window.DeanRecommendations
             ? window.DeanRecommendations.pickByModule(
                 musicData,
@@ -307,7 +315,7 @@ async function initPhotographyModule() {
             fetch('assets/data/photos.json?v=1.0'),
             window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
         ]);
-        const photos = await photosResponse.json();
+        const photos = getVisibleResources(await photosResponse.json());
 
         const homePhotos = window.DeanRecommendations
             ? window.DeanRecommendations.pickByModule(
