@@ -111,6 +111,14 @@ function requireAdmin(req) {
 }
 
 function getPresentedAdminToken(req) {
+    const queryToken = getQueryAdminToken(req);
+    if (queryToken) {
+        return {
+            token: normalizeAdminToken(queryToken),
+            transport: 'query'
+        };
+    }
+
     const encodedHeader = getHeaderValue(req.headers['x-admin-token-encoded']);
     if (encodedHeader) {
         return {
@@ -137,6 +145,15 @@ function getPresentedAdminToken(req) {
     }
 
     return { token: '', transport: 'missing' };
+}
+
+function getQueryAdminToken(req) {
+    try {
+        const url = new URL(req.url || '', 'https://admin.local');
+        return url.searchParams.get('admin_token') || url.searchParams.get('admin_token_encoded') || '';
+    } catch (error) {
+        return '';
+    }
 }
 
 function decodeHeaderToken(value) {

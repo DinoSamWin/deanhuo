@@ -172,7 +172,7 @@ async function loadContent() {
 }
 
 async function loadFromApi() {
-    const response = await fetch('/api/admin/content', {
+    const response = await fetch(buildAdminApiUrl('/api/admin/content'), {
         headers: getAuthHeaders(),
         cache: 'no-store'
     });
@@ -202,6 +202,13 @@ function getAuthHeaders() {
     return headers;
 }
 
+function buildAdminApiUrl(path) {
+    const url = new URL(path, window.location.origin);
+    url.searchParams.set('admin_token', state.token);
+    url.searchParams.set('auth_v', '3');
+    return `${url.pathname}${url.search}`;
+}
+
 function normalizeAdminToken(value) {
     const trimmed = String(value || '').trim();
     const quotePairs = [
@@ -217,6 +224,9 @@ function normalizeAdminToken(value) {
 
 function buildAuthErrorMessage(error) {
     const details = error && error.details ? error.details : {};
+    if (!error || error.code !== 'ADMIN_TOKEN_MISMATCH') {
+        return '服务端返回了旧格式的 401。请等待 Vercel Production 部署完成后，用 /admin/?v=auth3 重新打开。';
+    }
     const receivedText = details.tokenReceived
         ? '服务端已经收到你输入的密码，但它和 Vercel Production 里的 ADMIN_TOKEN 不一致。'
         : '服务端没有收到有效密码。';
@@ -632,7 +642,7 @@ async function uploadAsset(file, uploadType) {
     formData.append('uploadType', uploadType);
     formData.append('file', file);
 
-    const response = await fetch('/api/admin/upload', {
+    const response = await fetch(buildAdminApiUrl('/api/admin/upload'), {
         method: 'POST',
         headers: getAuthHeaders(),
         body: formData
@@ -1095,7 +1105,7 @@ async function publishAllDrafts() {
     setPublishBusy(true);
 
     try {
-        const response = await fetch('/api/admin/content', {
+        const response = await fetch(buildAdminApiUrl('/api/admin/content'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json; charset=utf-8',
@@ -1171,7 +1181,7 @@ async function publishSingleDraft(source, id) {
     setPublishBusy(true);
 
     try {
-        const response = await fetch('/api/admin/content', {
+        const response = await fetch(buildAdminApiUrl('/api/admin/content'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json; charset=utf-8',
