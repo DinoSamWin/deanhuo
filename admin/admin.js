@@ -39,6 +39,7 @@ const COVER_CROP_UPLOAD_TYPES = new Set(['lyricsCover', 'musicCover']);
 const coverCropTargetCache = {};
 const preparedCoverFiles = new WeakMap();
 const pickerSelectedFiles = new WeakMap();
+const multiSelectedFiles = new WeakMap();
 let imageCropperState = null;
 let musicAudioPreviewUrl = '';
 
@@ -520,7 +521,20 @@ function bindForms() {
         updateMusicAudioPreview();
         renderMusicVersionOptions();
     });
-    $('#music-form').elements.versionAudioFiles.addEventListener('change', renderMusicVersionOptions);
+    $('#music-form').elements.versionAudioFiles.addEventListener('change', event => {
+        appendSelectedInputFiles(event.currentTarget);
+        renderMusicVersionOptions();
+    });
+    $('#music-version-options').addEventListener('click', event => {
+        const removeButton = event.target.closest('[data-version-remove]');
+        if (removeButton) {
+            removeSelectedInputFileAt($('#music-form').elements.versionAudioFiles, Number(removeButton.dataset.versionRemove));
+            renderMusicVersionOptions();
+            return;
+        }
+
+        selectVersionOptionFromRow(event, 'defaultVersionSource');
+    });
     $('#music-version-options').addEventListener('change', event => {
         if (event.target.name === 'defaultVersionSource') {
             renderMusicVersionOptions();
@@ -1447,15 +1461,71 @@ function getSelectedInputFile(input) {
 
 function getSelectedInputFiles(input) {
     if (!input) return [];
+    const queued = multiSelectedFiles.get(input);
+    if (queued) return [...queued];
+
     const selected = input.files ? Array.from(input.files) : [];
     const fallback = pickerSelectedFiles.get(input);
     if (fallback && selected.length === 0) return [fallback];
     return selected;
 }
 
+function appendSelectedInputFiles(input) {
+    if (!input || !input.files || input.files.length === 0) return 0;
+
+    const current = multiSelectedFiles.get(input) || [];
+    const next = [...current];
+    const seen = new Set(current.map(getFileSignature));
+    let addedCount = 0;
+
+    Array.from(input.files).forEach(file => {
+        const signature = getFileSignature(file);
+        if (seen.has(signature)) return;
+
+        seen.add(signature);
+        next.push(file);
+        addedCount += 1;
+    });
+
+    multiSelectedFiles.set(input, next);
+    input.value = '';
+    return addedCount;
+}
+
+function removeSelectedInputFileAt(input, index) {
+    const current = getSelectedInputFiles(input);
+    if (!input || !current.length || !Number.isInteger(index) || index < 0 || index >= current.length) return;
+
+    const next = current.filter((_, fileIndex) => fileIndex !== index);
+    if (next.length > 0) {
+        multiSelectedFiles.set(input, next);
+    } else {
+        multiSelectedFiles.delete(input);
+    }
+    input.value = '';
+}
+
+function getFileSignature(file) {
+    return `${file.name}:${file.size}:${file.lastModified || 0}`;
+}
+
+function selectVersionOptionFromRow(event, radioName) {
+    if (event.target.closest('button, input, a')) return false;
+
+    const row = event.target.closest('.version-upload-item');
+    const radio = row && row.querySelector(`input[name="${radioName}"]`);
+    if (!radio || radio.checked) return false;
+
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+}
+
 function clearSelectedInputFile(input) {
     if (input) {
         pickerSelectedFiles.delete(input);
+        multiSelectedFiles.delete(input);
+        input.value = '';
     }
 }
 
@@ -1543,7 +1613,9 @@ function getMusicVersionCandidates() {
             source: `extra-file-${index}`,
             label: `追加版本 ${index + 1}`,
             detail: `${file.name} · ${formatFileSize(file.size)}`,
-            file
+            file,
+            fileIndex: index,
+            canRemove: true
         });
     });
 
@@ -1569,14 +1641,20 @@ function renderMusicVersionOptions() {
     const positionBySource = new Map(orderedCandidates.map((candidate, index) => [candidate.source, index + 1]));
 
     container.innerHTML = candidates.map((candidate, index) => `
-        <label class="version-upload-item">
+        <div class="version-upload-item">
             <input type="radio" name="defaultVersionSource" value="${escapeAttribute(candidate.source)}" ${candidate.source === selectedValue ? 'checked' : ''}>
             <span>
                 <strong>${escapeHtml(candidate.source === selectedValue ? `版本1（默认推荐） · ${candidate.label}` : `版本${positionBySource.get(candidate.source) || index + 1} · ${candidate.label}`)}</strong>
                 ${escapeHtml(candidate.detail)}
             </span>
-        </label>
+            ${candidate.canRemove ? `
+                <button class="version-upload-remove" type="button" title="移除这个版本" aria-label="移除这个版本" data-version-remove="${Number(candidate.fileIndex)}">
+                    <i data-lucide="x"></i>
+                </button>
+            ` : ''}
+        </div>
     `).join('');
+    renderIcons();
 }
 
 function buildMusicVersions(candidates, selectedSource) {
@@ -3441,7 +3519,7 @@ function renderMusicVersionsEditorField(field, item) {
             </div>
             <div class="version-upload-list" id="editor-music-version-options"></div>
             <label class="field">
-                <span>追加版本音频（可多选）</span>
+                <span>追加版本音频（可多选，可重复选择追加）</span>
                 <input type="file" name="versionsFiles" accept="audio/*" multiple data-editor-music-version-files>
             </label>
         </div>
@@ -3467,14 +3545,20 @@ function renderEditorMusicVersionOptions() {
     const positionBySource = new Map(orderedCandidates.map((candidate, index) => [candidate.source, index + 1]));
 
     container.innerHTML = candidates.map((candidate, index) => `
-        <label class="version-upload-item">
+        <div class="version-upload-item">
             <input type="radio" name="editorDefaultVersionSource" value="${escapeAttribute(candidate.source)}" ${candidate.source === selectedValue ? 'checked' : ''}>
             <span>
                 <strong>${escapeHtml(candidate.source === selectedValue ? `版本1（默认推荐） · ${candidate.label}` : `版本${positionBySource.get(candidate.source) || index + 1} · ${candidate.label}`)}</strong>
                 ${escapeHtml(candidate.detail || candidate.url)}
             </span>
-        </label>
+            ${candidate.canRemove ? `
+                <button class="version-upload-remove" type="button" title="移除这个版本" aria-label="移除这个版本" data-editor-version-remove="${Number(candidate.fileIndex)}">
+                    <i data-lucide="x"></i>
+                </button>
+            ` : ''}
+        </div>
     `).join('');
+    renderIcons();
 }
 
 function getEditorMusicVersionCandidates() {
@@ -3523,7 +3607,9 @@ function getEditorMusicVersionCandidates() {
             label: `追加版本 ${index + 1}`,
             detail: `${file.name} · ${formatFileSize(file.size)}`,
             file,
-            url: ''
+            url: '',
+            fileIndex: index,
+            canRemove: true
         });
     });
 
@@ -3632,6 +3718,17 @@ function handleResourceEditorRestore() {
 }
 
 function handleResourceEditorFieldClick(event) {
+    const removeButton = event.target.closest('[data-editor-version-remove]');
+    if (removeButton) {
+        removeSelectedInputFileAt($('#resource-editor-form').elements.versionsFiles, Number(removeButton.dataset.editorVersionRemove));
+        renderEditorMusicVersionOptions();
+        return;
+    }
+
+    if (selectVersionOptionFromRow(event, 'editorDefaultVersionSource')) {
+        return;
+    }
+
     const pickerButton = event.target.closest('[data-editor-file-picker]');
     if (!pickerButton) return;
 
@@ -3648,6 +3745,7 @@ async function handleResourceEditorFieldChange(event) {
     }
 
     if (event.target.closest('[data-editor-music-version-files]')) {
+        appendSelectedInputFiles(event.target);
         renderEditorMusicVersionOptions();
         return;
     }
