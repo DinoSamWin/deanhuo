@@ -62,5 +62,15 @@
         "url": "assets/audio/admin-uploads/1787323235684-musicAudio.mp3",
         "genre": "Original",
         "description": ""
+    },
+    {
+        "id": "17",
+        "title": "17岁哭过的约定",
+        "artist": "Dean Huo",
+        "year": "2026",
+        "cover": "assets/images/admin-uploads/music/1787361652669-1.jpg",
+        "url": "assets/audio/admin-uploads/1787361664512-17.mp3",
+        "genre": "Original",
+        "description": ""
     }
 ]
