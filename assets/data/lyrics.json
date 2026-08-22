@@ -319,5 +319,18 @@
         "homeOrder": 4,
         "releaseYear": "2026",
         "linkedMusicId": "17"
+    },
+    {
+        "id": "lyric-mt3qnclm",
+        "title": "古怪文学家",
+        "author": "Dean Huo",
+        "date": "2026-08-22",
+        "cover": "assets/images/admin-uploads/lyrics/1787364457084-1.jpg",
+        "summary": "下一种创作手法你又会引用哪一种｜实实虚虚主人公的千般变化｜是不是你镶嵌了托物言志｜侧面描写着你的细节",
+        "contentPath": "assets/lyrics/admin-generated/lyric-mt3qnclm.md",
+        "order": 24,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2026"
     }
 ]
