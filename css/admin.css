@@ -519,6 +519,11 @@ button {
     accent-color: var(--accent-color);
 }
 
+.file-picker-action {
+    justify-self: start;
+    min-height: 36px;
+}
+
 .form-progress {
     display: grid;
     gap: 8px;
