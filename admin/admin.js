@@ -521,6 +521,16 @@ function bindForms() {
     $('#music-audio-picker-button').addEventListener('click', () => {
         selectAudioFileWithRememberedDirectory($('#music-form').elements.audioFile);
     });
+    $('#photo-image-paste-button').addEventListener('click', () => {
+        pasteImageFromClipboard($('#photo-form').elements.file);
+    });
+    $('#lyric-cover-paste-button').addEventListener('click', () => {
+        pasteImageFromClipboard($('#lyric-form').elements.coverFile);
+    });
+    $('#music-cover-paste-button').addEventListener('click', () => {
+        pasteImageFromClipboard($('#music-form').elements.coverFile);
+    });
+    document.addEventListener('paste', handleGlobalImagePaste);
 
     $('#lyric-form').elements.contentFile.addEventListener('change', async event => {
         const file = event.target.files[0];
@@ -568,7 +578,7 @@ function bindForms() {
 async function handlePhotoSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
-    const file = form.elements.file.files[0];
+    const file = getSelectedInputFile(form.elements.file);
     if (!file) return showFormError(form, '请选择图片文件');
 
     await runFormTask(form, async progress => {
@@ -597,6 +607,7 @@ async function handlePhotoSubmit(event) {
         }
 
         form.reset();
+        clearSelectedInputFile(form.elements.file);
         setDefaultFormValues();
         return '图片资源创建成功，已进入待发布列表。';
     });
@@ -606,7 +617,7 @@ async function handleLyricSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const coverInput = form.elements.coverFile;
-    const coverFile = getPreparedUploadFile(coverInput) || coverInput.files[0];
+    const coverFile = getPreparedUploadFile(coverInput) || getSelectedInputFile(coverInput);
     const audioFile = getSelectedInputFile(form.elements.audioFile);
     const selectedMusicId = form.elements.musicAudioId.value;
     const selectedMusicAudioPath = getMusicAudioPath(selectedMusicId);
@@ -665,6 +676,7 @@ async function handleLyricSubmit(event) {
 
         form.reset();
         clearPreparedCoverFile(coverInput);
+        clearSelectedInputFile(coverInput);
         clearSelectedInputFile(form.elements.audioFile);
         setDefaultFormValues();
         return '词作资源创建成功，已进入待发布列表。';
@@ -675,7 +687,7 @@ async function handleMusicSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const coverInput = form.elements.coverFile;
-    const coverFile = getPreparedUploadFile(coverInput) || coverInput.files[0];
+    const coverFile = getPreparedUploadFile(coverInput) || getSelectedInputFile(coverInput);
     const audioFile = getSelectedInputFile(form.elements.audioFile);
     const audioUrl = normalizeAssetInput(form.elements.audioUrl.value);
     if (!coverFile) return showFormError(form, '请选择封面图片');
@@ -751,6 +763,7 @@ async function handleMusicSubmit(event) {
 
         form.reset();
         clearPreparedCoverFile(coverInput);
+        clearSelectedInputFile(coverInput);
         clearSelectedInputFile(form.elements.audioFile);
         clearMusicAudioPreview();
         setDefaultFormValues();
@@ -1229,6 +1242,123 @@ function bindUploadInputFeedback() {
     });
 }
 
+async function pasteImageFromClipboard(input) {
+    if (!input) return;
+
+    if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
+        showToast('当前浏览器不支持按钮读取剪贴板图片，可以在当前表单按 Cmd/Ctrl+V 粘贴图片');
+        return;
+    }
+
+    try {
+        const items = await navigator.clipboard.read();
+        const file = await getImageFileFromClipboardItems(items);
+        if (!file) {
+            throw new Error('剪贴板里没有可粘贴的图片');
+        }
+        setClipboardImageFile(input, file);
+    } catch (error) {
+        const message = error && error.name === 'NotAllowedError'
+            ? '浏览器没有授权读取剪贴板，请在当前表单按 Cmd/Ctrl+V 粘贴图片'
+            : error.message || '读取剪贴板图片失败';
+        showToast(message);
+    }
+}
+
+async function getImageFileFromClipboardItems(items) {
+    for (const item of items || []) {
+        const imageType = (item.types || []).find(type => String(type).startsWith('image/'));
+        if (!imageType) continue;
+        const blob = await item.getType(imageType);
+        return makeClipboardImageFile(blob, imageType);
+    }
+
+    return null;
+}
+
+function handleGlobalImagePaste(event) {
+    const file = getImageFileFromPasteEvent(event);
+    if (!file) return;
+
+    const input = getActiveImagePasteInput();
+    if (!input) return;
+
+    event.preventDefault();
+    setClipboardImageFile(input, file);
+}
+
+function getImageFileFromPasteEvent(event) {
+    const items = event.clipboardData && event.clipboardData.items
+        ? Array.from(event.clipboardData.items)
+        : [];
+
+    for (const item of items) {
+        if (!String(item.type || '').startsWith('image/') || typeof item.getAsFile !== 'function') {
+            continue;
+        }
+        const file = item.getAsFile();
+        if (file) {
+            return makeClipboardImageFile(file, file.type);
+        }
+    }
+
+    return null;
+}
+
+function getActiveImagePasteInput() {
+    const app = $('#admin-app');
+    if (!app || app.classList.contains('is-hidden')) return null;
+
+    const cropModal = $('#image-crop-modal');
+    if (cropModal && !cropModal.classList.contains('is-hidden')) return null;
+
+    const form = document.querySelector('.resource-form.is-active');
+    if (!form) return null;
+    if (form.id === 'photo-form') return form.elements.file;
+    if (form.id === 'lyric-form') return form.elements.coverFile;
+    if (form.id === 'music-form') return form.elements.coverFile;
+    return null;
+}
+
+function setClipboardImageFile(input, file) {
+    setSelectedInputFile(input, file);
+    const uploadType = getImageInputUploadType(input);
+    const label = UPLOAD_LABELS[uploadType] || '图片';
+    showToast(`${label}已从剪贴板粘贴`);
+}
+
+function getImageInputUploadType(input) {
+    const form = input && (input.form || (typeof input.closest === 'function' ? input.closest('form') : null));
+    if (!form) return 'photos';
+    if (form.id === 'photo-form') return 'photos';
+    if (form.id === 'lyric-form') return 'lyricsCover';
+    if (form.id === 'music-form') return 'musicCover';
+    return 'photos';
+}
+
+function makeClipboardImageFile(blob, type) {
+    const contentType = type || blob.type || 'image/png';
+    const sourceName = String(blob.name || '');
+    const extension = getClipboardImageExtension(sourceName, contentType);
+    const name = sourceName && /\.[a-zA-Z0-9]+$/.test(sourceName)
+        ? sourceName
+        : `clipboard-image-${Date.now()}${extension}`;
+
+    return new File([blob], name, {
+        type: contentType,
+        lastModified: Date.now()
+    });
+}
+
+function getClipboardImageExtension(filename, type) {
+    const existing = String(filename || '').match(/\.[a-zA-Z0-9]+$/);
+    if (existing) return existing[0].toLowerCase();
+    if (type === 'image/jpeg') return '.jpg';
+    if (type === 'image/webp') return '.webp';
+    if (type === 'image/gif') return '.gif';
+    return '.png';
+}
+
 async function selectAudioFileWithRememberedDirectory(input) {
     if (!input) return;
 
@@ -1379,6 +1509,7 @@ async function handleCoverImageSelection(form, input, uploadType, file) {
         const result = await openImageCropper(file, uploadType);
         if (!result) {
             input.value = '';
+            clearSelectedInputFile(input);
             setFormMessage(form, '已取消封面裁剪', 'info');
             return;
         }
@@ -1392,6 +1523,7 @@ async function handleCoverImageSelection(form, input, uploadType, file) {
     } catch (error) {
         input.value = '';
         clearPreparedCoverFile(input);
+        clearSelectedInputFile(input);
         setFormMessage(form, error.message || '封面裁剪失败，请重新选择图片', 'error');
     }
 }
