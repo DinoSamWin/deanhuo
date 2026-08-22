@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260822-cover-crop">
+    <link rel="stylesheet" href="../css/admin.css?v=20260822-music-lyrics-audio">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -230,6 +230,10 @@
                             <span>音频文件（大 WAV 会自动转 MP3）</span>
                             <input type="file" name="audioFile" accept="audio/*">
                         </label>
+                        <button class="secondary-action file-picker-action" id="lyric-audio-picker-button" type="button">
+                            <i data-lucide="folder-open"></i>
+                            从上次目录选择音频
+                        </button>
                         <label class="field">
                             <span>音频外链/已上传路径</span>
                             <input name="audioUrl" placeholder="https://... 或 assets/audio/xxx.mp3">
@@ -286,6 +290,10 @@
                             <span>音频文件（大 WAV 会自动转 MP3）</span>
                             <input type="file" name="audioFile" accept="audio/*">
                         </label>
+                        <button class="secondary-action file-picker-action" id="music-audio-picker-button" type="button">
+                            <i data-lucide="folder-open"></i>
+                            从上次目录选择音频
+                        </button>
                         <label class="field">
                             <span>音频外链/已上传路径</span>
                             <input name="audioUrl" placeholder="https://... 或 assets/audio/xxx.mp3">
@@ -297,6 +305,10 @@
                         <label class="field">
                             <span>歌词 Markdown 文件</span>
                             <input type="file" name="lyricMarkdownFile" accept=".md,text/markdown,text/plain">
+                        </label>
+                        <label class="field">
+                            <span>手动填写歌词</span>
+                            <textarea name="lyricMarkdownText" rows="8" placeholder="可以直接粘贴歌词，也可以先上传 Markdown 后再修改"></textarea>
                         </label>
                         <label class="check-field">
                             <input type="checkbox" name="syncLyric" checked>
@@ -655,7 +667,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260822-editor-audio"></script>
+    <script src="../admin/admin.js?v=20260822-music-lyrics-audio"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();

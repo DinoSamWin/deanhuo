@@ -26,16 +26,19 @@ const LEGACY_AUTH_STORAGE_KEY = 'deanAdminToken';
 const AUTH_TTL_DAYS = 7;
 const AUTH_TTL_MS = AUTH_TTL_DAYS * 24 * 60 * 60 * 1000;
 const ONLINE_UPLOAD_LIMIT_BYTES = Math.floor(4.5 * 1024 * 1024);
-const AUDIO_TRANSCODE_TARGET_BYTES = Math.floor(4.2 * 1024 * 1024);
+const AUDIO_UPLOAD_TARGET_BYTES = Math.floor(4 * 1024 * 1024);
+const AUDIO_TRANSCODE_TARGET_BYTES = AUDIO_UPLOAD_TARGET_BYTES;
 const AUDIO_TRANSCODE_MAX_SOURCE_BYTES = 120 * 1024 * 1024;
 const MP3_ENCODER_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
 const MP3_MAX_BITRATE_KBPS = 192;
 const MP3_MIN_BITRATE_KBPS = 128;
 const MP3_QUALITY_WARNING_BITRATE_KBPS = 160;
+const AUDIO_PICKER_ID = 'deanhuo-music-audio';
 let mp3EncoderLoadPromise = null;
 const COVER_CROP_UPLOAD_TYPES = new Set(['lyricsCover', 'musicCover']);
 const coverCropTargetCache = {};
 const preparedCoverFiles = new WeakMap();
+const pickerSelectedFiles = new WeakMap();
 let imageCropperState = null;
 
 const UPLOAD_LABELS = {
@@ -480,6 +483,7 @@ function bindForms() {
     $('#resource-editor-cancel-button').addEventListener('click', closeResourceEditor);
     $('#resource-editor-delete-button').addEventListener('click', handleResourceEditorDelete);
     $('#resource-editor-restore-button').addEventListener('click', handleResourceEditorRestore);
+    $('#resource-editor-fields').addEventListener('click', handleResourceEditorFieldClick);
     $('#resource-editor-fields').addEventListener('change', handleResourceEditorFieldChange);
     $('#resource-editor-modal').addEventListener('click', event => {
         if (event.target.id === 'resource-editor-modal') {
@@ -509,6 +513,12 @@ function bindForms() {
             delete event.target.dataset.autoTitleValue;
         }
     });
+    $('#lyric-audio-picker-button').addEventListener('click', () => {
+        selectAudioFileWithRememberedDirectory($('#lyric-form').elements.audioFile);
+    });
+    $('#music-audio-picker-button').addEventListener('click', () => {
+        selectAudioFileWithRememberedDirectory($('#music-form').elements.audioFile);
+    });
 
     $('#lyric-form').elements.contentFile.addEventListener('change', async event => {
         const file = event.target.files[0];
@@ -518,6 +528,17 @@ function bindForms() {
             showToast('Markdown 歌词已读取');
         } catch (error) {
             showToast('读取 Markdown 文件失败');
+        }
+    });
+
+    $('#music-form').elements.lyricMarkdownFile.addEventListener('change', async event => {
+        const file = event.target.files[0];
+        if (!file) return;
+        try {
+            $('#music-form').elements.lyricMarkdownText.value = await readTextFile(file);
+            showToast('Markdown 歌词已读取');
+        } catch (error) {
+            showToast(error.message || '读取 Markdown 文件失败');
         }
     });
 
@@ -584,7 +605,7 @@ async function handleLyricSubmit(event) {
     const form = event.currentTarget;
     const coverInput = form.elements.coverFile;
     const coverFile = getPreparedUploadFile(coverInput) || coverInput.files[0];
-    const audioFile = form.elements.audioFile.files[0];
+    const audioFile = getSelectedInputFile(form.elements.audioFile);
     const selectedMusicId = form.elements.musicAudioId.value;
     const selectedMusicAudioPath = getMusicAudioPath(selectedMusicId);
     const audioUrl = normalizeAssetInput(form.elements.audioUrl.value);
@@ -642,6 +663,7 @@ async function handleLyricSubmit(event) {
 
         form.reset();
         clearPreparedCoverFile(coverInput);
+        clearSelectedInputFile(form.elements.audioFile);
         setDefaultFormValues();
         return '词作资源创建成功，已进入待发布列表。';
     });
@@ -652,7 +674,7 @@ async function handleMusicSubmit(event) {
     const form = event.currentTarget;
     const coverInput = form.elements.coverFile;
     const coverFile = getPreparedUploadFile(coverInput) || coverInput.files[0];
-    const audioFile = form.elements.audioFile.files[0];
+    const audioFile = getSelectedInputFile(form.elements.audioFile);
     const audioUrl = normalizeAssetInput(form.elements.audioUrl.value);
     if (!coverFile) return showFormError(form, '请选择封面图片');
     if (!audioFile && !audioUrl) return showFormError(form, '请选择音频文件，或填写音频外链/已上传路径');
@@ -667,7 +689,11 @@ async function handleMusicSubmit(event) {
         const title = form.elements.title.value.trim();
         const id = makeUniqueId('music', title, 'music');
         const lyricMarkdownFile = form.elements.lyricMarkdownFile.files[0];
-        const lyricMarkdown = lyricMarkdownFile ? (await readTextFile(lyricMarkdownFile)).trim() : '';
+        const pastedLyricMarkdown = form.elements.lyricMarkdownText.value.trim();
+        const fileLyricMarkdown = lyricMarkdownFile && !pastedLyricMarkdown
+            ? (await readTextFile(lyricMarkdownFile)).trim()
+            : '';
+        const lyricMarkdown = pastedLyricMarkdown || fileLyricMarkdown;
         const shouldSyncLyric = Boolean(lyricMarkdown && form.elements.syncLyric.checked);
         state.previewUrls[id] = URL.createObjectURL(coverFile);
         const uploaded = await uploadFiles([
@@ -723,6 +749,7 @@ async function handleMusicSubmit(event) {
 
         form.reset();
         clearPreparedCoverFile(coverInput);
+        clearSelectedInputFile(form.elements.audioFile);
         setDefaultFormValues();
         return shouldSyncLyric
             ? '音乐和关联词作创建成功，已进入待发布列表。'
@@ -935,7 +962,7 @@ function uploadAssetWithProgress(file, uploadType, formData, onProgress) {
 
 async function transcodeAudioToMp3(file, onProgress) {
     if (!isMp3TranscodeCandidate(file)) {
-        throw new Error(`${file.name} 超过 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}，但当前文件类型不适合自动转 MP3。请上传 WAV/AIFF/音频文件，或填写音频外链。`);
+        throw new Error(`${file.name} 超过 ${formatFileSize(AUDIO_UPLOAD_TARGET_BYTES)}，但当前文件类型不适合自动转 MP3。请上传 WAV/AIFF/音频文件，或填写音频外链。`);
     }
     if (file.size > AUDIO_TRANSCODE_MAX_SOURCE_BYTES) {
         throw new Error(`${file.name} 太大了（${formatFileSize(file.size)}）。当前浏览器端转码上限是 ${formatFileSize(AUDIO_TRANSCODE_MAX_SOURCE_BYTES)}，建议改用外链/云存储。`);
@@ -969,7 +996,7 @@ async function transcodeAudioToMp3(file, onProgress) {
         });
         let mp3File = makeMp3File(file, mp3Blob);
 
-        if (mp3File.size > ONLINE_UPLOAD_LIMIT_BYTES && bitrate > MP3_MIN_BITRATE_KBPS) {
+        if (mp3File.size > AUDIO_UPLOAD_TARGET_BYTES && bitrate > MP3_MIN_BITRATE_KBPS) {
             const retryBitrate = Math.max(MP3_MIN_BITRATE_KBPS, bitrate - 16);
             onProgress?.(0.44, `第一次 MP3 仍偏大，正在用 ${retryBitrate}kbps 重试`);
             const retryBlob = await encodeMp3Buffer(lame, buffer, sampleRate, retryBitrate, ratio => {
@@ -978,8 +1005,8 @@ async function transcodeAudioToMp3(file, onProgress) {
             mp3File = makeMp3File(file, retryBlob);
         }
 
-        if (mp3File.size > ONLINE_UPLOAD_LIMIT_BYTES) {
-            throw new Error(`已转成 MP3，但文件仍有 ${formatFileSize(mp3File.size)}，超过上传上限 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}。为了避免明显压坏音质，请改用音频外链/云存储。`);
+        if (mp3File.size > AUDIO_UPLOAD_TARGET_BYTES) {
+            throw new Error(`已转成 MP3，但文件仍有 ${formatFileSize(mp3File.size)}，超过音频上传目标 ${formatFileSize(AUDIO_UPLOAD_TARGET_BYTES)}。为了避免明显压坏音质，请改用音频外链/云存储。`);
         }
 
         onProgress?.(0.96, `转码完成：${formatFileSize(file.size)} → ${formatFileSize(mp3File.size)}`);
@@ -994,7 +1021,7 @@ async function transcodeAudioToMp3(file, onProgress) {
 }
 
 function shouldTranscodeAudioForUpload(file, uploadType) {
-    return Boolean(state.online && isAudioUpload(uploadType) && file && file.size > ONLINE_UPLOAD_LIMIT_BYTES);
+    return Boolean(state.online && isAudioUpload(uploadType) && file && file.size > AUDIO_UPLOAD_TARGET_BYTES);
 }
 
 function isMp3TranscodeCandidate(file) {
@@ -1070,7 +1097,7 @@ function chooseMp3Bitrate(durationSeconds) {
 
     if (bitrate < MP3_MIN_BITRATE_KBPS) {
         const maxMinutes = Math.floor((AUDIO_TRANSCODE_TARGET_BYTES * 8) / (MP3_MIN_BITRATE_KBPS * 1000) / 60);
-        throw new Error(`这首歌时长约 ${Math.ceil(duration / 60)} 分钟，若压到 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)} 内会明显牺牲音质。当前自动转码最低保留 ${MP3_MIN_BITRATE_KBPS}kbps，建议 ${maxMinutes} 分钟以上的歌曲使用外链/云存储。`);
+        throw new Error(`这首歌时长约 ${Math.ceil(duration / 60)} 分钟，若压到 ${formatFileSize(AUDIO_UPLOAD_TARGET_BYTES)} 内会明显牺牲音质。当前自动转码最低保留 ${MP3_MIN_BITRATE_KBPS}kbps，建议 ${maxMinutes} 分钟以上的歌曲使用外链/云存储。`);
     }
 
     return Math.max(MP3_MIN_BITRATE_KBPS, bitrate);
@@ -1153,7 +1180,7 @@ function bindUploadInputFeedback() {
 
         form.elements[field].addEventListener('change', event => {
             const input = event.target;
-            const file = input.files[0];
+            const file = getSelectedInputFile(input);
             if (!file) {
                 if (isCoverCropUpload(uploadType)) {
                     clearPreparedCoverFile(input);
@@ -1174,7 +1201,7 @@ function bindUploadInputFeedback() {
             if (shouldTranscodeAudioForUpload(file, uploadType)) {
                 setFormMessage(
                     form,
-                    `${UPLOAD_LABELS[uploadType]}已选择：${file.name}（${formatFileSize(file.size)}）。创建时会先在浏览器里转成 MP3，目标小于 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}。MP3 是有损格式，发布后请试听确认。`,
+                    `${UPLOAD_LABELS[uploadType]}已选择：${file.name}（${formatFileSize(file.size)}）。创建时会先在浏览器里转成 MP3，目标小于 ${formatFileSize(AUDIO_UPLOAD_TARGET_BYTES)}。MP3 是有损格式，发布后请试听确认。`,
                     'info'
                 );
                 return;
@@ -1193,6 +1220,61 @@ function bindUploadInputFeedback() {
             }
         });
     });
+}
+
+async function selectAudioFileWithRememberedDirectory(input) {
+    if (!input) return;
+
+    if (!window.showOpenFilePicker) {
+        input.click();
+        showToast('当前浏览器不支持目录记忆，已打开普通文件选择器');
+        return;
+    }
+
+    try {
+        const [handle] = await window.showOpenFilePicker({
+            id: AUDIO_PICKER_ID,
+            multiple: false,
+            types: [{
+                description: '音频文件',
+                accept: {
+                    'audio/*': ['.mp3', '.wav', '.wave', '.m4a', '.aac', '.flac', '.ogg', '.aif', '.aiff']
+                }
+            }]
+        });
+        const file = await handle.getFile();
+        setSelectedInputFile(input, file);
+        showToast(`已选择音频：${file.name}`);
+    } catch (error) {
+        if (error && error.name === 'AbortError') return;
+        input.click();
+        showToast('目录记忆选择器不可用，已打开普通文件选择器');
+    }
+}
+
+function setSelectedInputFile(input, file) {
+    clearSelectedInputFile(input);
+
+    try {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        input.files = dataTransfer.files;
+    } catch (error) {
+        pickerSelectedFiles.set(input, file);
+    }
+
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function getSelectedInputFile(input) {
+    if (!input) return null;
+    return (input.files && input.files[0]) || pickerSelectedFiles.get(input) || null;
+}
+
+function clearSelectedInputFile(input) {
+    if (input) {
+        pickerSelectedFiles.delete(input);
+    }
 }
 
 function bindImageCropperModal() {
@@ -1607,14 +1689,15 @@ function validateUploads(items) {
 }
 
 function getUploadFileProblem(file, uploadType) {
-    if (!file || !state.online || file.size <= ONLINE_UPLOAD_LIMIT_BYTES) {
+    const safeLimit = getUploadSafeLimitBytes(uploadType);
+    if (!file || !state.online || file.size <= safeLimit) {
         return '';
     }
 
     const label = UPLOAD_LABELS[uploadType] || '上传文件';
     if (isAudioUpload(uploadType)) {
         if (!isMp3TranscodeCandidate(file)) {
-            return `${label}「${file.name}」大小为 ${formatFileSize(file.size)}，超过线上上传安全上限 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}。当前文件类型无法自动转 MP3，请上传 WAV/AIFF/常见音频文件，或填写音频外链。`;
+            return `${label}「${file.name}」大小为 ${formatFileSize(file.size)}，超过音频上传目标 ${formatFileSize(safeLimit)}。当前文件类型无法自动转 MP3，请上传 WAV/AIFF/常见音频文件，或填写音频外链。`;
         }
         if (file.size > AUDIO_TRANSCODE_MAX_SOURCE_BYTES) {
             return `${label}「${file.name}」大小为 ${formatFileSize(file.size)}，超过浏览器端转码上限 ${formatFileSize(AUDIO_TRANSCODE_MAX_SOURCE_BYTES)}。请改用音频外链/云存储。`;
@@ -1626,13 +1709,13 @@ function getUploadFileProblem(file, uploadType) {
         ? '请先压缩成更小的 mp3/m4a，或填写音频外链/已上传路径后再创建。'
         : '请先压缩后再上传。';
 
-    return `${label}「${file.name}」大小为 ${formatFileSize(file.size)}，超过线上上传安全上限 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}。${nextStep}`;
+    return `${label}「${file.name}」大小为 ${formatFileSize(file.size)}，超过线上上传安全上限 ${formatFileSize(safeLimit)}。${nextStep}`;
 }
 
 function buildUploadErrorMessage(response, data, file, uploadType) {
     if (response.status === 413) {
         const label = UPLOAD_LABELS[uploadType] || '上传文件';
-        return `${label}「${file.name}」上传被线上服务拒绝，文件大小 ${formatFileSize(file.size)}。请压缩到 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)} 以内，或改用外链/云存储方案。`;
+        return `${label}「${file.name}」上传被线上服务拒绝，文件大小 ${formatFileSize(file.size)}。请压缩到 ${formatFileSize(getUploadSafeLimitBytes(uploadType))} 以内，或改用外链/云存储方案。`;
     }
 
     return data.error || `上传失败（HTTP ${response.status}）`;
@@ -1640,6 +1723,10 @@ function buildUploadErrorMessage(response, data, file, uploadType) {
 
 function isAudioUpload(uploadType) {
     return uploadType === 'musicAudio' || uploadType === 'lyricAudio';
+}
+
+function getUploadSafeLimitBytes(uploadType) {
+    return isAudioUpload(uploadType) ? AUDIO_UPLOAD_TARGET_BYTES : ONLINE_UPLOAD_LIMIT_BYTES;
 }
 
 function formatFileSize(bytes) {
@@ -2916,12 +3003,21 @@ function renderMarkdownTextField(field, value) {
 }
 
 function renderEditorUploadField(field) {
+    const isAudio = isAudioUpload(field.uploadType);
     return `
-        <label class="field editor-field-wide">
-            <span>${escapeHtml(field.label)}</span>
-            <input type="file" name="${escapeAttribute(field.key)}" accept="${escapeAttribute(field.accept || '*/*')}" data-editor-upload-type="${escapeAttribute(field.uploadType)}">
+        <div class="field editor-field-wide">
+            <label class="field">
+                <span>${escapeHtml(field.label)}</span>
+                <input type="file" name="${escapeAttribute(field.key)}" accept="${escapeAttribute(field.accept || '*/*')}" data-editor-upload-type="${escapeAttribute(field.uploadType)}">
+            </label>
+            ${isAudio ? `
+                <button class="secondary-action file-picker-action" type="button" data-editor-file-picker="${escapeAttribute(field.key)}">
+                    <i data-lucide="folder-open"></i>
+                    从上次目录选择音频
+                </button>
+            ` : ''}
             ${field.note ? `<span>${escapeHtml(field.note)}</span>` : ''}
-        </label>
+        </div>
     `;
 }
 
@@ -3026,6 +3122,16 @@ function handleResourceEditorRestore() {
     restoreResource(button.dataset.source, button.dataset.resourceId);
 }
 
+function handleResourceEditorFieldClick(event) {
+    const pickerButton = event.target.closest('[data-editor-file-picker]');
+    if (!pickerButton) return;
+
+    const input = $('#resource-editor-form').elements[pickerButton.dataset.editorFilePicker];
+    if (input) {
+        selectAudioFileWithRememberedDirectory(input);
+    }
+}
+
 async function handleResourceEditorFieldChange(event) {
     const uploadInput = event.target.closest('[data-editor-upload-type]');
     if (uploadInput) {
@@ -3052,7 +3158,7 @@ async function handleResourceEditorFieldChange(event) {
 function handleResourceEditorUploadFieldChange(input) {
     const form = $('#resource-editor-form');
     const uploadType = input.dataset.editorUploadType;
-    const file = input.files && input.files[0];
+    const file = getSelectedInputFile(input);
 
     if (!file) {
         setFormMessage(form, '');
@@ -3062,7 +3168,7 @@ function handleResourceEditorUploadFieldChange(input) {
     if (shouldTranscodeAudioForUpload(file, uploadType)) {
         setFormMessage(
             form,
-            `${UPLOAD_LABELS[uploadType] || '素材'}已选择：${file.name}（${formatFileSize(file.size)}）。保存时会先在浏览器里转成 MP3，目标小于 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}。`,
+            `${UPLOAD_LABELS[uploadType] || '素材'}已选择：${file.name}（${formatFileSize(file.size)}）。保存时会先在浏览器里转成 MP3，目标小于 ${formatFileSize(AUDIO_UPLOAD_TARGET_BYTES)}。`,
             'info'
         );
         return;
@@ -3127,7 +3233,7 @@ async function applyEditorFieldValue(item, field, input, form, context = {}) {
 }
 
 async function applyEditorUploadFieldValue(item, field, input, context = {}) {
-    const file = input.files && input.files[0];
+    const file = getSelectedInputFile(input);
     if (!file) return;
 
     const uploadType = field.uploadType;
