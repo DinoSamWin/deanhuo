@@ -304,5 +304,20 @@
         "deletedAt": "2026-08-21T16:03:07.956Z",
         "deletedBy": "admin",
         "deletedReason": "后台软删除"
+    },
+    {
+        "id": "17",
+        "title": "17岁哭过的约定",
+        "author": "Dean Huo",
+        "date": "2026-08-22",
+        "cover": "assets/images/admin-uploads/lyrics/1787361867909-1.jpg",
+        "summary": "不是谁的公主我还很任性 ｜却不知一个人的维也纳音乐厅｜音符也不愿与我结伴而行",
+        "contentPath": "assets/lyrics/admin-generated/17.md",
+        "audioPath": "assets/audio/admin-uploads/1787361664512-17.mp3",
+        "order": 23,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2026",
+        "linkedMusicId": "17"
     }
 ]
