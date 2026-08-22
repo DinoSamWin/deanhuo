@@ -143,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const versions = getSongVersions(song);
         if (versions.length <= 1) {
             elements.versionStrip.classList.add('is-hidden');
+            elements.versionStrip.classList.remove('is-overflowing');
             elements.versionStrip.innerHTML = '';
             return;
         }
@@ -155,9 +156,14 @@ document.addEventListener('DOMContentLoaded', () => {
             button.className = `version-btn${index === currentVersionIndex ? ' is-active' : ''}`;
             button.textContent = version.label || `版本${index + 1}`;
             button.dataset.versionIndex = index;
-            button.addEventListener('click', () => selectVersion(index));
+            button.addEventListener('click', event => {
+                event.preventDefault();
+                event.stopPropagation();
+                selectVersion(index);
+            });
             elements.versionStrip.appendChild(button);
         });
+        requestAnimationFrame(updateVersionStripOverflow);
     }
 
     function selectVersion(index) {
@@ -196,9 +202,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function bindVersionStripScroll() {
         if (!elements.versionStrip) return;
+        const strip = elements.versionStrip;
 
-        elements.versionStrip.addEventListener('wheel', event => {
-            const strip = elements.versionStrip;
+        strip.addEventListener('pointerdown', event => {
+            event.stopPropagation();
+        });
+        strip.addEventListener('click', event => {
+            event.stopPropagation();
+        });
+
+        strip.addEventListener('wheel', event => {
+            event.stopPropagation();
             if (strip.scrollWidth <= strip.clientWidth) return;
 
             const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
@@ -209,6 +223,15 @@ document.addEventListener('DOMContentLoaded', () => {
             event.preventDefault();
             strip.scrollLeft += delta;
         }, { passive: false });
+
+        window.addEventListener('resize', updateVersionStripOverflow);
+    }
+
+    function updateVersionStripOverflow() {
+        if (!elements.versionStrip || elements.versionStrip.classList.contains('is-hidden')) return;
+
+        const isOverflowing = elements.versionStrip.scrollWidth > elements.versionStrip.clientWidth + 1;
+        elements.versionStrip.classList.toggle('is-overflowing', isOverflowing);
     }
 
     function renderCarousel() {
