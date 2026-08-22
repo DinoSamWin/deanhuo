@@ -185,6 +185,49 @@
             pointer-events: none;
         }
 
+        .version-strip {
+            width: clamp(180px, 35vh, 320px);
+            max-width: calc(100vw - 48px);
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+            overscroll-behavior-x: contain;
+            scrollbar-width: none;
+            padding: 2px 0 6px;
+            margin-top: 8px;
+            z-index: 25;
+        }
+
+        .version-strip.is-hidden {
+            display: none;
+        }
+
+        .version-strip::-webkit-scrollbar {
+            display: none;
+        }
+
+        .version-btn {
+            flex: 0 0 auto;
+            min-height: 26px;
+            padding: 0 10px;
+            color: rgba(255, 255, 255, 0.48);
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 999px;
+            font-size: 12px;
+            line-height: 1;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+        }
+
+        .version-btn:hover,
+        .version-btn.is-active {
+            color: #fff;
+            background: rgba(0, 229, 122, 0.14);
+            border-color: rgba(0, 229, 122, 0.45);
+        }
+
         /* Orbiting Progress Ring */
         .orbit-track {
             position: absolute;
@@ -399,6 +442,10 @@
                 height: 280px;
             }
 
+            .version-strip {
+                width: 280px;
+            }
+
             .cover-card.prev {
                 transform: translateX(-160px) scale(0.7) rotateY(20deg);
             }
@@ -430,6 +477,7 @@
                     <!-- Cards injected by JS -->
                 </div>
             </div>
+            <div class="version-strip is-hidden" id="version-strip" aria-label="音频版本"></div>
 
             <div class="orbit-track">
                 <svg class="orbit-svg" viewBox="0 0 1000 300">
@@ -477,7 +525,7 @@
 
     <audio id="audio-element"></audio>
 
-    <script src="js/music-player.js?v=trash-progress"></script>
+    <script src="js/music-player.js?v=music-versions"></script>
     <script>lucide.createIcons();</script>
 </body>
 

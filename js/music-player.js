@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let songs = [];
     let currentIndex = 0;
+    let currentVersionIndex = 0;
     let isPlaying = false;
     let lyrics = [];
 
@@ -25,7 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
         timeTotal: document.getElementById('time-total'),
         slider: document.getElementById('progress-slider'),
         lyricsBox: document.getElementById('lyrics-display'),
-        playerBody: document.getElementById('player-body')
+        playerBody: document.getElementById('player-body'),
+        versionStrip: document.getElementById('version-strip')
     };
 
     // 1. Fetch Music Data (Cache busting added)
@@ -55,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.playBtn.addEventListener('click', togglePlay);
         elements.nextBtn.addEventListener('click', () => nextTrack());
         elements.prevBtn.addEventListener('click', () => prevTrack());
+        bindVersionStripScroll();
 
         elements.audio.addEventListener('timeupdate', updateProgress);
         elements.audio.addEventListener('ended', () => nextTrack());
@@ -110,12 +113,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadTrack(index, initial = false) {
         const song = songs[index];
+        currentVersionIndex = 0;
         elements.title.textContent = song.title;
         elements.artist.textContent = song.artist || 'Unknown Artist';
         elements.blurBg.style.backgroundImage = `url(${song.cover})`;
-        elements.audio.src = song.url;
+        elements.audio.src = getSongVersions(song)[currentVersionIndex]?.url || song.url || '';
 
         updateCarouselUI();
+        renderVersionStrip(song);
         loadLyrics(song);
 
         if (!initial) {
@@ -130,6 +135,80 @@ document.addEventListener('DOMContentLoaded', () => {
                 updatePlayState();
             });
         }
+    }
+
+    function renderVersionStrip(song) {
+        if (!elements.versionStrip) return;
+
+        const versions = getSongVersions(song);
+        if (versions.length <= 1) {
+            elements.versionStrip.classList.add('is-hidden');
+            elements.versionStrip.innerHTML = '';
+            return;
+        }
+
+        elements.versionStrip.classList.remove('is-hidden');
+        elements.versionStrip.innerHTML = '';
+        versions.forEach((version, index) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `version-btn${index === currentVersionIndex ? ' is-active' : ''}`;
+            button.textContent = version.label || `版本${index + 1}`;
+            button.dataset.versionIndex = index;
+            button.addEventListener('click', () => selectVersion(index));
+            elements.versionStrip.appendChild(button);
+        });
+    }
+
+    function selectVersion(index) {
+        const song = songs[currentIndex];
+        const versions = getSongVersions(song);
+        const version = versions[index];
+        if (!version || index === currentVersionIndex) return;
+
+        const shouldResume = isPlaying;
+        currentVersionIndex = index;
+        elements.audio.src = version.url;
+        elements.audio.currentTime = 0;
+        elements.slider.value = 0;
+        elements.timeCurr.textContent = '0:00';
+        elements.timeTotal.textContent = '0:00';
+        updateVersionStripState();
+
+        if (shouldResume) {
+            playAudio();
+        } else {
+            isPlaying = false;
+            updatePlayState();
+        }
+    }
+
+    function updateVersionStripState() {
+        if (!elements.versionStrip) return;
+        elements.versionStrip.querySelectorAll('.version-btn').forEach((button, index) => {
+            button.classList.toggle('is-active', index === currentVersionIndex);
+        });
+        const active = elements.versionStrip.querySelector('.version-btn.is-active');
+        if (active && typeof active.scrollIntoView === 'function') {
+            active.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+        }
+    }
+
+    function bindVersionStripScroll() {
+        if (!elements.versionStrip) return;
+
+        elements.versionStrip.addEventListener('wheel', event => {
+            const strip = elements.versionStrip;
+            if (strip.scrollWidth <= strip.clientWidth) return;
+
+            const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+                ? event.deltaX
+                : event.deltaY;
+            if (!delta) return;
+
+            event.preventDefault();
+            strip.scrollLeft += delta;
+        }, { passive: false });
     }
 
     function renderCarousel() {
@@ -320,6 +399,49 @@ document.addEventListener('DOMContentLoaded', () => {
     function prevTrack() {
         currentIndex = (currentIndex - 1 + songs.length) % songs.length;
         loadTrack(currentIndex);
+    }
+
+    function getSongVersions(song) {
+        if (!song) return [];
+
+        const versions = [];
+        if (Array.isArray(song.versions)) {
+            song.versions.forEach(version => {
+                const url = normalizeAudioUrl(version && version.url);
+                if (!url) return;
+                versions.push({
+                    url,
+                    label: version.label || version.title || '',
+                    isDefault: Boolean(version.isDefault || version.default)
+                });
+            });
+        }
+
+        const fallbackUrl = normalizeAudioUrl(song.url);
+        if (fallbackUrl && !versions.some(version => version.url === fallbackUrl)) {
+            versions.unshift({
+                url: fallbackUrl,
+                label: '',
+                isDefault: !versions.some(version => version.isDefault)
+            });
+        }
+
+        if (versions.length === 0) return [];
+
+        const defaultIndex = versions.findIndex(version => version.isDefault);
+        const ordered = defaultIndex > 0
+            ? [versions[defaultIndex], ...versions.filter((_, index) => index !== defaultIndex)]
+            : versions;
+
+        return ordered.map((version, index) => ({
+            url: version.url,
+            label: `版本${index + 1}`,
+            isDefault: index === 0
+        }));
+    }
+
+    function normalizeAudioUrl(value) {
+        return String(value || '').trim();
     }
 
     function updateProgress() {
