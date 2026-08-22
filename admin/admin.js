@@ -73,7 +73,8 @@ const RESOURCE_EDIT_SCHEMAS = {
         { key: 'cover', label: '封面路径/URL', empty: 'delete' },
         { key: 'url', label: '音频路径/URL', empty: 'delete' },
         { key: 'description', label: '描述', type: 'textarea' },
-        { key: 'lyricId', label: '关联词作', type: 'resourceSelect', source: 'lyrics', empty: 'delete' }
+        { key: 'lyricId', label: '关联词作', type: 'resourceSelect', source: 'lyrics', empty: 'delete' },
+        { key: 'lyricText', label: '歌词内容', type: 'markdownText', fileLabel: '歌词 Markdown 文件', rows: 8, empty: 'delete' }
     ],
     knowledge: [
         { key: 'title', label: '标题', required: true },
@@ -474,6 +475,7 @@ function bindForms() {
     $('#resource-editor-cancel-button').addEventListener('click', closeResourceEditor);
     $('#resource-editor-delete-button').addEventListener('click', handleResourceEditorDelete);
     $('#resource-editor-restore-button').addEventListener('click', handleResourceEditorRestore);
+    $('#resource-editor-fields').addEventListener('change', handleResourceEditorFieldChange);
     $('#resource-editor-modal').addEventListener('click', event => {
         if (event.target.id === 'resource-editor-modal') {
             closeResourceEditor();
@@ -2425,6 +2427,10 @@ function renderEditorField(field, item) {
         return renderResourceSelectField(field, item, value);
     }
 
+    if (field.type === 'markdownText') {
+        return renderMarkdownTextField(field, value);
+    }
+
     return `
         <label class="field">
             <span>${escapeHtml(field.label)}</span>
@@ -2456,6 +2462,22 @@ function renderResourceSelectField(field, item, value) {
     `;
 }
 
+function renderMarkdownTextField(field, value) {
+    const fileKey = getMarkdownFileInputName(field);
+    return `
+        <div class="field editor-field-wide">
+            <label class="field">
+                <span>${escapeHtml(field.fileLabel || 'Markdown 文件')}</span>
+                <input type="file" name="${escapeAttribute(fileKey)}" accept=".md,text/markdown,text/plain" data-editor-markdown-file="${escapeAttribute(field.key)}">
+            </label>
+            <label class="field">
+                <span>${escapeHtml(field.label)}</span>
+                <textarea name="${escapeAttribute(field.key)}" rows="${Number(field.rows) || 6}" placeholder="可以粘贴歌词，也可以上传 Markdown 文件">${escapeHtml(value)}</textarea>
+            </label>
+        </div>
+    `;
+}
+
 function getRelationOptions(source, selectedValue) {
     const visibleItems = getVisibleSourceItems(source);
     if (!selectedValue || visibleItems.some(item => String(item.id) === selectedValue)) {
@@ -2477,6 +2499,10 @@ function formatRelationOptionLabel(source, item) {
     return `${title} · ${parts.filter(Boolean).join(' · ')}`;
 }
 
+function getMarkdownFileInputName(field) {
+    return field.fileKey || `${field.key}File`;
+}
+
 function getEditorFieldValue(field, item) {
     const value = item[field.key];
     if (field.type === 'checkbox') return Boolean(value);
@@ -2484,7 +2510,7 @@ function getEditorFieldValue(field, item) {
     return value === undefined || value === null ? '' : String(value);
 }
 
-function handleResourceEditorSubmit(event) {
+async function handleResourceEditorSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const source = form.elements.source.value;
@@ -2504,9 +2530,9 @@ function handleResourceEditorSubmit(event) {
     const updated = clone(original);
 
     try {
-        schema.forEach(field => {
-            applyEditorFieldValue(updated, field, form.elements[field.key]);
-        });
+        for (const field of schema) {
+            await applyEditorFieldValue(updated, field, form.elements[field.key], form);
+        }
     } catch (error) {
         showToast(error.message || '保存失败');
         return;
@@ -2535,11 +2561,33 @@ function handleResourceEditorRestore() {
     restoreResource(button.dataset.source, button.dataset.resourceId);
 }
 
-function applyEditorFieldValue(item, field, input) {
+async function handleResourceEditorFieldChange(event) {
+    const input = event.target.closest('[data-editor-markdown-file]');
+    if (!input || !input.files || !input.files[0]) return;
+
+    const targetKey = input.dataset.editorMarkdownFile;
+    const textarea = Array.from($('#resource-editor-fields').querySelectorAll('textarea'))
+        .find(node => node.name === targetKey);
+    if (!textarea) return;
+
+    try {
+        textarea.value = await readTextFile(input.files[0]);
+        showToast('Markdown 歌词已读取');
+    } catch (error) {
+        showToast(error.message || '读取 Markdown 文件失败');
+    }
+}
+
+async function applyEditorFieldValue(item, field, input, form) {
     if (!input) return;
 
     if (field.type === 'checkbox') {
         item[field.key] = input.checked;
+        return;
+    }
+
+    if (field.type === 'markdownText') {
+        await applyMarkdownTextFieldValue(item, field, input, form);
         return;
     }
 
@@ -2572,6 +2620,25 @@ function applyEditorFieldValue(item, field, input) {
     }
 
     item[field.key] = rawValue;
+}
+
+async function applyMarkdownTextFieldValue(item, field, input, form) {
+    const fileInput = form && form.elements[getMarkdownFileInputName(field)];
+    const markdownFile = fileInput && fileInput.files ? fileInput.files[0] : null;
+    const rawValue = markdownFile
+        ? (await readTextFile(markdownFile)).trim()
+        : String(input.value || '').trim();
+
+    if (field.required && !rawValue) {
+        throw new Error(`${field.label}不能为空`);
+    }
+
+    if (!rawValue && field.empty === 'delete') {
+        delete item[field.key];
+        return;
+    }
+
+    item[field.key] = markdownToPlainText(rawValue);
 }
 
 function getDraftEntries() {
