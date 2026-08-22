@@ -103,6 +103,17 @@
         "cover": "assets/images/admin-uploads/music/1787367440551-05425e1b-c7f5-4294-a287-270a586285ef-cover.jpg",
         "url": "assets/audio/admin-uploads/1787367455998-musicAudio.mp3",
         "genre": "Original",
-        "description": ""
+        "description": "",
+        "versions": [
+            {
+                "label": "版本1",
+                "url": "assets/audio/admin-uploads/1787367455998-musicAudio.mp3",
+                "isDefault": true
+            },
+            {
+                "label": "版本2",
+                "url": "assets/audio/admin-uploads/1787367562941-musicAudio.mp3"
+            }
+        ]
     }
 ]
