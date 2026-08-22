@@ -76,6 +76,7 @@ const RESOURCE_EDIT_SCHEMAS = {
         { key: 'genre', label: '曲风' },
         { key: 'cover', label: '封面路径/URL', empty: 'delete' },
         { key: 'url', label: '音频路径/URL', empty: 'delete' },
+        { key: 'urlFile', label: '替换音频文件', type: 'fileUpload', uploadType: 'musicAudio', targetKey: 'url', accept: 'audio/*', note: '选择新音频后，保存时会上传并替换上面的音频路径。大 WAV 会自动转 MP3。' },
         { key: 'description', label: '描述', type: 'textarea' },
         { key: 'lyricId', label: '关联词作', type: 'resourceSelect', source: 'lyrics', empty: 'delete' },
         { key: 'lyricText', label: '歌词内容', type: 'markdownText', fileLabel: '歌词 Markdown 文件', rows: 8, empty: 'delete' }
@@ -2789,6 +2790,7 @@ function openResourceEditor(source, id) {
     }
 
     const form = $('#resource-editor-form');
+    clearFormFeedback(form);
     form.elements.source.value = source;
     form.elements.resourceId.value = item.id;
     const isDeleted = isResourceDeleted(item);
@@ -2829,6 +2831,7 @@ function openResourceEditor(source, id) {
 }
 
 function closeResourceEditor() {
+    clearFormFeedback($('#resource-editor-form'));
     $('#resource-editor-modal').classList.add('is-hidden');
     $('#resource-editor-modal').setAttribute('aria-hidden', 'true');
 }
@@ -2859,6 +2862,10 @@ function renderEditorField(field, item) {
 
     if (field.type === 'markdownText') {
         return renderMarkdownTextField(field, value);
+    }
+
+    if (field.type === 'fileUpload') {
+        return renderEditorUploadField(field);
     }
 
     return `
@@ -2908,6 +2915,16 @@ function renderMarkdownTextField(field, value) {
     `;
 }
 
+function renderEditorUploadField(field) {
+    return `
+        <label class="field editor-field-wide">
+            <span>${escapeHtml(field.label)}</span>
+            <input type="file" name="${escapeAttribute(field.key)}" accept="${escapeAttribute(field.accept || '*/*')}" data-editor-upload-type="${escapeAttribute(field.uploadType)}">
+            ${field.note ? `<span>${escapeHtml(field.note)}</span>` : ''}
+        </label>
+    `;
+}
+
 function getRelationOptions(source, selectedValue) {
     const visibleItems = getVisibleSourceItems(source);
     if (!selectedValue || visibleItems.some(item => String(item.id) === selectedValue)) {
@@ -2943,6 +2960,9 @@ function getEditorFieldValue(field, item) {
 async function handleResourceEditorSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
+    const submitButton = form.querySelector('button[type="submit"]');
+    const originalButtonHtml = submitButton.innerHTML;
+    const progress = createFormProgress(form);
     const source = form.elements.source.value;
     const id = form.elements.resourceId.value;
     const schema = RESOURCE_EDIT_SCHEMAS[source] || [];
@@ -2958,18 +2978,33 @@ async function handleResourceEditorSubmit(event) {
 
     const original = getSourceItems(source)[index];
     const updated = clone(original);
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i data-lucide="loader-circle"></i> 正在保存';
+    progress.set(6, '正在准备保存修改');
+    setFormMessage(form, '正在保存资源修改，请稍候...', 'info');
+    renderIcons();
 
     try {
+        progress.set(14, '正在读取编辑字段');
         for (const field of schema) {
-            await applyEditorFieldValue(updated, field, form.elements[field.key], form);
+            await applyEditorFieldValue(updated, field, form.elements[field.key], form, { progress });
         }
+        progress.set(88, '正在写入待发布列表');
     } catch (error) {
+        progress.set(100, '保存失败', 'error');
+        setFormMessage(form, error.message || '保存失败', 'error');
         showToast(error.message || '保存失败');
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonHtml;
+        renderIcons();
         return;
     }
 
     updated.id = original.id;
     state.files[path][index] = updated;
+    progress.set(100, '修改已保存到待发布列表', 'success');
+    submitButton.disabled = false;
+    submitButton.innerHTML = originalButtonHtml;
     closeResourceEditor();
     renderAll();
 
@@ -2992,6 +3027,12 @@ function handleResourceEditorRestore() {
 }
 
 async function handleResourceEditorFieldChange(event) {
+    const uploadInput = event.target.closest('[data-editor-upload-type]');
+    if (uploadInput) {
+        handleResourceEditorUploadFieldChange(uploadInput);
+        return;
+    }
+
     const input = event.target.closest('[data-editor-markdown-file]');
     if (!input || !input.files || !input.files[0]) return;
 
@@ -3008,7 +3049,35 @@ async function handleResourceEditorFieldChange(event) {
     }
 }
 
-async function applyEditorFieldValue(item, field, input, form) {
+function handleResourceEditorUploadFieldChange(input) {
+    const form = $('#resource-editor-form');
+    const uploadType = input.dataset.editorUploadType;
+    const file = input.files && input.files[0];
+
+    if (!file) {
+        setFormMessage(form, '');
+        return;
+    }
+
+    if (shouldTranscodeAudioForUpload(file, uploadType)) {
+        setFormMessage(
+            form,
+            `${UPLOAD_LABELS[uploadType] || '素材'}已选择：${file.name}（${formatFileSize(file.size)}）。保存时会先在浏览器里转成 MP3，目标小于 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}。`,
+            'info'
+        );
+        return;
+    }
+
+    const problem = getUploadFileProblem(file, uploadType);
+    if (problem) {
+        setFormMessage(form, problem, 'error');
+        return;
+    }
+
+    setFormMessage(form, `${UPLOAD_LABELS[uploadType] || '素材'}已选择：${file.name}（${formatFileSize(file.size)}）`, 'info');
+}
+
+async function applyEditorFieldValue(item, field, input, form, context = {}) {
     if (!input) return;
 
     if (field.type === 'checkbox') {
@@ -3018,6 +3087,11 @@ async function applyEditorFieldValue(item, field, input, form) {
 
     if (field.type === 'markdownText') {
         await applyMarkdownTextFieldValue(item, field, input, form);
+        return;
+    }
+
+    if (field.type === 'fileUpload') {
+        await applyEditorUploadFieldValue(item, field, input, context);
         return;
     }
 
@@ -3050,6 +3124,33 @@ async function applyEditorFieldValue(item, field, input, form) {
     }
 
     item[field.key] = rawValue;
+}
+
+async function applyEditorUploadFieldValue(item, field, input, context = {}) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    const uploadType = field.uploadType;
+    const targetKey = field.targetKey || field.key;
+    const label = field.uploadLabel || field.label || UPLOAD_LABELS[uploadType] || '素材';
+    const progress = context.progress;
+
+    if (!uploadType) {
+        throw new Error(`${field.label}缺少上传类型配置`);
+    }
+
+    validateUploads([{ file, uploadType }]);
+    progress?.set(22, `准备上传${label}`);
+    const uploadedPath = await uploadAsset(file, uploadType, (ratio, statusLabel) => {
+        const safeRatio = Math.max(0, Math.min(Number(ratio) || 0, 1));
+        const percent = Math.round(safeRatio * 100);
+        progress?.set(
+            22 + safeRatio * 60,
+            statusLabel || `正在上传${label}（${percent}%）`
+        );
+    });
+    item[targetKey] = uploadedPath;
+    progress?.set(84, `${label}上传完成`);
 }
 
 async function applyMarkdownTextFieldValue(item, field, input, form) {
@@ -3588,8 +3689,7 @@ function setFormProgress(form, value, label, tone = 'info') {
                 <div class="form-progress-bar"></div>
             </div>
         `;
-        const submitButton = form.querySelector('button[type="submit"]');
-        form.insertBefore(progressNode, submitButton || null);
+        insertFormFeedbackNode(form, progressNode);
     }
 
     const percent = Math.max(0, Math.min(Math.round(Number(value) || 0), 100));
@@ -3607,13 +3707,32 @@ function setFormMessage(form, message, tone = 'info') {
         messageNode.className = 'form-message';
         messageNode.setAttribute('role', 'status');
         messageNode.setAttribute('aria-live', 'polite');
-        const submitButton = form.querySelector('button[type="submit"]');
-        form.insertBefore(messageNode, submitButton || null);
+        insertFormFeedbackNode(form, messageNode);
     }
 
     messageNode.textContent = message || '';
     messageNode.hidden = !message;
     messageNode.className = `form-message is-${tone}`;
+}
+
+function insertFormFeedbackNode(form, node) {
+    const anchor = form.querySelector('.modal-actions') || form.querySelector('button[type="submit"]');
+    if (anchor && anchor.parentElement === form) {
+        form.insertBefore(node, anchor);
+        return;
+    }
+
+    form.appendChild(node);
+}
+
+function clearFormFeedback(form) {
+    const progressNode = form.querySelector('.form-progress');
+    const messageNode = form.querySelector('.form-message');
+    if (progressNode) progressNode.hidden = true;
+    if (messageNode) {
+        messageNode.hidden = true;
+        messageNode.textContent = '';
+    }
 }
 
 function togglePasswordVisibility() {
