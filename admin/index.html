@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260822-clipboard-images">
+    <link rel="stylesheet" href="../css/admin.css?v=20260822-music-versions">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -317,6 +317,11 @@
                             <span>音频外链/已上传路径</span>
                             <input name="audioUrl" placeholder="https://... 或 assets/audio/xxx.mp3">
                         </label>
+                        <label class="field">
+                            <span>追加版本音频（可多选）</span>
+                            <input type="file" name="versionAudioFiles" accept="audio/*" multiple>
+                        </label>
+                        <div class="version-upload-list" id="music-version-options"></div>
                         <label class="field">
                             <span>关联词作</span>
                             <select name="lyricId" id="music-lyric-select"></select>
@@ -686,7 +691,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260822-clipboard-images"></script>
+    <script src="../admin/admin.js?v=20260822-music-versions"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();

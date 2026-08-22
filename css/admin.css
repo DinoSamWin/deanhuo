@@ -555,6 +555,60 @@ button {
     width: 100%;
 }
 
+.version-upload-list {
+    display: grid;
+    gap: 8px;
+}
+
+.version-upload-item {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.version-upload-item input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-color);
+}
+
+.version-upload-item strong {
+    display: block;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.editor-version-heading {
+    display: grid;
+    gap: 4px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.editor-version-heading small,
+.version-upload-empty {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.5;
+}
+
+.version-upload-empty {
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px dashed var(--border-color);
+    border-radius: 8px;
+}
+
 .form-progress {
     display: grid;
     gap: 8px;

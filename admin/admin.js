@@ -80,7 +80,8 @@ const RESOURCE_EDIT_SCHEMAS = {
         { key: 'genre', label: '曲风' },
         { key: 'cover', label: '封面路径/URL', empty: 'delete' },
         { key: 'url', label: '音频路径/URL', empty: 'delete' },
-        { key: 'urlFile', label: '替换音频文件', type: 'fileUpload', uploadType: 'musicAudio', targetKey: 'url', accept: 'audio/*', note: '选择新音频后，保存时会上传并替换上面的音频路径。大 WAV 会自动转 MP3。' },
+        { key: 'urlFile', label: '替换音频文件', type: 'fileUpload', uploadType: 'musicAudio', targetKey: 'url', accept: 'audio/*', note: '选择新音频后，保存时会上传并替换上面的音频路径。大 WAV 会自动转 MP3。', uploadProgressEnd: 58 },
+        { key: 'versions', label: '音频版本', type: 'musicVersions' },
         { key: 'description', label: '描述', type: 'textarea' },
         { key: 'lyricId', label: '关联词作', type: 'resourceSelect', source: 'lyrics', empty: 'delete' },
         { key: 'lyricText', label: '歌词内容', type: 'markdownText', fileLabel: '歌词 Markdown 文件', rows: 8, empty: 'delete' }
@@ -486,6 +487,7 @@ function bindForms() {
     $('#resource-editor-restore-button').addEventListener('click', handleResourceEditorRestore);
     $('#resource-editor-fields').addEventListener('click', handleResourceEditorFieldClick);
     $('#resource-editor-fields').addEventListener('change', handleResourceEditorFieldChange);
+    $('#resource-editor-fields').addEventListener('input', handleResourceEditorFieldInput);
     $('#resource-editor-modal').addEventListener('click', event => {
         if (event.target.id === 'resource-editor-modal') {
             closeResourceEditor();
@@ -514,7 +516,16 @@ function bindForms() {
             delete event.target.dataset.autoTitleValue;
         }
     });
-    $('#music-form').elements.audioUrl.addEventListener('input', updateMusicAudioPreview);
+    $('#music-form').elements.audioUrl.addEventListener('input', () => {
+        updateMusicAudioPreview();
+        renderMusicVersionOptions();
+    });
+    $('#music-form').elements.versionAudioFiles.addEventListener('change', renderMusicVersionOptions);
+    $('#music-version-options').addEventListener('change', event => {
+        if (event.target.name === 'defaultVersionSource') {
+            renderMusicVersionOptions();
+        }
+    });
     $('#lyric-audio-picker-button').addEventListener('click', () => {
         selectAudioFileWithRememberedDirectory($('#lyric-form').elements.audioFile);
     });
@@ -689,6 +700,7 @@ async function handleMusicSubmit(event) {
     const coverInput = form.elements.coverFile;
     const coverFile = getPreparedUploadFile(coverInput) || getSelectedInputFile(coverInput);
     const audioFile = getSelectedInputFile(form.elements.audioFile);
+    const versionAudioFiles = getSelectedInputFiles(form.elements.versionAudioFiles);
     const audioUrl = normalizeAssetInput(form.elements.audioUrl.value);
     if (!coverFile) return showFormError(form, '请选择封面图片');
     if (!audioFile && !audioUrl) return showFormError(form, '请选择音频文件，或填写音频外链/已上传路径');
@@ -697,7 +709,8 @@ async function handleMusicSubmit(event) {
         progress.set(8, '正在读取音乐信息');
         validateUploads([
             { file: coverFile, uploadType: 'musicCover' },
-            ...(audioFile && !audioUrl ? [{ file: audioFile, uploadType: 'musicAudio' }] : [])
+            ...(audioFile && !audioUrl ? [{ file: audioFile, uploadType: 'musicAudio' }] : []),
+            ...versionAudioFiles.map(file => ({ file, uploadType: 'musicAudio' }))
         ]);
 
         const title = form.elements.title.value.trim();
@@ -710,12 +723,31 @@ async function handleMusicSubmit(event) {
         const lyricMarkdown = pastedLyricMarkdown || fileLyricMarkdown;
         const shouldSyncLyric = Boolean(lyricMarkdown && form.elements.syncLyric.checked);
         state.previewUrls[id] = URL.createObjectURL(coverFile);
+        const versionUploadItems = versionAudioFiles.map((file, index) => ({
+            key: `version${index}`,
+            file,
+            uploadType: 'musicAudio',
+            label: `版本音频${index + 1}`
+        }));
         const uploaded = await uploadFiles([
             { key: 'cover', file: coverFile, uploadType: 'musicCover', label: '音乐封面' },
-            ...(audioFile && !audioUrl ? [{ key: 'url', file: audioFile, uploadType: 'musicAudio', label: '音乐音频' }] : [])
+            ...(audioFile && !audioUrl ? [{ key: 'url', file: audioFile, uploadType: 'musicAudio', label: '音乐音频' }] : []),
+            ...versionUploadItems
         ], progress, 22, 78);
         const cover = uploaded.cover;
-        const url = audioUrl || uploaded.url;
+        const primaryUrl = audioUrl || uploaded.url;
+        const primarySource = audioUrl ? 'primary-url' : 'primary-file';
+        const versionCandidates = [
+            ...(primaryUrl ? [{ source: primarySource, url: primaryUrl, label: '主音频' }] : []),
+            ...versionAudioFiles.map((file, index) => ({
+                source: `extra-file-${index}`,
+                url: uploaded[`version${index}`],
+                label: makeTitleFromFilename(file.name) || `追加版本 ${index + 1}`
+            }))
+        ];
+        const selectedVersionSource = form.querySelector('input[name="defaultVersionSource"]:checked')?.value;
+        const versions = buildMusicVersions(versionCandidates, selectedVersionSource);
+        const url = versions[0]?.url || primaryUrl;
         let lyricId = form.elements.lyricId.value;
 
         progress.set(86, shouldSyncLyric ? '正在生成音乐和关联词作草稿' : '正在生成音乐草稿');
@@ -748,6 +780,7 @@ async function handleMusicSubmit(event) {
             url,
             genre: form.elements.genre.value.trim() || 'Original',
             description: form.elements.description.value.trim(),
+            ...(versions.length > 1 ? { versions } : {}),
             ...(lyricId ? { lyricId } : {})
         };
 
@@ -765,7 +798,9 @@ async function handleMusicSubmit(event) {
         clearPreparedCoverFile(coverInput);
         clearSelectedInputFile(coverInput);
         clearSelectedInputFile(form.elements.audioFile);
+        clearSelectedInputFile(form.elements.versionAudioFiles);
         clearMusicAudioPreview();
+        renderMusicVersionOptions();
         setDefaultFormValues();
         return shouldSyncLyric
             ? '音乐和关联词作创建成功，已进入待发布列表。'
@@ -1203,6 +1238,7 @@ function bindUploadInputFeedback() {
                 }
                 if (formId === 'music-form' && field === 'audioFile') {
                     updateMusicAudioPreview();
+                    renderMusicVersionOptions();
                 }
                 setFormMessage(form, '');
                 return;
@@ -1216,6 +1252,7 @@ function bindUploadInputFeedback() {
             if (formId === 'music-form' && field === 'audioFile') {
                 fillMusicTitleFromAudioFile(form, file);
                 updateMusicAudioPreview();
+                renderMusicVersionOptions();
             }
 
             if (shouldTranscodeAudioForUpload(file, uploadType)) {
@@ -1408,6 +1445,14 @@ function getSelectedInputFile(input) {
     return (input.files && input.files[0]) || pickerSelectedFiles.get(input) || null;
 }
 
+function getSelectedInputFiles(input) {
+    if (!input) return [];
+    const selected = input.files ? Array.from(input.files) : [];
+    const fallback = pickerSelectedFiles.get(input);
+    if (fallback && selected.length === 0) return [fallback];
+    return selected;
+}
+
 function clearSelectedInputFile(input) {
     if (input) {
         pickerSelectedFiles.delete(input);
@@ -1466,6 +1511,123 @@ function clearMusicAudioPreview() {
     if (preview) {
         preview.classList.add('is-hidden');
     }
+}
+
+function getMusicVersionCandidates() {
+    const form = $('#music-form');
+    if (!form) return [];
+
+    const candidates = [];
+    const audioUrl = normalizeAssetInput(form.elements.audioUrl.value);
+    const audioFile = getSelectedInputFile(form.elements.audioFile);
+    const versionFiles = getSelectedInputFiles(form.elements.versionAudioFiles);
+
+    if (audioUrl) {
+        candidates.push({
+            source: 'primary-url',
+            label: '主音频外链 / 已上传路径',
+            detail: audioUrl,
+            file: null
+        });
+    } else if (audioFile) {
+        candidates.push({
+            source: 'primary-file',
+            label: '主音频文件',
+            detail: `${audioFile.name} · ${formatFileSize(audioFile.size)}`,
+            file: audioFile
+        });
+    }
+
+    versionFiles.forEach((file, index) => {
+        candidates.push({
+            source: `extra-file-${index}`,
+            label: `追加版本 ${index + 1}`,
+            detail: `${file.name} · ${formatFileSize(file.size)}`,
+            file
+        });
+    });
+
+    return candidates;
+}
+
+function renderMusicVersionOptions() {
+    const container = $('#music-version-options');
+    if (!container) return;
+
+    const existingValue = container.querySelector('input[name="defaultVersionSource"]:checked')?.value || '';
+    const candidates = getMusicVersionCandidates();
+
+    if (candidates.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const selectedValue = candidates.some(item => item.source === existingValue)
+        ? existingValue
+        : candidates[0].source;
+    const orderedCandidates = orderMusicVersionCandidates(candidates, selectedValue);
+    const positionBySource = new Map(orderedCandidates.map((candidate, index) => [candidate.source, index + 1]));
+
+    container.innerHTML = candidates.map((candidate, index) => `
+        <label class="version-upload-item">
+            <input type="radio" name="defaultVersionSource" value="${escapeAttribute(candidate.source)}" ${candidate.source === selectedValue ? 'checked' : ''}>
+            <span>
+                <strong>${escapeHtml(candidate.source === selectedValue ? `版本1（默认推荐） · ${candidate.label}` : `版本${positionBySource.get(candidate.source) || index + 1} · ${candidate.label}`)}</strong>
+                ${escapeHtml(candidate.detail)}
+            </span>
+        </label>
+    `).join('');
+}
+
+function buildMusicVersions(candidates, selectedSource) {
+    const ordered = orderMusicVersionCandidates(
+        candidates.filter(candidate => normalizeAssetInput(candidate && candidate.url)),
+        selectedSource
+    );
+    return ordered.map((candidate, index) => ({
+        label: `版本${index + 1}`,
+        url: normalizeAssetInput(candidate.url),
+        ...(index === 0 ? { isDefault: true } : {})
+    }));
+}
+
+function orderMusicVersionCandidates(candidates, selectedSource) {
+    const validCandidates = dedupeMusicVersionCandidates(candidates, selectedSource);
+    if (validCandidates.length === 0) return [];
+
+    const defaultIndex = validCandidates.findIndex(candidate => candidate.source === selectedSource);
+    if (defaultIndex <= 0) return validCandidates;
+
+    return [
+        validCandidates[defaultIndex],
+        ...validCandidates.filter((_, index) => index !== defaultIndex)
+    ];
+}
+
+function dedupeMusicVersionCandidates(candidates, selectedSource) {
+    const result = [];
+    const indexByKey = new Map();
+
+    candidates.forEach(candidate => {
+        const url = normalizeAssetInput(candidate && candidate.url);
+        const source = String(candidate && candidate.source || '');
+        if (!url && !source) return;
+
+        const key = url || `source:${source}`;
+        const item = { ...candidate, url };
+        const existingIndex = indexByKey.get(key);
+        if (existingIndex === undefined) {
+            indexByKey.set(key, result.length);
+            result.push(item);
+            return;
+        }
+
+        if (candidate.source === selectedSource) {
+            result[existingIndex] = item;
+        }
+    });
+
+    return result;
 }
 
 function bindImageCropperModal() {
@@ -2523,7 +2685,9 @@ function getResourceDetailFields(source, item) {
         ] : []),
         ...schema.map(field => ({
             label: field.label,
-            value: formatResourceFieldValue(item[field.key])
+            value: field.type === 'musicVersions'
+                ? formatMusicVersionSummary(item)
+                : formatResourceFieldValue(item[field.key])
         }))
     ].filter(field => field.value !== '');
 }
@@ -2546,9 +2710,58 @@ function getResourcePreviewText(source, item) {
 
 function getItemAudioPath(source, item) {
     if (!item) return '';
-    if (source === 'music') return item.url || '';
+    if (source === 'music') return getDefaultMusicAudioPath(item);
     if (source === 'lyrics') return item.audioPath || '';
     return '';
+}
+
+function getDefaultMusicAudioPath(item) {
+    return getMusicVersionsForItem(item)[0]?.url || item?.url || '';
+}
+
+function getMusicVersionsForItem(item) {
+    if (!item) return [];
+
+    const versions = [];
+    if (Array.isArray(item.versions)) {
+        item.versions.forEach(version => {
+            const url = normalizeAssetInput(version && version.url);
+            if (!url) return;
+            versions.push({
+                url,
+                label: version.label || version.title || '',
+                isDefault: Boolean(version.isDefault || version.default)
+            });
+        });
+    }
+
+    const fallbackUrl = normalizeAssetInput(item.url);
+    if (fallbackUrl && !versions.some(version => version.url === fallbackUrl)) {
+        versions.unshift({
+            url: fallbackUrl,
+            label: '',
+            isDefault: !versions.some(version => version.isDefault)
+        });
+    }
+
+    if (versions.length === 0) return [];
+
+    const defaultIndex = versions.findIndex(version => version.isDefault);
+    const ordered = defaultIndex > 0
+        ? [versions[defaultIndex], ...versions.filter((_, index) => index !== defaultIndex)]
+        : versions;
+
+    return ordered.map((version, index) => ({
+        url: version.url,
+        label: `版本${index + 1}`,
+        isDefault: index === 0
+    }));
+}
+
+function formatMusicVersionSummary(item) {
+    const versions = getMusicVersionsForItem(item);
+    if (versions.length <= 1) return '';
+    return versions.map((version, index) => `${version.label || `版本${index + 1}`}${index === 0 ? '（默认）' : ''}：${version.url}`).join('；');
 }
 
 function getResourcePublicUrl(source, item) {
@@ -2680,7 +2893,7 @@ function renderLyricMusicAudioSelect() {
 function getMusicAudioPath(id) {
     if (!id) return '';
     const item = getVisibleSourceItems('music').find(entry => String(entry.id) === String(id));
-    return item && item.url ? item.url : '';
+    return getDefaultMusicAudioPath(item);
 }
 
 function bindPublishActions() {
@@ -3099,6 +3312,7 @@ function openResourceEditor(source, id) {
 
     $('#resource-editor-modal').classList.remove('is-hidden');
     $('#resource-editor-modal').setAttribute('aria-hidden', 'false');
+    renderEditorMusicVersionOptions();
     renderIcons();
 
     const firstInput = $('#resource-editor-fields input:not([disabled]), #resource-editor-fields select, #resource-editor-fields textarea');
@@ -3146,6 +3360,10 @@ function renderEditorField(field, item) {
 
     if (field.type === 'fileUpload') {
         return renderEditorUploadField(field);
+    }
+
+    if (field.type === 'musicVersions') {
+        return renderMusicVersionsEditorField(field, item);
     }
 
     return `
@@ -3214,6 +3432,104 @@ function renderEditorUploadField(field) {
     `;
 }
 
+function renderMusicVersionsEditorField(field, item) {
+    return `
+        <div class="field editor-field-wide music-version-editor" data-editor-music-versions>
+            <div class="editor-version-heading">
+                <span>${escapeHtml(field.label)}</span>
+                <small>当前选中的项目会成为前台版本1，也是列表自动播放的默认音频。</small>
+            </div>
+            <div class="version-upload-list" id="editor-music-version-options"></div>
+            <label class="field">
+                <span>追加版本音频（可多选）</span>
+                <input type="file" name="versionsFiles" accept="audio/*" multiple data-editor-music-version-files>
+            </label>
+        </div>
+    `;
+}
+
+function renderEditorMusicVersionOptions() {
+    const form = $('#resource-editor-form');
+    const container = $('#editor-music-version-options');
+    if (!form || !container || form.elements.source.value !== 'music') return;
+
+    const existingValue = container.querySelector('input[name="editorDefaultVersionSource"]:checked')?.value || '';
+    const candidates = getEditorMusicVersionCandidates();
+    if (candidates.length === 0) {
+        container.innerHTML = '<div class="version-upload-empty">还没有可用音频，请填写音频路径或上传音频文件。</div>';
+        return;
+    }
+
+    const selectedValue = candidates.some(candidate => candidate.source === existingValue)
+        ? existingValue
+        : candidates[0].source;
+    const orderedCandidates = orderMusicVersionCandidates(candidates, selectedValue);
+    const positionBySource = new Map(orderedCandidates.map((candidate, index) => [candidate.source, index + 1]));
+
+    container.innerHTML = candidates.map((candidate, index) => `
+        <label class="version-upload-item">
+            <input type="radio" name="editorDefaultVersionSource" value="${escapeAttribute(candidate.source)}" ${candidate.source === selectedValue ? 'checked' : ''}>
+            <span>
+                <strong>${escapeHtml(candidate.source === selectedValue ? `版本1（默认推荐） · ${candidate.label}` : `版本${positionBySource.get(candidate.source) || index + 1} · ${candidate.label}`)}</strong>
+                ${escapeHtml(candidate.detail || candidate.url)}
+            </span>
+        </label>
+    `).join('');
+}
+
+function getEditorMusicVersionCandidates() {
+    const form = $('#resource-editor-form');
+    if (!form || form.elements.source.value !== 'music') return [];
+
+    const item = getSourceItems('music').find(entry => String(entry.id) === String(form.elements.resourceId.value));
+    const versions = getMusicVersionsForItem(item);
+    const typedUrl = normalizeAssetInput(form.elements.url?.value);
+    const replacementFile = getSelectedInputFile(form.elements.urlFile);
+    const versionFiles = getSelectedInputFiles(form.elements.versionsFiles);
+    const candidates = [];
+
+    if (replacementFile) {
+        candidates.push({
+            source: 'replacement-file',
+            label: '替换后的主音频',
+            detail: `${replacementFile.name} · ${formatFileSize(replacementFile.size)}`,
+            file: replacementFile,
+            url: typedUrl || getDefaultMusicAudioPath(item)
+        });
+    }
+
+    if (versions.length > 0) {
+        versions.forEach((version, index) => {
+            const url = index === 0 && typedUrl ? typedUrl : version.url;
+            candidates.push({
+                source: `existing-${index}`,
+                label: version.label || `已有版本 ${index + 1}`,
+                detail: url,
+                url
+            });
+        });
+    } else if (typedUrl) {
+        candidates.push({
+            source: 'existing-url',
+            label: '当前音频路径',
+            detail: typedUrl,
+            url: typedUrl
+        });
+    }
+
+    versionFiles.forEach((file, index) => {
+        candidates.push({
+            source: `editor-extra-file-${index}`,
+            label: `追加版本 ${index + 1}`,
+            detail: `${file.name} · ${formatFileSize(file.size)}`,
+            file,
+            url: ''
+        });
+    });
+
+    return candidates;
+}
+
 function getRelationOptions(source, selectedValue) {
     const visibleItems = getVisibleSourceItems(source);
     if (!selectedValue || visibleItems.some(item => String(item.id) === selectedValue)) {
@@ -3276,7 +3592,7 @@ async function handleResourceEditorSubmit(event) {
     try {
         progress.set(14, '正在读取编辑字段');
         for (const field of schema) {
-            await applyEditorFieldValue(updated, field, form.elements[field.key], form, { progress });
+            await applyEditorFieldValue(updated, field, form.elements[field.key], form, { progress, original });
         }
         progress.set(88, '正在写入待发布列表');
     } catch (error) {
@@ -3326,9 +3642,22 @@ function handleResourceEditorFieldClick(event) {
 }
 
 async function handleResourceEditorFieldChange(event) {
+    if (event.target.name === 'editorDefaultVersionSource') {
+        renderEditorMusicVersionOptions();
+        return;
+    }
+
+    if (event.target.closest('[data-editor-music-version-files]')) {
+        renderEditorMusicVersionOptions();
+        return;
+    }
+
     const uploadInput = event.target.closest('[data-editor-upload-type]');
     if (uploadInput) {
         handleResourceEditorUploadFieldChange(uploadInput);
+        if ($('#resource-editor-form').elements.source.value === 'music') {
+            renderEditorMusicVersionOptions();
+        }
         return;
     }
 
@@ -3345,6 +3674,14 @@ async function handleResourceEditorFieldChange(event) {
         showToast('Markdown 歌词已读取');
     } catch (error) {
         showToast(error.message || '读取 Markdown 文件失败');
+    }
+}
+
+function handleResourceEditorFieldInput(event) {
+    const form = $('#resource-editor-form');
+    if (form.elements.source.value !== 'music') return;
+    if (event.target && event.target.name === 'url') {
+        renderEditorMusicVersionOptions();
     }
 }
 
@@ -3377,6 +3714,11 @@ function handleResourceEditorUploadFieldChange(input) {
 }
 
 async function applyEditorFieldValue(item, field, input, form, context = {}) {
+    if (field.type === 'musicVersions') {
+        await applyMusicVersionsEditorValue(item, field, form, context);
+        return;
+    }
+
     if (!input) return;
 
     if (field.type === 'checkbox') {
@@ -3438,18 +3780,93 @@ async function applyEditorUploadFieldValue(item, field, input, context = {}) {
         throw new Error(`${field.label}缺少上传类型配置`);
     }
 
+    const startPercent = Number.isFinite(field.uploadProgressStart) ? field.uploadProgressStart : 22;
+    const endPercent = Number.isFinite(field.uploadProgressEnd) ? field.uploadProgressEnd : 84;
+
     validateUploads([{ file, uploadType }]);
-    progress?.set(22, `准备上传${label}`);
+    progress?.set(startPercent, `准备上传${label}`);
     const uploadedPath = await uploadAsset(file, uploadType, (ratio, statusLabel) => {
         const safeRatio = Math.max(0, Math.min(Number(ratio) || 0, 1));
         const percent = Math.round(safeRatio * 100);
         progress?.set(
-            22 + safeRatio * 60,
+            startPercent + safeRatio * (endPercent - startPercent),
             statusLabel || `正在上传${label}（${percent}%）`
         );
     });
     item[targetKey] = uploadedPath;
-    progress?.set(84, `${label}上传完成`);
+    progress?.set(endPercent, `${label}上传完成`);
+}
+
+async function applyMusicVersionsEditorValue(item, field, form, context = {}) {
+    if (!form || form.elements.source.value !== 'music') return;
+
+    const extraFiles = getSelectedInputFiles(form.elements.versionsFiles);
+    validateUploads(extraFiles.map(file => ({ file, uploadType: 'musicAudio' })));
+
+    const uploaded = extraFiles.length > 0
+        ? await uploadFiles(
+            extraFiles.map((file, index) => ({
+                key: `editorVersion${index}`,
+                file,
+                uploadType: 'musicAudio',
+                label: `追加版本音频${index + 1}`
+            })),
+            context.progress,
+            60,
+            84
+        )
+        : {};
+
+    const selectedSource = form.querySelector('input[name="editorDefaultVersionSource"]:checked')?.value;
+    const original = context.original || item;
+    const replacementFile = getSelectedInputFile(form.elements.urlFile);
+    const baseVersions = getMusicVersionsForItem(original);
+    const currentUrl = normalizeAssetInput(item.url);
+    const candidates = [];
+
+    if (replacementFile && currentUrl) {
+        candidates.push({
+            source: 'replacement-file',
+            url: currentUrl,
+            label: makeTitleFromFilename(replacementFile.name) || '替换后的主音频'
+        });
+    }
+
+    if (baseVersions.length > 0) {
+        baseVersions.forEach((version, index) => {
+            const url = index === 0 && currentUrl ? currentUrl : version.url;
+            candidates.push({
+                source: `existing-${index}`,
+                url,
+                label: version.label || `版本${index + 1}`
+            });
+        });
+    } else if (currentUrl) {
+        candidates.push({
+            source: 'existing-url',
+            url: currentUrl,
+            label: '版本1'
+        });
+    }
+
+    extraFiles.forEach((file, index) => {
+        candidates.push({
+            source: `editor-extra-file-${index}`,
+            url: uploaded[`editorVersion${index}`],
+            label: makeTitleFromFilename(file.name) || `追加版本 ${index + 1}`
+        });
+    });
+
+    const versions = buildMusicVersions(candidates, selectedSource);
+    if (versions.length > 0) {
+        item.url = versions[0].url;
+    }
+
+    if (versions.length > 1) {
+        item.versions = versions;
+    } else {
+        delete item.versions;
+    }
 }
 
 async function applyMarkdownTextFieldValue(item, field, input, form) {
