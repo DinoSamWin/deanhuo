@@ -562,7 +562,7 @@ button {
 
 .version-upload-item {
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
+    grid-template-columns: 18px minmax(0, 1fr) auto;
     gap: 10px;
     align-items: center;
     padding: 10px 12px;
@@ -584,6 +584,29 @@ button {
     display: block;
     color: var(--text-primary);
     overflow-wrap: anywhere;
+}
+
+.version-upload-remove {
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 7px;
+}
+
+.version-upload-remove:hover {
+    color: #ff6868;
+    border-color: rgba(255, 104, 104, 0.45);
+    background: rgba(255, 104, 104, 0.08);
+}
+
+.version-upload-remove svg {
+    width: 15px;
+    height: 15px;
 }
 
 .editor-version-heading {

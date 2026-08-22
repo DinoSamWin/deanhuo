@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260822-music-versions">
+    <link rel="stylesheet" href="../css/admin.css?v=20260822-version-queue">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -318,7 +318,7 @@
                             <input name="audioUrl" placeholder="https://... 或 assets/audio/xxx.mp3">
                         </label>
                         <label class="field">
-                            <span>追加版本音频（可多选）</span>
+                            <span>追加版本音频（可多选，可重复选择追加）</span>
                             <input type="file" name="versionAudioFiles" accept="audio/*" multiple>
                         </label>
                         <div class="version-upload-list" id="music-version-options"></div>
@@ -691,7 +691,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260822-music-versions"></script>
+    <script src="../admin/admin.js?v=20260822-version-queue"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();
