@@ -94,5 +94,15 @@
         "url": "assets/audio/admin-uploads/1787365794149-musicAudio.mp3",
         "genre": "Original",
         "description": ""
+    },
+    {
+        "id": "music-mt3sf9sx",
+        "title": "我叫哥伦布",
+        "artist": "Dean Huo",
+        "year": "2026",
+        "cover": "assets/images/admin-uploads/music/1787367440551-05425e1b-c7f5-4294-a287-270a586285ef-cover.jpg",
+        "url": "assets/audio/admin-uploads/1787367455998-musicAudio.mp3",
+        "genre": "Original",
+        "description": ""
     }
 ]
