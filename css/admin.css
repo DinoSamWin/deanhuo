@@ -789,6 +789,95 @@ button {
     color: var(--text-secondary);
 }
 
+.crop-modal-panel {
+    width: min(940px, 100%);
+}
+
+.crop-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 18px;
+    padding: 20px;
+}
+
+.crop-stage-shell {
+    min-width: 0;
+    display: grid;
+    place-items: center;
+}
+
+.image-crop-stage {
+    --crop-aspect: 2 / 1;
+    position: relative;
+    width: 100%;
+    max-height: min(58vh, 520px);
+    aspect-ratio: var(--crop-aspect);
+    overflow: hidden;
+    background:
+        linear-gradient(45deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(255, 255, 255, 0.08) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.08) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.08) 75%);
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+    background-size: 20px 20px;
+    border: 1px solid rgba(0, 255, 136, 0.5);
+    border-radius: 8px;
+    cursor: grab;
+    touch-action: none;
+}
+
+.image-crop-stage:active {
+    cursor: grabbing;
+}
+
+.image-crop-stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border: 2px solid rgba(255, 255, 255, 0.86);
+    box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0.08);
+}
+
+.image-crop-stage img {
+    position: absolute;
+    left: 0;
+    top: 0;
+    max-width: none;
+    user-select: none;
+    pointer-events: none;
+    transform-origin: 0 0;
+}
+
+.crop-controls {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+}
+
+.crop-meta {
+    display: grid;
+    gap: 8px;
+}
+
+.crop-meta span,
+.crop-controls p {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.crop-meta span {
+    padding: 9px 10px;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.crop-actions {
+    padding-top: 0;
+}
+
 .editor-form {
     display: grid;
     gap: 14px;
@@ -1282,6 +1371,10 @@ pre {
     }
 
     .editor-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .crop-workspace {
         grid-template-columns: 1fr;
     }
 
