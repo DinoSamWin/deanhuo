@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260822-music-lyrics-audio">
+    <link rel="stylesheet" href="../css/admin.css?v=20260822-audio-preview">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -294,6 +294,13 @@
                             <i data-lucide="folder-open"></i>
                             从上次目录选择音频
                         </button>
+                        <div class="audio-preview is-hidden" id="music-audio-preview">
+                            <div class="audio-preview-header">
+                                <span>音乐预听</span>
+                                <strong id="music-audio-preview-name">未选择音频</strong>
+                            </div>
+                            <audio id="music-audio-preview-player" controls preload="metadata"></audio>
+                        </div>
                         <label class="field">
                             <span>音频外链/已上传路径</span>
                             <input name="audioUrl" placeholder="https://... 或 assets/audio/xxx.mp3">
@@ -667,7 +674,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260822-music-lyrics-audio"></script>
+    <script src="../admin/admin.js?v=20260822-audio-preview"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();

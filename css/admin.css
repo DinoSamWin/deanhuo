@@ -524,6 +524,37 @@ button {
     min-height: 36px;
 }
 
+.audio-preview {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.055);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.audio-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.audio-preview-header strong {
+    min-width: 0;
+    color: var(--text-primary);
+    font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.audio-preview audio {
+    width: 100%;
+}
+
 .form-progress {
     display: grid;
     gap: 8px;
