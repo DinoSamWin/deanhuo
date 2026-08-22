@@ -40,6 +40,7 @@ const coverCropTargetCache = {};
 const preparedCoverFiles = new WeakMap();
 const pickerSelectedFiles = new WeakMap();
 let imageCropperState = null;
+let musicAudioPreviewUrl = '';
 
 const UPLOAD_LABELS = {
     photos: '图片文件',
@@ -513,6 +514,7 @@ function bindForms() {
             delete event.target.dataset.autoTitleValue;
         }
     });
+    $('#music-form').elements.audioUrl.addEventListener('input', updateMusicAudioPreview);
     $('#lyric-audio-picker-button').addEventListener('click', () => {
         selectAudioFileWithRememberedDirectory($('#lyric-form').elements.audioFile);
     });
@@ -750,6 +752,7 @@ async function handleMusicSubmit(event) {
         form.reset();
         clearPreparedCoverFile(coverInput);
         clearSelectedInputFile(form.elements.audioFile);
+        clearMusicAudioPreview();
         setDefaultFormValues();
         return shouldSyncLyric
             ? '音乐和关联词作创建成功，已进入待发布列表。'
@@ -1185,6 +1188,9 @@ function bindUploadInputFeedback() {
                 if (isCoverCropUpload(uploadType)) {
                     clearPreparedCoverFile(input);
                 }
+                if (formId === 'music-form' && field === 'audioFile') {
+                    updateMusicAudioPreview();
+                }
                 setFormMessage(form, '');
                 return;
             }
@@ -1196,6 +1202,7 @@ function bindUploadInputFeedback() {
 
             if (formId === 'music-form' && field === 'audioFile') {
                 fillMusicTitleFromAudioFile(form, file);
+                updateMusicAudioPreview();
             }
 
             if (shouldTranscodeAudioForUpload(file, uploadType)) {
@@ -1274,6 +1281,60 @@ function getSelectedInputFile(input) {
 function clearSelectedInputFile(input) {
     if (input) {
         pickerSelectedFiles.delete(input);
+    }
+}
+
+function updateMusicAudioPreview() {
+    const form = $('#music-form');
+    if (!form) return;
+
+    const preview = $('#music-audio-preview');
+    const player = $('#music-audio-preview-player');
+    const label = $('#music-audio-preview-name');
+    const file = getSelectedInputFile(form.elements.audioFile);
+    const audioUrl = normalizeAssetInput(form.elements.audioUrl.value);
+
+    if (musicAudioPreviewUrl) {
+        URL.revokeObjectURL(musicAudioPreviewUrl);
+        musicAudioPreviewUrl = '';
+    }
+
+    if (audioUrl) {
+        player.src = resolveAssetUrl(audioUrl);
+        label.textContent = audioUrl;
+        preview.classList.remove('is-hidden');
+        return;
+    }
+
+    if (file) {
+        musicAudioPreviewUrl = URL.createObjectURL(file);
+        player.src = musicAudioPreviewUrl;
+        label.textContent = `${file.name} · ${formatFileSize(file.size)}`;
+        preview.classList.remove('is-hidden');
+        return;
+    }
+
+    clearMusicAudioPreview();
+}
+
+function clearMusicAudioPreview() {
+    const preview = $('#music-audio-preview');
+    const player = $('#music-audio-preview-player');
+    const label = $('#music-audio-preview-name');
+    if (musicAudioPreviewUrl) {
+        URL.revokeObjectURL(musicAudioPreviewUrl);
+        musicAudioPreviewUrl = '';
+    }
+    if (player) {
+        player.pause();
+        player.removeAttribute('src');
+        player.load();
+    }
+    if (label) {
+        label.textContent = '未选择音频';
+    }
+    if (preview) {
+        preview.classList.add('is-hidden');
     }
 }
 
