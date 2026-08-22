@@ -1,4 +1,4 @@
-const MAX_UPLOAD_SIZE = 4 * 1024 * 1024;
+const MAX_UPLOAD_SIZE = Math.floor(4.5 * 1024 * 1024);
 
 const UPLOAD_DIRECTORIES = {
     photos: 'assets/images/admin-uploads/photos',

@@ -25,7 +25,14 @@ const AUTH_STORAGE_KEY = 'deanAdminAuth';
 const LEGACY_AUTH_STORAGE_KEY = 'deanAdminToken';
 const AUTH_TTL_DAYS = 7;
 const AUTH_TTL_MS = AUTH_TTL_DAYS * 24 * 60 * 60 * 1000;
-const ONLINE_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
+const ONLINE_UPLOAD_LIMIT_BYTES = Math.floor(4.5 * 1024 * 1024);
+const AUDIO_TRANSCODE_TARGET_BYTES = Math.floor(4.2 * 1024 * 1024);
+const AUDIO_TRANSCODE_MAX_SOURCE_BYTES = 120 * 1024 * 1024;
+const MP3_ENCODER_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
+const MP3_MAX_BITRATE_KBPS = 192;
+const MP3_MIN_BITRATE_KBPS = 128;
+const MP3_QUALITY_WARNING_BITRATE_KBPS = 160;
+let mp3EncoderLoadPromise = null;
 
 const UPLOAD_LABELS = {
     photos: '图片文件',
@@ -797,10 +804,13 @@ async function uploadFiles(uploadItems, progress, startPercent = 12, endPercent 
         const itemEnd = startPercent + span * (index + 1);
 
         progress.set(itemStart, `准备上传${label}`);
-        results[item.key] = await uploadAsset(item.file, item.uploadType, ratio => {
+        results[item.key] = await uploadAsset(item.file, item.uploadType, (ratio, statusLabel) => {
             const safeRatio = Math.max(0, Math.min(Number(ratio) || 0, 1));
             const percent = Math.round(safeRatio * 100);
-            progress.set(itemStart + (itemEnd - itemStart) * safeRatio, `正在上传${label}（${percent}%）`);
+            progress.set(
+                itemStart + (itemEnd - itemStart) * safeRatio,
+                statusLabel || `正在上传${label}（${percent}%）`
+            );
         });
         progress.set(itemEnd, `${label}上传完成`);
     }
@@ -809,29 +819,40 @@ async function uploadFiles(uploadItems, progress, startPercent = 12, endPercent 
 }
 
 async function uploadAsset(file, uploadType, onProgress) {
-    const uploadProblem = getUploadFileProblem(file, uploadType);
+    let uploadFile = file;
+    let uploadProgress = onProgress;
+    if (shouldTranscodeAudioForUpload(file, uploadType)) {
+        uploadFile = await transcodeAudioToMp3(file, (ratio, label) => {
+            if (onProgress) onProgress(ratio * 0.72, label);
+        });
+        uploadProgress = (ratio, label) => {
+            if (onProgress) onProgress(0.72 + ratio * 0.28, label);
+        };
+    }
+
+    const uploadProblem = getUploadFileProblem(uploadFile, uploadType);
     if (uploadProblem) {
         throw new Error(uploadProblem);
     }
 
     if (!state.online) {
-        const path = suggestAssetPath(uploadType, file.name);
+        const path = suggestAssetPath(uploadType, uploadFile.name);
         state.pendingAssets.push({
             path,
-            name: file.name,
-            size: file.size,
-            type: file.type
+            name: uploadFile.name,
+            size: uploadFile.size,
+            type: uploadFile.type
         });
-        if (onProgress) onProgress(1);
+        if (uploadProgress) uploadProgress(1);
         return path;
     }
 
     const formData = new FormData();
     formData.append('uploadType', uploadType);
-    formData.append('file', file);
+    formData.append('file', uploadFile);
 
-    if (onProgress && window.XMLHttpRequest) {
-        return uploadAssetWithProgress(file, uploadType, formData, onProgress);
+    if (uploadProgress && window.XMLHttpRequest) {
+        return uploadAssetWithProgress(uploadFile, uploadType, formData, uploadProgress);
     }
 
     const response = await fetch(buildAdminApiUrl('/api/admin/upload'), {
@@ -842,7 +863,7 @@ async function uploadAsset(file, uploadType, onProgress) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-        throw new Error(buildUploadErrorMessage(response, data, file, uploadType));
+        throw new Error(buildUploadErrorMessage(response, data, uploadFile, uploadType));
     }
 
     return data.path;
@@ -859,9 +880,10 @@ function uploadAssetWithProgress(file, uploadType, formData, onProgress) {
 
         xhr.upload.addEventListener('progress', event => {
             if (event.lengthComputable && event.total > 0) {
-                onProgress(Math.min(event.loaded / event.total, 0.98));
+                const ratio = Math.min(event.loaded / event.total, 0.98);
+                onProgress(ratio, `正在上传${file.name}（${Math.round(ratio * 100)}%）`);
             } else {
-                onProgress(0.5);
+                onProgress(0.5, `正在上传${file.name}`);
             }
         });
 
@@ -877,7 +899,7 @@ function uploadAssetWithProgress(file, uploadType, formData, onProgress) {
                 return;
             }
 
-            onProgress(1);
+            onProgress(1, `${file.name} 上传完成`);
             resolve(data.path);
         });
 
@@ -891,6 +913,205 @@ function uploadAssetWithProgress(file, uploadType, formData, onProgress) {
 
         xhr.send(formData);
     });
+}
+
+async function transcodeAudioToMp3(file, onProgress) {
+    if (!isMp3TranscodeCandidate(file)) {
+        throw new Error(`${file.name} 超过 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}，但当前文件类型不适合自动转 MP3。请上传 WAV/AIFF/音频文件，或填写音频外链。`);
+    }
+    if (file.size > AUDIO_TRANSCODE_MAX_SOURCE_BYTES) {
+        throw new Error(`${file.name} 太大了（${formatFileSize(file.size)}）。当前浏览器端转码上限是 ${formatFileSize(AUDIO_TRANSCODE_MAX_SOURCE_BYTES)}，建议改用外链/云存储。`);
+    }
+
+    onProgress?.(0.04, `正在加载 MP3 编码器`);
+    const lame = await ensureMp3Encoder();
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) {
+        throw new Error('当前浏览器不支持音频解码，无法自动转 MP3。请使用最新版 Chrome，或填写音频外链。');
+    }
+
+    let audioContext;
+    try {
+        audioContext = new AudioContextCtor();
+        onProgress?.(0.12, `正在读取${file.name}`);
+        const arrayBuffer = await file.arrayBuffer();
+        onProgress?.(0.22, '正在解码音频');
+        const decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        const { buffer, sampleRate } = await prepareAudioBufferForMp3(decodedBuffer, ratio => {
+            onProgress?.(0.24 + ratio * 0.16, `正在整理音频采样（${Math.round(ratio * 100)}%）`);
+        });
+        const bitrate = chooseMp3Bitrate(buffer.duration);
+        const bitrateNote = bitrate < MP3_QUALITY_WARNING_BITRATE_KBPS
+            ? `目标体积需要使用 ${bitrate}kbps；MP3 是有损格式，请发布后试听确认。`
+            : `使用 ${bitrate}kbps MP3，优先保留听感质量。`;
+
+        onProgress?.(0.42, bitrateNote);
+        const mp3Blob = await encodeMp3Buffer(lame, buffer, sampleRate, bitrate, ratio => {
+            onProgress?.(0.44 + ratio * 0.48, `正在转成 MP3（${Math.round(ratio * 100)}%）`);
+        });
+        let mp3File = makeMp3File(file, mp3Blob);
+
+        if (mp3File.size > ONLINE_UPLOAD_LIMIT_BYTES && bitrate > MP3_MIN_BITRATE_KBPS) {
+            const retryBitrate = Math.max(MP3_MIN_BITRATE_KBPS, bitrate - 16);
+            onProgress?.(0.44, `第一次 MP3 仍偏大，正在用 ${retryBitrate}kbps 重试`);
+            const retryBlob = await encodeMp3Buffer(lame, buffer, sampleRate, retryBitrate, ratio => {
+                onProgress?.(0.44 + ratio * 0.48, `正在重新转 MP3（${Math.round(ratio * 100)}%）`);
+            });
+            mp3File = makeMp3File(file, retryBlob);
+        }
+
+        if (mp3File.size > ONLINE_UPLOAD_LIMIT_BYTES) {
+            throw new Error(`已转成 MP3，但文件仍有 ${formatFileSize(mp3File.size)}，超过上传上限 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}。为了避免明显压坏音质，请改用音频外链/云存储。`);
+        }
+
+        onProgress?.(0.96, `转码完成：${formatFileSize(file.size)} → ${formatFileSize(mp3File.size)}`);
+        return mp3File;
+    } catch (error) {
+        throw new Error(error.message || '音频转 MP3 失败');
+    } finally {
+        if (audioContext && typeof audioContext.close === 'function') {
+            audioContext.close().catch(() => {});
+        }
+    }
+}
+
+function shouldTranscodeAudioForUpload(file, uploadType) {
+    return Boolean(state.online && isAudioUpload(uploadType) && file && file.size > ONLINE_UPLOAD_LIMIT_BYTES);
+}
+
+function isMp3TranscodeCandidate(file) {
+    const name = String(file && file.name || '').toLowerCase();
+    const type = String(file && file.type || '').toLowerCase();
+    return type.startsWith('audio/') || /\.(wav|wave|aif|aiff|flac|m4a|mp3|aac|ogg)$/i.test(name);
+}
+
+function ensureMp3Encoder() {
+    if (window.lamejs && window.lamejs.Mp3Encoder) {
+        return Promise.resolve(window.lamejs);
+    }
+
+    if (!mp3EncoderLoadPromise) {
+        mp3EncoderLoadPromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = MP3_ENCODER_SCRIPT_URL;
+            script.async = true;
+            script.onload = () => {
+                if (window.lamejs && window.lamejs.Mp3Encoder) {
+                    resolve(window.lamejs);
+                } else {
+                    reject(new Error('MP3 编码器加载失败'));
+                }
+            };
+            script.onerror = () => reject(new Error('MP3 编码器加载失败，请检查网络后重试'));
+            document.head.appendChild(script);
+        });
+    }
+
+    return mp3EncoderLoadPromise;
+}
+
+async function prepareAudioBufferForMp3(audioBuffer, onProgress) {
+    const channels = Math.min(2, Math.max(1, audioBuffer.numberOfChannels || 1));
+    const sampleRate = chooseMp3SampleRate(audioBuffer.sampleRate);
+    const needsRender = audioBuffer.sampleRate !== sampleRate || audioBuffer.numberOfChannels !== channels;
+
+    if (!needsRender) {
+        onProgress?.(1);
+        return { buffer: audioBuffer, sampleRate };
+    }
+
+    const OfflineContextCtor = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OfflineContextCtor) {
+        onProgress?.(1);
+        return { buffer: audioBuffer, sampleRate: audioBuffer.sampleRate };
+    }
+
+    const frameCount = Math.ceil(audioBuffer.duration * sampleRate);
+    const offlineContext = new OfflineContextCtor(channels, frameCount, sampleRate);
+    const source = offlineContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineContext.destination);
+    source.start(0);
+    const rendered = await offlineContext.startRendering();
+    onProgress?.(1);
+    return { buffer: rendered, sampleRate };
+}
+
+function chooseMp3SampleRate(sampleRate) {
+    if (sampleRate >= 48000) return 48000;
+    if (sampleRate >= 44100) return 44100;
+    if (sampleRate >= 32000) return 32000;
+    if (sampleRate >= 22050) return 22050;
+    return 44100;
+}
+
+function chooseMp3Bitrate(durationSeconds) {
+    const duration = Math.max(Number(durationSeconds) || 0, 1);
+    const maxKbpsForTarget = Math.floor((AUDIO_TRANSCODE_TARGET_BYTES * 8) / duration / 1000);
+    const bitrate = Math.min(MP3_MAX_BITRATE_KBPS, maxKbpsForTarget);
+
+    if (bitrate < MP3_MIN_BITRATE_KBPS) {
+        const maxMinutes = Math.floor((AUDIO_TRANSCODE_TARGET_BYTES * 8) / (MP3_MIN_BITRATE_KBPS * 1000) / 60);
+        throw new Error(`这首歌时长约 ${Math.ceil(duration / 60)} 分钟，若压到 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)} 内会明显牺牲音质。当前自动转码最低保留 ${MP3_MIN_BITRATE_KBPS}kbps，建议 ${maxMinutes} 分钟以上的歌曲使用外链/云存储。`);
+    }
+
+    return Math.max(MP3_MIN_BITRATE_KBPS, bitrate);
+}
+
+async function encodeMp3Buffer(lame, audioBuffer, sampleRate, bitrate, onProgress) {
+    const channels = Math.min(2, Math.max(1, audioBuffer.numberOfChannels || 1));
+    const encoder = new lame.Mp3Encoder(channels, sampleRate, bitrate);
+    const left = audioBuffer.getChannelData(0);
+    const right = channels > 1 ? audioBuffer.getChannelData(1) : null;
+    const sampleBlockSize = 1152;
+    const mp3Data = [];
+
+    for (let offset = 0; offset < left.length; offset += sampleBlockSize) {
+        const leftChunk = floatTo16BitPcm(left, offset, sampleBlockSize);
+        const mp3Buffer = right
+            ? encoder.encodeBuffer(leftChunk, floatTo16BitPcm(right, offset, sampleBlockSize))
+            : encoder.encodeBuffer(leftChunk);
+
+        if (mp3Buffer.length > 0) {
+            mp3Data.push(mp3Buffer);
+        }
+
+        if (offset % (sampleBlockSize * 50) === 0) {
+            onProgress?.(offset / left.length);
+            await waitForBrowserFrame();
+        }
+    }
+
+    const finalBuffer = encoder.flush();
+    if (finalBuffer.length > 0) {
+        mp3Data.push(finalBuffer);
+    }
+    onProgress?.(1);
+    return new Blob(mp3Data, { type: 'audio/mpeg' });
+}
+
+function floatTo16BitPcm(channelData, offset, length) {
+    const end = Math.min(offset + length, channelData.length);
+    const result = new Int16Array(end - offset);
+
+    for (let index = offset; index < end; index += 1) {
+        const sample = Math.max(-1, Math.min(1, channelData[index] || 0));
+        result[index - offset] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+    }
+
+    return result;
+}
+
+function makeMp3File(sourceFile, mp3Blob) {
+    const basename = String(sourceFile.name || 'audio').replace(/\.[^.]+$/, '') || 'audio';
+    return new File([mp3Blob], `${basename}.mp3`, {
+        type: 'audio/mpeg',
+        lastModified: Date.now()
+    });
+}
+
+function waitForBrowserFrame() {
+    return new Promise(resolve => setTimeout(resolve, 0));
 }
 
 function parseJsonSafely(text) {
@@ -916,6 +1137,15 @@ function bindUploadInputFeedback() {
             const file = event.target.files[0];
             if (!file) {
                 setFormMessage(form, '');
+                return;
+            }
+
+            if (shouldTranscodeAudioForUpload(file, uploadType)) {
+                setFormMessage(
+                    form,
+                    `${UPLOAD_LABELS[uploadType]}已选择：${file.name}（${formatFileSize(file.size)}）。创建时会先在浏览器里转成 MP3，目标小于 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}。MP3 是有损格式，发布后请试听确认。`,
+                    'info'
+                );
                 return;
             }
 
@@ -949,6 +1179,16 @@ function getUploadFileProblem(file, uploadType) {
     }
 
     const label = UPLOAD_LABELS[uploadType] || '上传文件';
+    if (isAudioUpload(uploadType)) {
+        if (!isMp3TranscodeCandidate(file)) {
+            return `${label}「${file.name}」大小为 ${formatFileSize(file.size)}，超过线上上传安全上限 ${formatFileSize(ONLINE_UPLOAD_LIMIT_BYTES)}。当前文件类型无法自动转 MP3，请上传 WAV/AIFF/常见音频文件，或填写音频外链。`;
+        }
+        if (file.size > AUDIO_TRANSCODE_MAX_SOURCE_BYTES) {
+            return `${label}「${file.name}」大小为 ${formatFileSize(file.size)}，超过浏览器端转码上限 ${formatFileSize(AUDIO_TRANSCODE_MAX_SOURCE_BYTES)}。请改用音频外链/云存储。`;
+        }
+        return '';
+    }
+
     const nextStep = isAudioUpload(uploadType)
         ? '请先压缩成更小的 mp3/m4a，或填写音频外链/已上传路径后再创建。'
         : '请先压缩后再上传。';
