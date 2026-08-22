@@ -1,6 +1,6 @@
 {
     "version": 1,
-    "updatedAt": "2026-08-21T14:40:46.247Z",
+    "updatedAt": "2026-08-22T12:03:27.492Z",
     "modules": {
         "homeLyrics": {
             "label": "首页词作轮播",
@@ -13,7 +13,10 @@
             "source": "music",
             "limit": 4,
             "items": [
-                "music-mt323oas"
+                "music-mt323oas",
+                "bei-wei-35-du",
+                "mo-er-ben-dian-che",
+                "music-mt3rfonf"
             ]
         },
         "homePhotos": {
