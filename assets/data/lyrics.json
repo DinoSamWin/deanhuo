@@ -332,5 +332,18 @@
         "showOnHome": false,
         "homeOrder": 4,
         "releaseYear": "2026"
+    },
+    {
+        "id": "lyric-mt3r0wfn",
+        "title": "手稿",
+        "author": "Dean Huo",
+        "date": "2026-08-22",
+        "cover": "assets/images/admin-uploads/lyrics/1787365089644-huaban-5465771589-cover.jpg",
+        "summary": "收件箱未读留言｜多少是关于想念｜昨夜今晚 侧辗转卧难眠",
+        "contentPath": "assets/lyrics/admin-generated/lyric-mt3r0wfn.md",
+        "order": 25,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2026"
     }
 ]
