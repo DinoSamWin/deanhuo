@@ -468,5 +468,15 @@
         "category": "Photography",
         "date": "Feb 2026",
         "updateTime": 1771943280.2533903
+    },
+    {
+        "id": "img-mteewuxn",
+        "title": "深圳-春笋",
+        "description": "",
+        "src": "assets/images/admin-uploads/photos/1788009884896-img_5066.jpg",
+        "showOnHome": false,
+        "category": "Photography",
+        "date": "Aug 2026",
+        "updateTime": 1788009886.878
     }
 ]
