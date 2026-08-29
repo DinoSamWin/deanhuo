@@ -115,5 +115,27 @@
                 "url": "assets/audio/admin-uploads/1787367562941-musicAudio.mp3"
             }
         ]
+    },
+    {
+        "id": "music-mteehlj8",
+        "title": "少年",
+        "artist": "Dean Huo",
+        "year": "2026",
+        "cover": "assets/images/admin-uploads/music/1788009162148-clipboard-image-1788009139598-cover.jpg",
+        "url": "assets/audio/admin-uploads/1788009269424-musicAudio.mp3",
+        "genre": "Original",
+        "description": "",
+        "versions": [
+            {
+                "label": "版本1",
+                "url": "assets/audio/admin-uploads/1788009269424-musicAudio.mp3",
+                "isDefault": true
+            },
+            {
+                "label": "版本2",
+                "url": "assets/audio/admin-uploads/1788009296538-1.mp3"
+            }
+        ],
+        "lyricId": "lyric-mteekl1i"
     }
 ]

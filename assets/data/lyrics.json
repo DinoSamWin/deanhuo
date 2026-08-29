@@ -345,5 +345,19 @@
         "showOnHome": false,
         "homeOrder": 4,
         "releaseYear": "2026"
+    },
+    {
+        "id": "lyric-mteekl1i",
+        "title": "少年",
+        "author": "Dean Huo",
+        "date": "2026-08-29",
+        "cover": "assets/images/admin-uploads/music/1788009162148-clipboard-image-1788009139598-cover.jpg",
+        "summary": "我们曾经都是少年",
+        "contentPath": "assets/lyrics/admin-generated/lyric-mteekl1i.md",
+        "audioPath": "assets/audio/admin-uploads/1788009269424-musicAudio.mp3",
+        "order": 26,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2026"
     }
 ]
