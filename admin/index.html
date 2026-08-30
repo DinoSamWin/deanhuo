@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260822-version-queue">
+    <link rel="stylesheet" href="../css/admin.css?v=20260830-photo-batch">
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 
@@ -165,21 +165,41 @@
                     <form class="resource-form is-active" id="photo-form">
                         <h3><i data-lucide="image"></i> 新增图片</h3>
                         <label class="field">
-                            <span>图片文件</span>
-                            <input type="file" name="file" accept="image/*" required>
+                            <span>图片文件（可多选，可重复选择追加）</span>
+                            <input type="file" name="file" accept="image/*" multiple>
                         </label>
                         <button class="secondary-action file-picker-action" id="photo-image-paste-button" type="button">
                             <i data-lucide="clipboard-paste"></i>
                             粘贴剪贴板图片
                         </button>
-                        <label class="field">
-                            <span>标题</span>
-                            <input name="title" placeholder="例如：雨后街角" required>
-                        </label>
-                        <label class="field">
-                            <span>描述</span>
-                            <textarea name="description" rows="4" placeholder="这张图片背后的说明"></textarea>
-                        </label>
+                        <div class="photo-batch-editor is-hidden" id="photo-batch-editor">
+                            <div class="photo-batch-header">
+                                <div>
+                                    <span>批量图片</span>
+                                    <strong id="photo-batch-count">0 张待创建</strong>
+                                </div>
+                                <button class="secondary-action photo-batch-clear" id="photo-batch-clear-button" type="button">
+                                    <i data-lucide="trash-2"></i>
+                                    清空
+                                </button>
+                            </div>
+                            <div class="photo-batch-tabs" id="photo-batch-tabs" aria-label="待创建图片列表"></div>
+                            <div class="photo-batch-preview">
+                                <img id="photo-batch-preview-image" alt="">
+                                <div class="photo-batch-preview-meta">
+                                    <strong id="photo-batch-preview-title">未选择图片</strong>
+                                    <span id="photo-batch-preview-detail"></span>
+                                </div>
+                            </div>
+                            <label class="field">
+                                <span>当前图片标题</span>
+                                <input name="title" placeholder="例如：雨后街角">
+                            </label>
+                            <label class="field">
+                                <span>当前图片描述</span>
+                                <textarea name="description" rows="4" placeholder="这张图片背后的说明"></textarea>
+                            </label>
+                        </div>
                         <div class="field-row">
                             <label class="field">
                                 <span>分类</span>
@@ -691,7 +711,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260822-version-queue"></script>
+    <script src="../admin/admin.js?v=20260830-photo-batch"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();

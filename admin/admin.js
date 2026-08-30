@@ -42,6 +42,8 @@ const pickerSelectedFiles = new WeakMap();
 const multiSelectedFiles = new WeakMap();
 let imageCropperState = null;
 let musicAudioPreviewUrl = '';
+let photoBatchItems = [];
+let photoBatchActiveIndex = 0;
 
 const UPLOAD_LABELS = {
     photos: '图片文件',
@@ -512,6 +514,26 @@ function bindForms() {
     bindUploadInputFeedback();
     bindImageCropperModal();
 
+    $('#photo-form').elements.file.addEventListener('change', event => {
+        syncActivePhotoBatchFromForm();
+        const selectedFiles = getSelectedPhotoInputFiles(event.currentTarget);
+        const selectedCount = selectedFiles.length;
+        const addedCount = appendPhotoBatchFiles(selectedFiles);
+        clearSelectedInputFile(event.currentTarget);
+        renderPhotoBatchEditor();
+        if (addedCount > 0) {
+            setFormMessage($('#photo-form'), `已加入 ${addedCount} 张图片，请逐张确认标题和描述。`, 'info');
+        } else if (selectedCount > 0) {
+            setFormMessage($('#photo-form'), '没有新增图片，可能是重复选择或文件不是图片格式。', 'info');
+        }
+    });
+    $('#photo-batch-tabs').addEventListener('click', handlePhotoBatchTabClick);
+    $('#photo-batch-tabs').addEventListener('wheel', handlePhotoBatchTabsWheel, { passive: false });
+    $('#photo-batch-tabs').addEventListener('keydown', handlePhotoBatchTabKeydown);
+    $('#photo-batch-clear-button').addEventListener('click', clearPhotoBatch);
+    $('#photo-form').elements.title.addEventListener('input', syncActivePhotoBatchField);
+    $('#photo-form').elements.description.addEventListener('input', syncActivePhotoBatchField);
+
     $('#music-form').elements.title.addEventListener('input', event => {
         if (event.target.value.trim() !== event.target.dataset.autoTitleValue) {
             delete event.target.dataset.autoTitleValue;
@@ -603,38 +625,60 @@ function bindForms() {
 async function handlePhotoSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
-    const file = getSelectedInputFile(form.elements.file);
-    if (!file) return showFormError(form, '请选择图片文件');
+    syncActivePhotoBatchFromForm();
+    const items = getPhotoBatchItems();
+    if (items.length === 0) return showFormError(form, '请选择图片文件');
+
+    const emptyTitleIndex = items.findIndex(item => !String(item.title || '').trim());
+    if (emptyTitleIndex !== -1) {
+        photoBatchActiveIndex = emptyTitleIndex;
+        renderPhotoBatchEditor();
+        return showFormError(form, `第 ${emptyTitleIndex + 1} 张图片还没有标题`);
+    }
 
     await runFormTask(form, async progress => {
-        progress.set(8, '正在检查图片文件');
-        const title = form.elements.title.value.trim();
-        const id = makeUniqueId('img', title || file.name, 'photos');
-        state.previewUrls[id] = URL.createObjectURL(file);
-        const uploaded = await uploadFiles([
-            { key: 'src', file, uploadType: 'photos', label: '图片文件' }
-        ], progress, 16, 82);
+        progress.set(8, `正在检查 ${items.length} 张图片`);
+        validateUploads(items.map(item => ({ file: item.file, uploadType: 'photos' })));
+        const uploaded = await uploadFiles(items.map((item, index) => ({
+            key: `photo${index}`,
+            file: item.file,
+            uploadType: 'photos',
+            label: `图片${index + 1}`
+        })), progress, 16, 82);
 
         progress.set(90, '正在生成图片草稿');
-        appendResource('photos', {
-            id,
-            title: title || id,
-            description: form.elements.description.value.trim(),
-            src: uploaded.src,
-            showOnHome: form.elements.showOnHome.checked,
-            category: form.elements.category.value.trim() || 'Photography',
-            date: form.elements.date.value.trim() || formatMonthYear(new Date()),
-            updateTime: Date.now() / 1000
+        const showOnHome = form.elements.showOnHome.checked;
+        const category = form.elements.category.value.trim() || 'Photography';
+        const date = form.elements.date.value.trim() || formatMonthYear(new Date());
+        const createdIds = [];
+
+        items.forEach((item, index) => {
+            const title = String(item.title || '').trim();
+            const id = makeUniqueId('img', title || item.file.name, 'photos');
+            state.previewUrls[id] = URL.createObjectURL(item.file);
+            appendResource('photos', {
+                id,
+                title: title || id,
+                description: String(item.description || '').trim(),
+                src: uploaded[`photo${index}`],
+                showOnHome,
+                category,
+                date,
+                updateTime: Date.now() / 1000
+            });
+            createdIds.push(id);
+
+            if (showOnHome) {
+                addRecommendation('homePhotos', id);
+            }
         });
 
-        if (form.elements.showOnHome.checked) {
-            addRecommendation('homePhotos', id);
-        }
 
         form.reset();
+        clearPhotoBatch();
         clearSelectedInputFile(form.elements.file);
         setDefaultFormValues();
-        return '图片资源创建成功，已进入待发布列表。';
+        return `${createdIds.length} 张图片资源创建成功，已进入待发布列表。`;
     });
 }
 
@@ -1234,7 +1278,6 @@ function parseJsonSafely(text) {
 
 function bindUploadInputFeedback() {
     [
-        { formId: 'photo-form', field: 'file', uploadType: 'photos' },
         { formId: 'lyric-form', field: 'coverFile', uploadType: 'lyricsCover' },
         { formId: 'lyric-form', field: 'audioFile', uploadType: 'lyricAudio' },
         { formId: 'music-form', field: 'coverFile', uploadType: 'musicCover' },
@@ -1291,6 +1334,215 @@ function bindUploadInputFeedback() {
             }
         });
     });
+}
+
+function appendPhotoBatchFiles(files) {
+    const incoming = (files || []).filter(file => file && String(file.type || '').startsWith('image/'));
+    if (incoming.length === 0) return 0;
+
+    const seen = new Set(photoBatchItems.map(item => item.signature));
+    let addedCount = 0;
+
+    incoming.forEach(file => {
+        const signature = getFileSignature(file);
+        if (seen.has(signature)) return;
+
+        seen.add(signature);
+        photoBatchItems.push({
+            signature,
+            file,
+            title: makeTitleFromFilename(file.name) || `图片 ${photoBatchItems.length + 1}`,
+            description: '',
+            previewUrl: URL.createObjectURL(file)
+        });
+        addedCount += 1;
+    });
+
+    if (photoBatchItems.length > 0) {
+        photoBatchActiveIndex = Math.min(photoBatchActiveIndex, photoBatchItems.length - 1);
+    }
+
+    return addedCount;
+}
+
+function getSelectedPhotoInputFiles(input) {
+    const selected = input && input.files ? Array.from(input.files) : [];
+    if (selected.length > 0) return selected;
+
+    const fallback = getSelectedInputFile(input);
+    return fallback ? [fallback] : [];
+}
+
+function getPhotoBatchItems() {
+    return photoBatchItems.filter(item => item && item.file);
+}
+
+function renderPhotoBatchEditor() {
+    const form = $('#photo-form');
+    const editor = $('#photo-batch-editor');
+    if (!form || !editor) return;
+
+    const items = getPhotoBatchItems();
+    if (items.length === 0) {
+        editor.classList.add('is-hidden');
+        form.elements.title.value = '';
+        form.elements.description.value = '';
+        $('#photo-batch-tabs').innerHTML = '';
+        $('#photo-batch-preview-image').removeAttribute('src');
+        $('#photo-batch-preview-title').textContent = '未选择图片';
+        $('#photo-batch-preview-detail').textContent = '';
+        return;
+    }
+
+    photoBatchActiveIndex = Math.max(0, Math.min(photoBatchActiveIndex, items.length - 1));
+    editor.classList.remove('is-hidden');
+    $('#photo-batch-count').textContent = `${items.length} 张待创建`;
+    renderPhotoBatchTabs();
+    renderActivePhotoBatchItem();
+    renderIcons();
+}
+
+function renderPhotoBatchTabs() {
+    const container = $('#photo-batch-tabs');
+    if (!container) return;
+
+    container.innerHTML = getPhotoBatchItems().map((item, index) => `
+        <div class="photo-batch-thumb ${index === photoBatchActiveIndex ? 'is-active' : ''}" role="button" tabindex="0" data-photo-batch-index="${index}">
+            <img src="${escapeAttribute(item.previewUrl)}" alt="${escapeAttribute(item.title || item.file.name)}">
+            <span>${index + 1}</span>
+            <button class="photo-batch-remove" type="button" title="移除这张图片" aria-label="移除这张图片" data-photo-batch-remove="${index}">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function renderActivePhotoBatchItem() {
+    const form = $('#photo-form');
+    const item = getPhotoBatchItems()[photoBatchActiveIndex];
+    if (!form || !item) return;
+
+    $('#photo-batch-preview-image').src = item.previewUrl;
+    $('#photo-batch-preview-title').textContent = item.file.name;
+    $('#photo-batch-preview-detail').textContent = `${photoBatchActiveIndex + 1} / ${photoBatchItems.length} · ${formatFileSize(item.file.size)}`;
+    form.elements.title.value = item.title || '';
+    form.elements.description.value = item.description || '';
+
+    scrollActivePhotoBatchThumbIntoView();
+}
+
+function handlePhotoBatchTabClick(event) {
+    const removeButton = event.target.closest('[data-photo-batch-remove]');
+    if (removeButton) {
+        removePhotoBatchItem(Number(removeButton.dataset.photoBatchRemove));
+        return;
+    }
+
+    const thumb = event.target.closest('[data-photo-batch-index]');
+    if (!thumb) return;
+
+    setActivePhotoBatchIndex(Number(thumb.dataset.photoBatchIndex));
+}
+
+function handlePhotoBatchTabsWheel(event) {
+    const tabs = event.currentTarget;
+    if (!tabs || tabs.scrollWidth <= tabs.clientWidth) return;
+
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+        ? event.deltaX
+        : event.deltaY;
+    if (!delta) return;
+
+    event.preventDefault();
+    tabs.scrollLeft += delta;
+}
+
+function handlePhotoBatchTabKeydown(event) {
+    const thumb = event.target.closest('[data-photo-batch-index]');
+    if (!thumb) return;
+
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        setActivePhotoBatchIndex(Number(thumb.dataset.photoBatchIndex));
+        return;
+    }
+
+    if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        setActivePhotoBatchIndex(Math.min(photoBatchActiveIndex + 1, photoBatchItems.length - 1));
+        return;
+    }
+
+    if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        setActivePhotoBatchIndex(Math.max(photoBatchActiveIndex - 1, 0));
+    }
+}
+
+function setActivePhotoBatchIndex(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= photoBatchItems.length) return;
+
+    syncActivePhotoBatchFromForm();
+    photoBatchActiveIndex = index;
+    renderPhotoBatchEditor();
+}
+
+function syncActivePhotoBatchField(event) {
+    const item = photoBatchItems[photoBatchActiveIndex];
+    if (!item || !event.target) return;
+
+    if (event.target.name === 'title') {
+        item.title = event.target.value;
+        renderPhotoBatchTabs();
+        scrollActivePhotoBatchThumbIntoView();
+        renderIcons();
+        return;
+    }
+
+    if (event.target.name === 'description') {
+        item.description = event.target.value;
+    }
+}
+
+function syncActivePhotoBatchFromForm() {
+    const form = $('#photo-form');
+    const item = photoBatchItems[photoBatchActiveIndex];
+    if (!form || !item) return;
+
+    item.title = form.elements.title.value;
+    item.description = form.elements.description.value;
+}
+
+function removePhotoBatchItem(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= photoBatchItems.length) return;
+
+    const [removed] = photoBatchItems.splice(index, 1);
+    if (removed && removed.previewUrl) {
+        URL.revokeObjectURL(removed.previewUrl);
+    }
+    if (photoBatchActiveIndex >= photoBatchItems.length) {
+        photoBatchActiveIndex = Math.max(0, photoBatchItems.length - 1);
+    }
+    renderPhotoBatchEditor();
+}
+
+function clearPhotoBatch() {
+    photoBatchItems.forEach(item => {
+        if (item && item.previewUrl) {
+            URL.revokeObjectURL(item.previewUrl);
+        }
+    });
+    photoBatchItems = [];
+    photoBatchActiveIndex = 0;
+    renderPhotoBatchEditor();
+    setFormMessage($('#photo-form'), '');
+}
+
+function scrollActivePhotoBatchThumbIntoView() {
+    const activeThumb = $('#photo-batch-tabs')?.querySelector('.photo-batch-thumb.is-active');
+    if (activeThumb && typeof activeThumb.scrollIntoView === 'function') {
+        activeThumb.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    }
 }
 
 async function pasteImageFromClipboard(input) {
