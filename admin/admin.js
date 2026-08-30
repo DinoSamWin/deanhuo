@@ -26,6 +26,15 @@ const LEGACY_AUTH_STORAGE_KEY = 'deanAdminToken';
 const AUTH_TTL_DAYS = 7;
 const AUTH_TTL_MS = AUTH_TTL_DAYS * 24 * 60 * 60 * 1000;
 const ONLINE_UPLOAD_LIMIT_BYTES = Math.floor(4.5 * 1024 * 1024);
+const PHOTO_UPLOAD_TARGET_BYTES = Math.floor(4.2 * 1024 * 1024);
+const PHOTO_OPTIMIZE_MIME_TYPE = 'image/webp';
+const PHOTO_OPTIMIZE_EXTENSION = '.webp';
+const PHOTO_OPTIMIZE_QUALITY_STEPS = [0.96, 0.94, 0.92, 0.9, 0.88, 0.86, 0.84, 0.82, 0.8];
+const PHOTO_BATCH_DRAFT_DB = 'deanhuo-photo-batch-draft';
+const PHOTO_BATCH_DRAFT_STORE = 'drafts';
+const PHOTO_BATCH_DRAFT_KEY = 'current-photo-batch';
+const PHOTO_BATCH_DRAFT_VERSION = 1;
+const PHOTO_BATCH_DRAFT_SAVE_DELAY_MS = 350;
 const AUDIO_UPLOAD_TARGET_BYTES = Math.floor(4 * 1024 * 1024);
 const AUDIO_TRANSCODE_TARGET_BYTES = AUDIO_UPLOAD_TARGET_BYTES;
 const AUDIO_TRANSCODE_MAX_SOURCE_BYTES = 120 * 1024 * 1024;
@@ -44,6 +53,8 @@ let imageCropperState = null;
 let musicAudioPreviewUrl = '';
 let photoBatchItems = [];
 let photoBatchActiveIndex = 0;
+let photoBatchDraftSaveTimer = null;
+let photoBatchDraftRestoring = false;
 
 const UPLOAD_LABELS = {
     photos: '图片文件',
@@ -202,6 +213,7 @@ async function login(token) {
     saveStoredAdminToken(normalizedToken);
     $('#login-screen').classList.add('is-hidden');
     $('#admin-app').classList.remove('is-hidden');
+    restorePhotoBatchDraft();
 }
 
 async function loadContent() {
@@ -522,6 +534,7 @@ function bindForms() {
         clearSelectedInputFile(event.currentTarget);
         renderPhotoBatchEditor();
         if (addedCount > 0) {
+            savePhotoBatchDraftSoon();
             setFormMessage($('#photo-form'), `已加入 ${addedCount} 张图片，请逐张确认标题和描述。`, 'info');
         } else if (selectedCount > 0) {
             setFormMessage($('#photo-form'), '没有新增图片，可能是重复选择或文件不是图片格式。', 'info');
@@ -533,6 +546,9 @@ function bindForms() {
     $('#photo-batch-clear-button').addEventListener('click', clearPhotoBatch);
     $('#photo-form').elements.title.addEventListener('input', syncActivePhotoBatchField);
     $('#photo-form').elements.description.addEventListener('input', syncActivePhotoBatchField);
+    $('#photo-form').elements.category.addEventListener('input', savePhotoBatchDraftSoon);
+    $('#photo-form').elements.date.addEventListener('input', savePhotoBatchDraftSoon);
+    $('#photo-form').elements.showOnHome.addEventListener('change', savePhotoBatchDraftSoon);
 
     $('#music-form').elements.title.addEventListener('input', event => {
         if (event.target.value.trim() !== event.target.dataset.autoTitleValue) {
@@ -982,6 +998,13 @@ async function uploadAsset(file, uploadType, onProgress) {
         uploadProgress = (ratio, label) => {
             if (onProgress) onProgress(0.72 + ratio * 0.28, label);
         };
+    } else if (shouldOptimizePhotoForUpload(file, uploadType)) {
+        uploadFile = await optimizePhotoToWebp(file, (ratio, label) => {
+            if (onProgress) onProgress(ratio * 0.68, label);
+        });
+        uploadProgress = (ratio, label) => {
+            if (onProgress) onProgress(0.68 + ratio * 0.32, label);
+        };
     }
 
     const uploadProblem = getUploadFileProblem(uploadFile, uploadType);
@@ -1067,6 +1090,78 @@ function uploadAssetWithProgress(file, uploadType, formData, onProgress) {
 
         xhr.send(formData);
     });
+}
+
+async function optimizePhotoToWebp(file, onProgress) {
+    onProgress?.(0.04, `正在读取大图：${file.name}`);
+    const sourceUrl = URL.createObjectURL(file);
+    let canvas = null;
+
+    try {
+        const image = await loadImageElement(sourceUrl);
+        const width = image.naturalWidth;
+        const height = image.naturalHeight;
+
+        if (!width || !height) {
+            throw new Error('无法读取图片尺寸');
+        }
+
+        await waitForBrowserFrame();
+        canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const context = canvas.getContext('2d', { alpha: true });
+        if (!context) {
+            throw new Error('当前浏览器无法创建图片优化画布');
+        }
+
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(image, 0, 0, width, height);
+
+        let bestFile = null;
+        for (let index = 0; index < PHOTO_OPTIMIZE_QUALITY_STEPS.length; index += 1) {
+            const quality = PHOTO_OPTIMIZE_QUALITY_STEPS[index];
+            const progressRatio = 0.16 + (index / PHOTO_OPTIMIZE_QUALITY_STEPS.length) * 0.68;
+            onProgress?.(progressRatio, `正在转成高质量 WebP（${Math.round(quality * 100)}%）`);
+            const blob = await canvasToBlob(canvas, PHOTO_OPTIMIZE_MIME_TYPE, quality);
+            const optimized = makeOptimizedPhotoFile(file, blob);
+
+            if (!bestFile || optimized.size < bestFile.size) {
+                bestFile = optimized;
+            }
+
+            if (optimized.size <= PHOTO_UPLOAD_TARGET_BYTES) {
+                onProgress?.(0.96, `图片已优化：${formatFileSize(file.size)} → ${formatFileSize(optimized.size)}`);
+                return optimized;
+            }
+        }
+
+        throw new Error(buildPhotoOptimizeFailureMessage(file, bestFile));
+    } catch (error) {
+        throw new Error(error.message || '图片自动优化失败');
+    } finally {
+        URL.revokeObjectURL(sourceUrl);
+        if (canvas) {
+            canvas.width = 1;
+            canvas.height = 1;
+        }
+    }
+}
+
+function makeOptimizedPhotoFile(sourceFile, blob) {
+    const basename = String(sourceFile.name || 'photo').replace(/\.[^.]+$/, '') || 'photo';
+    return new File([blob], `${basename}${PHOTO_OPTIMIZE_EXTENSION}`, {
+        type: PHOTO_OPTIMIZE_MIME_TYPE,
+        lastModified: Date.now()
+    });
+}
+
+function buildPhotoOptimizeFailureMessage(sourceFile, bestFile) {
+    const target = formatFileSize(PHOTO_UPLOAD_TARGET_BYTES);
+    const bestSize = bestFile ? formatFileSize(bestFile.size) : formatFileSize(sourceFile.size);
+    return `已尝试把「${sourceFile.name}」按原尺寸转成高质量 WebP，最小仍有 ${bestSize}，超过上传目标 ${target}。为了避免明显压坏画质，请换一张更小的原图或先裁剪后再上传。`;
 }
 
 async function transcodeAudioToMp3(file, onProgress) {
@@ -1424,7 +1519,10 @@ function renderActivePhotoBatchItem() {
 
     $('#photo-batch-preview-image').src = item.previewUrl;
     $('#photo-batch-preview-title').textContent = item.file.name;
-    $('#photo-batch-preview-detail').textContent = `${photoBatchActiveIndex + 1} / ${photoBatchItems.length} · ${formatFileSize(item.file.size)}`;
+    const optimizeNote = shouldShowPhotoOptimizeNote(item.file)
+        ? ` · 发布时自动优化到 ${formatFileSize(PHOTO_UPLOAD_TARGET_BYTES)} 内`
+        : '';
+    $('#photo-batch-preview-detail').textContent = `${photoBatchActiveIndex + 1} / ${photoBatchItems.length} · ${formatFileSize(item.file.size)}${optimizeNote}`;
     form.elements.title.value = item.title || '';
     form.elements.description.value = item.description || '';
 
@@ -1485,6 +1583,7 @@ function setActivePhotoBatchIndex(index) {
     syncActivePhotoBatchFromForm();
     photoBatchActiveIndex = index;
     renderPhotoBatchEditor();
+    savePhotoBatchDraftSoon();
 }
 
 function syncActivePhotoBatchField(event) {
@@ -1496,11 +1595,13 @@ function syncActivePhotoBatchField(event) {
         renderPhotoBatchTabs();
         scrollActivePhotoBatchThumbIntoView();
         renderIcons();
+        savePhotoBatchDraftSoon();
         return;
     }
 
     if (event.target.name === 'description') {
         item.description = event.target.value;
+        savePhotoBatchDraftSoon();
     }
 }
 
@@ -1524,9 +1625,17 @@ function removePhotoBatchItem(index) {
         photoBatchActiveIndex = Math.max(0, photoBatchItems.length - 1);
     }
     renderPhotoBatchEditor();
+    savePhotoBatchDraftSoon();
 }
 
 function clearPhotoBatch() {
+    resetPhotoBatchItems();
+    renderPhotoBatchEditor();
+    setFormMessage($('#photo-form'), '');
+    deletePhotoBatchDraft();
+}
+
+function resetPhotoBatchItems() {
     photoBatchItems.forEach(item => {
         if (item && item.previewUrl) {
             URL.revokeObjectURL(item.previewUrl);
@@ -1534,8 +1643,217 @@ function clearPhotoBatch() {
     });
     photoBatchItems = [];
     photoBatchActiveIndex = 0;
-    renderPhotoBatchEditor();
-    setFormMessage($('#photo-form'), '');
+}
+
+function shouldShowPhotoOptimizeNote(file) {
+    return state.online
+        && isOptimizablePhotoUpload(file, 'photos')
+        && file.size > PHOTO_UPLOAD_TARGET_BYTES;
+}
+
+function savePhotoBatchDraftSoon() {
+    if (photoBatchDraftRestoring || !canUsePhotoBatchDraftStorage()) return;
+
+    window.clearTimeout(photoBatchDraftSaveTimer);
+    photoBatchDraftSaveTimer = window.setTimeout(() => {
+        photoBatchDraftSaveTimer = null;
+        savePhotoBatchDraft().catch(() => {
+            // Draft persistence is best-effort and should never block resource creation.
+        });
+    }, PHOTO_BATCH_DRAFT_SAVE_DELAY_MS);
+}
+
+async function savePhotoBatchDraft() {
+    if (photoBatchDraftRestoring || !canUsePhotoBatchDraftStorage()) return;
+
+    const items = getPhotoBatchItems();
+    if (items.length === 0) {
+        await deletePhotoBatchDraft();
+        return;
+    }
+
+    syncActivePhotoBatchFromForm();
+    await putPhotoBatchDraftRecord({
+        id: PHOTO_BATCH_DRAFT_KEY,
+        savedAt: Date.now(),
+        activeIndex: photoBatchActiveIndex,
+        fields: getPhotoBatchDraftFormFields(),
+        items: items.map(item => ({
+            signature: item.signature || getFileSignature(item.file),
+            title: item.title || '',
+            description: item.description || '',
+            fileName: item.file.name,
+            fileType: item.file.type,
+            fileSize: item.file.size,
+            lastModified: item.file.lastModified || Date.now(),
+            file: item.file
+        }))
+    });
+}
+
+async function restorePhotoBatchDraft() {
+    if (!canUsePhotoBatchDraftStorage() || getPhotoBatchItems().length > 0) return;
+
+    try {
+        const record = await readPhotoBatchDraftRecord();
+        const entries = Array.isArray(record && record.items) ? record.items : [];
+        if (entries.length === 0) return;
+
+        photoBatchDraftRestoring = true;
+        resetPhotoBatchItems();
+        photoBatchItems = entries
+            .map((entry, index) => {
+                const file = restorePhotoBatchDraftFile(entry);
+                if (!file) return null;
+
+                return {
+                    signature: entry.signature || getFileSignature(file),
+                    file,
+                    title: entry.title || makeTitleFromFilename(file.name) || `图片 ${index + 1}`,
+                    description: entry.description || '',
+                    previewUrl: URL.createObjectURL(file)
+                };
+            })
+            .filter(Boolean);
+
+        if (photoBatchItems.length === 0) {
+            await deletePhotoBatchDraft();
+            return;
+        }
+
+        photoBatchActiveIndex = Math.max(
+            0,
+            Math.min(Number(record.activeIndex) || 0, photoBatchItems.length - 1)
+        );
+        restorePhotoBatchDraftFormFields(record.fields);
+        renderPhotoBatchEditor();
+        setFormMessage($('#photo-form'), `已恢复 ${photoBatchItems.length} 张未创建的图片草稿，可以继续编辑或清空。`, 'info');
+        showToast(`已恢复 ${photoBatchItems.length} 张图片草稿`);
+    } catch (error) {
+        // A broken local draft should not stop the admin from opening.
+    } finally {
+        photoBatchDraftRestoring = false;
+    }
+}
+
+function restorePhotoBatchDraftFile(entry) {
+    const storedFile = entry && entry.file;
+    if (storedFile instanceof File) return storedFile;
+    if (storedFile instanceof Blob) {
+        return new File([storedFile], entry.fileName || `photo-${Date.now()}.jpg`, {
+            type: entry.fileType || storedFile.type || 'image/jpeg',
+            lastModified: entry.lastModified || Date.now()
+        });
+    }
+
+    return null;
+}
+
+function getPhotoBatchDraftFormFields() {
+    const form = $('#photo-form');
+    if (!form) return {};
+
+    return {
+        category: form.elements.category.value,
+        date: form.elements.date.value,
+        showOnHome: form.elements.showOnHome.checked
+    };
+}
+
+function restorePhotoBatchDraftFormFields(fields) {
+    const form = $('#photo-form');
+    if (!form || !fields) return;
+
+    form.elements.category.value = fields.category || form.elements.category.value || 'Photography';
+    form.elements.date.value = fields.date || form.elements.date.value;
+    form.elements.showOnHome.checked = Boolean(fields.showOnHome);
+}
+
+function deletePhotoBatchDraft() {
+    cancelPhotoBatchDraftSave();
+    if (!canUsePhotoBatchDraftStorage()) return Promise.resolve();
+
+    return deletePhotoBatchDraftRecord().catch(() => {
+        // Ignore draft cleanup failures.
+    });
+}
+
+function cancelPhotoBatchDraftSave() {
+    if (!photoBatchDraftSaveTimer) return;
+    window.clearTimeout(photoBatchDraftSaveTimer);
+    photoBatchDraftSaveTimer = null;
+}
+
+function canUsePhotoBatchDraftStorage() {
+    return typeof window !== 'undefined' && Boolean(window.indexedDB);
+}
+
+function openPhotoBatchDraftDb() {
+    return new Promise((resolve, reject) => {
+        const request = window.indexedDB.open(PHOTO_BATCH_DRAFT_DB, PHOTO_BATCH_DRAFT_VERSION);
+
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(PHOTO_BATCH_DRAFT_STORE)) {
+                db.createObjectStore(PHOTO_BATCH_DRAFT_STORE, { keyPath: 'id' });
+            }
+        };
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('无法打开图片草稿缓存'));
+        request.onblocked = () => reject(new Error('图片草稿缓存被浏览器占用'));
+    });
+}
+
+function readPhotoBatchDraftRecord() {
+    return runPhotoBatchDraftRequest('readonly', store => store.get(PHOTO_BATCH_DRAFT_KEY));
+}
+
+function putPhotoBatchDraftRecord(record) {
+    return runPhotoBatchDraftRequest('readwrite', store => store.put(record));
+}
+
+function deletePhotoBatchDraftRecord() {
+    return runPhotoBatchDraftRequest('readwrite', store => store.delete(PHOTO_BATCH_DRAFT_KEY));
+}
+
+async function runPhotoBatchDraftRequest(mode, createRequest) {
+    const db = await openPhotoBatchDraftDb();
+
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        let result;
+
+        function finish(callback, value) {
+            if (settled) return;
+            settled = true;
+            db.close();
+            callback(value);
+        }
+
+        try {
+            const transaction = db.transaction(PHOTO_BATCH_DRAFT_STORE, mode);
+            const request = createRequest(transaction.objectStore(PHOTO_BATCH_DRAFT_STORE));
+
+            request.onsuccess = () => {
+                result = request.result;
+            };
+            request.onerror = () => {
+                finish(reject, request.error || new Error('图片草稿缓存读写失败'));
+            };
+            transaction.oncomplete = () => {
+                finish(resolve, result);
+            };
+            transaction.onerror = () => {
+                finish(reject, transaction.error || request.error || new Error('图片草稿缓存读写失败'));
+            };
+            transaction.onabort = () => {
+                finish(reject, transaction.error || request.error || new Error('图片草稿缓存写入被取消'));
+            };
+        } catch (error) {
+            finish(reject, error);
+        }
+    });
 }
 
 function scrollActivePhotoBatchThumbIntoView() {
@@ -2133,6 +2451,13 @@ async function getCoverCropTarget(uploadType, fallbackDimensions) {
 }
 
 function loadImageDimensions(src) {
+    return loadImageElement(src).then(image => ({
+        width: image.naturalWidth,
+        height: image.naturalHeight
+    }));
+}
+
+function loadImageElement(src) {
     return new Promise((resolve, reject) => {
         const image = new Image();
         image.onload = () => {
@@ -2140,10 +2465,7 @@ function loadImageDimensions(src) {
                 reject(new Error('无法读取图片尺寸'));
                 return;
             }
-            resolve({
-                width: image.naturalWidth,
-                height: image.naturalHeight
-            });
+            resolve(image);
         };
         image.onerror = () => reject(new Error('图片读取失败，请换一张图片试试'));
         image.src = src;
@@ -2390,9 +2712,15 @@ function getUploadFileProblem(file, uploadType) {
         return '';
     }
 
+    if (shouldOptimizePhotoForUpload(file, uploadType)) {
+        return '';
+    }
+
     const nextStep = isAudioUpload(uploadType)
         ? '请先压缩成更小的 mp3/m4a，或填写音频外链/已上传路径后再创建。'
-        : '请先压缩后再上传。';
+        : isPhotoUpload(uploadType)
+            ? '当前文件类型无法自动转 WebP，请换成 JPG/PNG/WebP/AVIF 等普通图片后再上传。'
+            : '请先压缩后再上传。';
 
     return `${label}「${file.name}」大小为 ${formatFileSize(file.size)}，超过线上上传安全上限 ${formatFileSize(safeLimit)}。${nextStep}`;
 }
@@ -2400,6 +2728,9 @@ function getUploadFileProblem(file, uploadType) {
 function buildUploadErrorMessage(response, data, file, uploadType) {
     if (response.status === 413) {
         const label = UPLOAD_LABELS[uploadType] || '上传文件';
+        if (isPhotoUpload(uploadType)) {
+            return `${label}「${file.name}」上传被线上服务拒绝，当前发送文件大小 ${formatFileSize(file.size)}。后台会自动把大图转成 WebP；如果仍失败，请换一张更小的原图，或稍后改用云存储方案。`;
+        }
         return `${label}「${file.name}」上传被线上服务拒绝，文件大小 ${formatFileSize(file.size)}。请压缩到 ${formatFileSize(getUploadSafeLimitBytes(uploadType))} 以内，或改用外链/云存储方案。`;
     }
 
@@ -2410,8 +2741,30 @@ function isAudioUpload(uploadType) {
     return uploadType === 'musicAudio' || uploadType === 'lyricAudio';
 }
 
+function isPhotoUpload(uploadType) {
+    return uploadType === 'photos';
+}
+
+function isOptimizablePhotoUpload(file, uploadType) {
+    if (!isPhotoUpload(uploadType) || !file) return false;
+
+    const type = String(file.type || '').toLowerCase();
+    if (type === 'image/gif' || type === 'image/svg+xml') return false;
+    if (type.startsWith('image/')) return true;
+
+    return /\.(jpe?g|png|webp|avif|bmp)$/i.test(String(file.name || ''));
+}
+
+function shouldOptimizePhotoForUpload(file, uploadType) {
+    return state.online
+        && isOptimizablePhotoUpload(file, uploadType)
+        && file.size > getUploadSafeLimitBytes(uploadType);
+}
+
 function getUploadSafeLimitBytes(uploadType) {
-    return isAudioUpload(uploadType) ? AUDIO_UPLOAD_TARGET_BYTES : ONLINE_UPLOAD_LIMIT_BYTES;
+    if (isAudioUpload(uploadType)) return AUDIO_UPLOAD_TARGET_BYTES;
+    if (isPhotoUpload(uploadType)) return PHOTO_UPLOAD_TARGET_BYTES;
+    return ONLINE_UPLOAD_LIMIT_BYTES;
 }
 
 function formatFileSize(bytes) {
