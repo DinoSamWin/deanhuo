@@ -38,7 +38,7 @@ const PHOTO_BATCH_DRAFT_SAVE_DELAY_MS = 350;
 const AUDIO_UPLOAD_TARGET_BYTES = Math.floor(4 * 1024 * 1024);
 const AUDIO_TRANSCODE_TARGET_BYTES = AUDIO_UPLOAD_TARGET_BYTES;
 const AUDIO_TRANSCODE_MAX_SOURCE_BYTES = 120 * 1024 * 1024;
-const MP3_ENCODER_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
+const MP3_ENCODER_SCRIPT_URL = '../assets/vendor/lamejs-1.2.1.min.js';
 const MP3_MAX_BITRATE_KBPS = 192;
 const MP3_MIN_BITRATE_KBPS = 128;
 const MP3_QUALITY_WARNING_BITRATE_KBPS = 160;
@@ -55,6 +55,11 @@ let photoBatchItems = [];
 let photoBatchActiveIndex = 0;
 let photoBatchDraftSaveTimer = null;
 let photoBatchDraftRestoring = false;
+let lyricTimingSession = null;
+let newMusicLyricTimingDraft = null;
+let lyricTimingClickTimer = null;
+let lyricTimingAudioUrls = new WeakMap();
+const lyricTimingObjectUrls = new Set();
 
 const UPLOAD_LABELS = {
     photos: '图片文件',
@@ -83,6 +88,7 @@ const RESOURCE_EDIT_SCHEMAS = {
         { key: 'audioPath', label: '音频路径/URL', empty: 'delete' },
         { key: 'linkedMusicId', label: '关联音乐', type: 'resourceSelect', source: 'music', empty: 'delete' },
         { key: 'contentPath', label: '正文 Markdown 路径', empty: 'delete' },
+        { key: 'contentBody', label: '歌词正文', type: 'contentMarkdown', fileLabel: '歌词 Markdown 文件', rows: 12, pathKey: 'contentPath', required: true },
         { key: 'order', label: '词作排序', type: 'number', empty: 'delete' },
         { key: 'showOnHome', label: '首页显示标记', type: 'checkbox' },
         { key: 'homeOrder', label: '首页排序', type: 'number', empty: 'delete' }
@@ -98,7 +104,7 @@ const RESOURCE_EDIT_SCHEMAS = {
         { key: 'versions', label: '音频版本', type: 'musicVersions' },
         { key: 'description', label: '描述', type: 'textarea' },
         { key: 'lyricId', label: '关联词作', type: 'resourceSelect', source: 'lyrics', empty: 'delete' },
-        { key: 'lyricText', label: '歌词内容', type: 'markdownText', fileLabel: '歌词 Markdown 文件', rows: 8, empty: 'delete' }
+        { key: 'lyricText', label: '歌词内容', type: 'markdownText', fileLabel: '歌词 Markdown 文件', rows: 8, empty: 'delete', linkedLyricContent: true }
     ],
     knowledge: [
         { key: 'title', label: '标题', required: true },
@@ -116,6 +122,7 @@ const state = {
     apiError: '',
     apiStatus: 0,
     baseFiles: {},
+    baseTextFiles: {},
     files: {},
     textFiles: {},
     pendingAssets: [],
@@ -395,6 +402,8 @@ async function fetchJson(path, fallback) {
 }
 
 function initializeFiles(files) {
+    if (lyricTimingSession) closeLyricTimingWorkspace();
+    resetNewMusicLyricTimingDraft();
     const normalized = {
         [DATA_FILES.photos]: Array.isArray(files[DATA_FILES.photos]) ? files[DATA_FILES.photos] : [],
         [DATA_FILES.lyrics]: Array.isArray(files[DATA_FILES.lyrics]) ? files[DATA_FILES.lyrics] : [],
@@ -404,6 +413,7 @@ function initializeFiles(files) {
     };
 
     state.baseFiles = clone(normalized);
+    state.baseTextFiles = {};
     state.files = clone(normalized);
     state.textFiles = {};
     state.pendingAssets = [];
@@ -555,6 +565,7 @@ function bindForms() {
             delete event.target.dataset.autoTitleValue;
         }
     });
+    $('#music-form').elements.lyricMarkdownText.addEventListener('input', syncNewMusicLyricTimingDraftText);
     $('#music-form').elements.audioUrl.addEventListener('input', () => {
         updateMusicAudioPreview();
         renderMusicVersionOptions();
@@ -611,10 +622,29 @@ function bindForms() {
         if (!file) return;
         try {
             $('#music-form').elements.lyricMarkdownText.value = await readTextFile(file);
+            syncNewMusicLyricTimingDraftText();
             showToast('Markdown 歌词已读取');
         } catch (error) {
             showToast(error.message || '读取 Markdown 文件失败');
         }
+    });
+
+    $('#music-lyric-timing-button').addEventListener('click', openNewMusicLyricTiming);
+    $('#lyric-timing-close-button').addEventListener('click', closeLyricTimingWorkspace);
+    $('#lyric-timing-reset-button').addEventListener('click', resetActiveLyricTimingVersion);
+    $('#lyric-timing-sync-button').addEventListener('click', syncLyricTimingSession);
+    $('#lyric-timing-version-select').addEventListener('change', event => {
+        if (!lyricTimingSession) return;
+        lyricTimingSession.activeKey = event.target.value;
+        loadActiveLyricTimingVersion();
+    });
+    $('#lyric-timing-view').addEventListener('click', handleLyricTimingControlClick);
+    $('#lyric-timing-lines').addEventListener('click', handleLyricTimingLineClick);
+    $('#lyric-timing-lines').addEventListener('dblclick', handleLyricTimingLineDoubleClick);
+    $('#lyric-timing-lines').addEventListener('keydown', handleLyricTimingLineKeydown);
+    $('#lyric-timing-lines').addEventListener('focusout', handleLyricTimingLineFocusOut);
+    ['timeupdate', 'seeking', 'loadedmetadata', 'durationchange'].forEach(eventName => {
+        $('#lyric-timing-audio').addEventListener(eventName, updateLyricTimingPlaybackUI);
     });
 
     $('#draft-list').addEventListener('click', event => {
@@ -812,16 +842,25 @@ async function handleMusicSubmit(event) {
         const primaryUrl = audioUrl || uploaded.url;
         const primarySource = audioUrl ? 'primary-url' : 'primary-file';
         const versionCandidates = [
-            ...(primaryUrl ? [{ source: primarySource, url: primaryUrl, label: '主音频' }] : []),
+            ...(primaryUrl ? [{
+                source: primarySource,
+                url: primaryUrl,
+                label: '主音频',
+                timingKey: audioUrl
+                    ? getLyricTimingUrlKey(audioUrl)
+                    : getLyricTimingFileKey(audioFile)
+            }] : []),
             ...versionAudioFiles.map((file, index) => ({
                 source: `extra-file-${index}`,
                 url: uploaded[`version${index}`],
-                label: makeTitleFromFilename(file.name) || `追加版本 ${index + 1}`
+                label: makeTitleFromFilename(file.name) || `追加版本 ${index + 1}`,
+                timingKey: getLyricTimingFileKey(file)
             }))
         ];
         const selectedVersionSource = form.querySelector('input[name="defaultVersionSource"]:checked')?.value;
         const versions = buildMusicVersions(versionCandidates, selectedVersionSource);
         const url = versions[0]?.url || primaryUrl;
+        const lyricTimings = buildNewMusicLyricTimings(versionCandidates);
         let lyricId = form.elements.lyricId.value;
 
         progress.set(86, shouldSyncLyric ? '正在生成音乐和关联词作草稿' : '正在生成音乐草稿');
@@ -855,6 +894,7 @@ async function handleMusicSubmit(event) {
             genre: form.elements.genre.value.trim() || 'Original',
             description: form.elements.description.value.trim(),
             ...(versions.length > 1 ? { versions } : {}),
+            ...(lyricTimings ? { lyricTimings } : {}),
             ...(lyricId ? { lyricId } : {})
         };
 
@@ -874,6 +914,7 @@ async function handleMusicSubmit(event) {
         clearSelectedInputFile(form.elements.audioFile);
         clearSelectedInputFile(form.elements.versionAudioFiles);
         clearMusicAudioPreview();
+        resetNewMusicLyricTimingDraft();
         renderMusicVersionOptions();
         setDefaultFormValues();
         return shouldSyncLyric
@@ -2167,6 +2208,7 @@ function getMusicVersionCandidates() {
             source: 'primary-url',
             label: '主音频外链 / 已上传路径',
             detail: audioUrl,
+            url: audioUrl,
             file: null
         });
     } else if (audioFile) {
@@ -2276,6 +2318,656 @@ function dedupeMusicVersionCandidates(candidates, selectedSource) {
     });
 
     return result;
+}
+
+function openNewMusicLyricTiming() {
+    const form = $('#music-form');
+    const lyricText = markdownToPlainText(form.elements.lyricMarkdownText.value);
+    const lineTexts = splitLyricTimingText(lyricText);
+    if (lineTexts.length === 0) {
+        showFormError(form, '请先上传歌词文件或填写歌词，再进入歌词打点');
+        return;
+    }
+
+    const selectedSource = form.querySelector('input[name="defaultVersionSource"]:checked')?.value;
+    const candidates = orderMusicVersionCandidates(getMusicVersionCandidates(), selectedSource);
+    if (candidates.length === 0) {
+        showFormError(form, '请先选择主音频文件或填写音频路径');
+        return;
+    }
+
+    const previous = newMusicLyricTimingDraft;
+    const versions = candidates.map((candidate, index) => buildCreateLyricTimingVersion(candidate, index));
+    const linesByVersion = {};
+    versions.forEach(version => {
+        const previousLines = previous && previous.linesByVersion
+            ? previous.linesByVersion[version.key]
+            : null;
+        linesByVersion[version.key] = reconcileLyricTimingLines(previousLines, lineTexts);
+    });
+
+    lyricTimingSession = {
+        origin: 'create',
+        title: form.elements.title.value.trim() || '新音乐',
+        resourceId: '',
+        versions,
+        activeKey: versions.some(version => version.key === previous?.activeKey)
+            ? previous.activeKey
+            : versions[0].key,
+        linesByVersion,
+        hasUnsyncedChanges: Boolean(previous?.hasUnsyncedChanges)
+    };
+    newMusicLyricTimingDraft = lyricTimingSession;
+    showLyricTimingWorkspace();
+}
+
+async function openResourceLyricTiming(id) {
+    const item = getSourceItems('music').find(entry => String(entry.id) === String(id));
+    if (!item) {
+        showToast('没有找到这首音乐');
+        return;
+    }
+
+    const musicVersions = getMusicVersionsForItem(item);
+    if (musicVersions.length === 0) {
+        showToast('这首音乐还没有可播放的音频');
+        return;
+    }
+
+    setPanel('resources-panel');
+    activateResourceForm('music-form');
+    showToast('正在读取已有歌词…');
+
+    try {
+        const seed = await loadResourceLyricTimingSeed(item, musicVersions);
+        if (seed.lineTexts.length === 0) {
+            showToast('这首音乐还没有可打点的歌词');
+            return;
+        }
+
+        const versions = musicVersions.map((version, index) => ({
+            key: getLyricTimingUrlKey(version.url),
+            label: version.label || `版本${index + 1}`,
+            detail: version.url,
+            playbackUrl: resolveAssetUrl(version.url),
+            finalUrl: version.url
+        }));
+        const linesByVersion = {};
+        versions.forEach((version, index) => {
+            const storedLines = seed.storedByUrl[version.finalUrl];
+            const legacyLines = index === 0 ? seed.legacyLines : null;
+            linesByVersion[version.key] = reconcileLyricTimingLines(
+                storedLines || legacyLines,
+                seed.lineTexts
+            );
+        });
+
+        lyricTimingSession = {
+            origin: 'resource',
+            title: item.title || item.id,
+            resourceId: item.id,
+            lyricContentPath: seed.lyricContentPath,
+            versions,
+            activeKey: versions[0].key,
+            linesByVersion,
+            hasUnsyncedChanges: false,
+            hasTextChanges: false
+        };
+        showLyricTimingWorkspace();
+    } catch (error) {
+        showToast(error.message || '读取歌词失败');
+    }
+}
+
+function activateResourceForm(formId) {
+    const button = $(`#resource-type-tabs button[data-resource-form="${formId}"]`);
+    if (button && !button.classList.contains('is-active')) {
+        button.click();
+    }
+}
+
+function buildCreateLyricTimingVersion(candidate, index) {
+    const key = getLyricTimingCandidateKey(candidate);
+    return {
+        key,
+        label: candidate.label || `版本${index + 1}`,
+        detail: candidate.detail || candidate.url || '',
+        playbackUrl: candidate.file
+            ? getLyricTimingFilePlaybackUrl(candidate.file)
+            : resolveAssetUrl(candidate.url),
+        finalUrl: normalizeAssetInput(candidate.url)
+    };
+}
+
+function getLyricTimingCandidateKey(candidate) {
+    if (candidate && candidate.timingKey) return candidate.timingKey;
+    if (candidate && candidate.file) return getLyricTimingFileKey(candidate.file);
+    return getLyricTimingUrlKey(candidate && candidate.url);
+}
+
+function getLyricTimingFileKey(file) {
+    return file ? `file:${getFileSignature(file)}` : '';
+}
+
+function getLyricTimingUrlKey(url) {
+    return `url:${normalizeAssetInput(url)}`;
+}
+
+function getLyricTimingFilePlaybackUrl(file) {
+    if (!file) return '';
+    const existingUrl = lyricTimingAudioUrls.get(file);
+    if (existingUrl) return existingUrl;
+
+    const url = URL.createObjectURL(file);
+    lyricTimingAudioUrls.set(file, url);
+    lyricTimingObjectUrls.add(url);
+    return url;
+}
+
+async function loadResourceLyricTimingSeed(item, musicVersions) {
+    const storedByUrl = normalizeMusicLyricTimings(item.lyricTimings);
+    const storedLines = Object.values(storedByUrl).find(lines => lines.length > 0) || [];
+    let legacyLines = [];
+    let lineTexts = storedLines.map(line => line.text);
+    let lyricContentPath = '';
+    let linkedLyricText = '';
+
+    if (item.lyricId) {
+        const lyricItem = getSourceItems('lyrics')
+            .find(entry => String(entry.id) === String(item.lyricId));
+        lyricContentPath = lyricItem && lyricItem.contentPath ? lyricItem.contentPath : '';
+        if (lyricContentPath) {
+            linkedLyricText = await getEditableTextFileValue(lyricContentPath);
+        }
+    }
+
+    if (lineTexts.length === 0) {
+        legacyLines = await loadLegacyLrcTimingLines(item.id);
+        lineTexts = legacyLines.map(line => line.text);
+    }
+
+    if (lineTexts.length === 0 && item.lyricText) {
+        lineTexts = splitLyricTimingText(item.lyricText);
+    }
+
+    if (lineTexts.length === 0 && linkedLyricText) {
+        lineTexts = splitLyricTimingText(markdownToPlainText(linkedLyricText));
+    }
+
+    if (lineTexts.length === 0 && musicVersions.length === 1) {
+        const onlyStoredLines = storedByUrl[musicVersions[0].url] || [];
+        lineTexts = onlyStoredLines.map(line => line.text);
+    }
+
+    return { storedByUrl, legacyLines, lineTexts, lyricContentPath };
+}
+
+async function loadLegacyLrcTimingLines(id) {
+    if (!id) return [];
+    const text = await fetchOptionalText(`assets/lyrics/${encodeURIComponent(id)}.lrc`);
+    if (!text) return [];
+
+    const lines = [];
+    const pattern = /\[(\d{1,3}):(\d{2}(?:\.\d{1,3})?)\](.*)/;
+    text.split('\n').forEach(rawLine => {
+        const match = pattern.exec(rawLine);
+        if (!match) return;
+        const lyricText = match[3].trim();
+        if (!lyricText) return;
+        lines.push({
+            time: (parseInt(match[1], 10) * 60) + parseFloat(match[2]),
+            text: lyricText
+        });
+    });
+    return lines.sort((a, b) => a.time - b.time);
+}
+
+async function fetchOptionalText(path) {
+    if (!path) return '';
+    try {
+        const url = resolveAssetUrl(path);
+        const separator = url.includes('?') ? '&' : '?';
+        const response = await fetch(`${url}${separator}v=${Date.now()}`);
+        return response.ok ? response.text() : '';
+    } catch (error) {
+        return '';
+    }
+}
+
+function normalizeMusicLyricTimings(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.entries(value).reduce((result, [url, lines]) => {
+        const normalizedUrl = normalizeAssetInput(url);
+        if (!normalizedUrl || !Array.isArray(lines)) return result;
+        result[normalizedUrl] = lines
+            .map(normalizeLyricTimingLine)
+            .filter(Boolean);
+        return result;
+    }, {});
+}
+
+function normalizeLyricTimingLine(line) {
+    if (!line || typeof line !== 'object') return null;
+    const text = String(line.text || '').trim();
+    if (!text) return null;
+    return {
+        time: normalizeLyricTimingTime(line.time),
+        text
+    };
+}
+
+function normalizeLyricTimingTime(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) && numericValue >= 0
+        ? Math.round(numericValue * 100) / 100
+        : null;
+}
+
+function splitLyricTimingText(value) {
+    return String(value || '')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+}
+
+function reconcileLyricTimingLines(existingLines, lineTexts) {
+    const normalizedExisting = Array.isArray(existingLines)
+        ? existingLines.map(normalizeLyricTimingLine).filter(Boolean)
+        : [];
+    return lineTexts.map((text, index) => ({
+        text,
+        time: normalizedExisting[index]
+            ? normalizedExisting[index].time
+            : null
+    }));
+}
+
+function showLyricTimingWorkspace() {
+    if (!lyricTimingSession) return;
+    $('#library-view').classList.add('is-hidden');
+    $('#lyric-timing-view').classList.remove('is-hidden');
+    $('#lyric-timing-title').textContent = `${lyricTimingSession.title}·歌词打点`;
+    renderLyricTimingVersionSelect();
+    loadActiveLyricTimingVersion();
+    renderIcons();
+}
+
+function renderLyricTimingVersionSelect() {
+    if (!lyricTimingSession) return;
+    const select = $('#lyric-timing-version-select');
+    select.innerHTML = lyricTimingSession.versions.map((version, index) => {
+        const lines = lyricTimingSession.linesByVersion[version.key] || [];
+        const completed = lines.length > 0 && lines.every(line => line.time !== null);
+        return `
+            <option value="${escapeAttribute(version.key)}" ${version.key === lyricTimingSession.activeKey ? 'selected' : ''}>
+                ${escapeHtml(version.label || `版本${index + 1}`)}${completed ? ' · 已完成' : ''}
+            </option>
+        `;
+    }).join('');
+    select.closest('.lyric-timing-version-field')?.classList.toggle('is-hidden', lyricTimingSession.versions.length <= 1);
+}
+
+function loadActiveLyricTimingVersion() {
+    const version = getActiveLyricTimingVersion();
+    if (!version) return;
+
+    const audio = $('#lyric-timing-audio');
+    audio.pause();
+    audio.src = version.playbackUrl;
+    audio.load();
+    $('#lyric-timing-current-time').textContent = formatLyricTimingClock(0);
+    renderLyricTimingLines();
+    renderLyricTimingStatus();
+}
+
+function getActiveLyricTimingVersion() {
+    if (!lyricTimingSession) return null;
+    return lyricTimingSession.versions
+        .find(version => version.key === lyricTimingSession.activeKey)
+        || lyricTimingSession.versions[0]
+        || null;
+}
+
+function getActiveLyricTimingLines() {
+    const version = getActiveLyricTimingVersion();
+    return version && lyricTimingSession
+        ? lyricTimingSession.linesByVersion[version.key] || []
+        : [];
+}
+
+function renderLyricTimingLines(options = {}) {
+    const container = $('#lyric-timing-lines');
+    const previousScrollTop = container.scrollTop;
+    const lines = getActiveLyricTimingLines();
+    const nextIndex = lines.findIndex(line => line.time === null);
+
+    container.innerHTML = lines.map((line, index) => `
+        <div class="lyric-timing-line ${index === nextIndex ? 'is-next' : ''}" data-lyric-timing-index="${index}">
+            <span class="lyric-timing-index">${String(index + 1).padStart(2, '0')}</span>
+            <span class="lyric-timing-stamp ${line.time === null ? 'is-empty' : ''}">
+                ${line.time === null ? '--:--.--' : escapeHtml(formatLyricTimingClock(line.time))}
+            </span>
+            <span class="lyric-timing-text" title="双击修改歌词">${escapeHtml(line.text)}</span>
+            <button class="icon-action lyric-timing-clear" type="button" title="清除这一句时间" aria-label="清除第 ${index + 1} 句时间" data-clear-lyric-timing="${index}" ${line.time === null ? 'disabled' : ''}>
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+    `).join('') || '<div class="draft-item"><span>没有可打点的歌词</span></div>';
+    container.scrollTop = previousScrollTop;
+    renderIcons();
+    updateLyricTimingPlaybackUI();
+
+    if (options.revealNext) {
+        container.querySelector('.lyric-timing-line.is-next')
+            ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+function handleLyricTimingControlClick(event) {
+    const seekButton = event.target.closest('[data-lyric-timing-seek]');
+    if (!seekButton || !lyricTimingSession) return;
+
+    const audio = $('#lyric-timing-audio');
+    const offset = Number(seekButton.dataset.lyricTimingSeek) || 0;
+    const duration = Number.isFinite(audio.duration) ? audio.duration : Number.POSITIVE_INFINITY;
+    audio.currentTime = Math.max(0, Math.min((audio.currentTime || 0) + offset, duration));
+    updateLyricTimingPlaybackUI();
+}
+
+function handleLyricTimingLineClick(event) {
+    if (!lyricTimingSession) return;
+
+    const clearButton = event.target.closest('[data-clear-lyric-timing]');
+    if (clearButton) {
+        clearTimeout(lyricTimingClickTimer);
+        setLyricTimingAtIndex(Number(clearButton.dataset.clearLyricTiming), null);
+        return;
+    }
+
+    const row = event.target.closest('[data-lyric-timing-index]');
+    const editingText = event.target.closest('.lyric-timing-text[contenteditable="true"]');
+    if (!row || editingText || event.target.closest('button')) return;
+
+    clearTimeout(lyricTimingClickTimer);
+    lyricTimingClickTimer = setTimeout(() => {
+        const audio = $('#lyric-timing-audio');
+        setLyricTimingAtIndex(Number(row.dataset.lyricTimingIndex), audio.currentTime || 0, true);
+    }, 190);
+}
+
+function handleLyricTimingLineDoubleClick(event) {
+    const textNode = event.target.closest('.lyric-timing-text');
+    const row = event.target.closest('[data-lyric-timing-index]');
+    if (!textNode || !row) return;
+
+    clearTimeout(lyricTimingClickTimer);
+    event.preventDefault();
+    event.stopPropagation();
+    textNode.dataset.originalText = textNode.textContent;
+    textNode.setAttribute('contenteditable', 'true');
+    textNode.setAttribute('role', 'textbox');
+    textNode.focus();
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    selection.removeAllRanges();
+    selection.addRange(range);
+}
+
+function handleLyricTimingLineKeydown(event) {
+    const textNode = event.target.closest('.lyric-timing-text[contenteditable="true"]');
+    if (!textNode) return;
+
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        textNode.blur();
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        textNode.dataset.cancelEdit = 'true';
+        textNode.textContent = textNode.dataset.originalText || textNode.textContent;
+        textNode.blur();
+    }
+}
+
+function handleLyricTimingLineFocusOut(event) {
+    const textNode = event.target.closest('.lyric-timing-text[contenteditable="true"]');
+    const row = event.target.closest('[data-lyric-timing-index]');
+    if (!textNode || !row || !lyricTimingSession) return;
+
+    const originalText = String(textNode.dataset.originalText || '').trim();
+    const cancelled = textNode.dataset.cancelEdit === 'true';
+    const nextText = cancelled ? originalText : String(textNode.textContent || '').replace(/\s+/g, ' ').trim();
+    const safeText = nextText || originalText;
+    const index = Number(row.dataset.lyricTimingIndex);
+
+    lyricTimingSession.versions.forEach(version => {
+        const line = lyricTimingSession.linesByVersion[version.key]?.[index];
+        if (line) line.text = safeText;
+    });
+    textNode.textContent = safeText;
+    textNode.removeAttribute('contenteditable');
+    textNode.removeAttribute('role');
+    delete textNode.dataset.cancelEdit;
+    delete textNode.dataset.originalText;
+
+    if (!cancelled && safeText !== originalText) {
+        lyricTimingSession.hasUnsyncedChanges = true;
+        lyricTimingSession.hasTextChanges = true;
+        syncCreateLyricTextToForm();
+        renderLyricTimingStatus();
+    }
+}
+
+function setLyricTimingAtIndex(index, value, revealNext = false) {
+    const lines = getActiveLyricTimingLines();
+    if (!Number.isInteger(index) || !lines[index]) return;
+    lines[index].time = normalizeLyricTimingTime(value);
+    lyricTimingSession.hasUnsyncedChanges = true;
+    renderLyricTimingLines({ revealNext });
+    renderLyricTimingStatus();
+}
+
+function resetActiveLyricTimingVersion() {
+    const lines = getActiveLyricTimingLines();
+    if (lines.length === 0) return;
+    lines.forEach(line => {
+        line.time = null;
+    });
+    lyricTimingSession.hasUnsyncedChanges = true;
+    $('#lyric-timing-audio').currentTime = 0;
+    renderLyricTimingLines();
+    renderLyricTimingStatus();
+    showToast('已清空当前版本的时间点');
+}
+
+function updateLyricTimingPlaybackUI() {
+    const audio = $('#lyric-timing-audio');
+    const currentTime = audio.currentTime || 0;
+    $('#lyric-timing-current-time').textContent = formatLyricTimingClock(currentTime);
+    const lines = getActiveLyricTimingLines();
+    let activeIndex = -1;
+    lines.forEach((line, index) => {
+        if (line.time !== null && currentTime >= line.time) activeIndex = index;
+    });
+    $$('#lyric-timing-lines .lyric-timing-line').forEach((row, index) => {
+        row.classList.toggle('is-playing', index === activeIndex);
+    });
+}
+
+function renderLyricTimingStatus() {
+    if (!lyricTimingSession) return;
+    const lines = getActiveLyricTimingLines();
+    const timedCount = lines.filter(line => line.time !== null).length;
+    const completeVersions = lyricTimingSession.versions.filter(version => {
+        const versionLines = lyricTimingSession.linesByVersion[version.key] || [];
+        return versionLines.length > 0 && versionLines.every(line => line.time !== null)
+            && isLyricTimingSequenceOrdered(versionLines);
+    }).length;
+    const isComplete = lines.length > 0 && timedCount === lines.length && isLyricTimingSequenceOrdered(lines);
+    const isOutOfOrder = timedCount === lines.length && !isLyricTimingSequenceOrdered(lines);
+    const status = $('#lyric-timing-status');
+
+    status.className = `lyric-timing-status ${isComplete ? 'is-complete' : isOutOfOrder ? 'is-warning' : ''}`;
+    status.textContent = isOutOfOrder
+        ? `当前版本 ${timedCount}/${lines.length} 句，时间顺序有冲突，请重新打点。`
+        : `当前版本 ${timedCount}/${lines.length} 句；${completeVersions}/${lyricTimingSession.versions.length} 个版本已完成${lyricTimingSession.hasUnsyncedChanges ? '；有未同步修改' : ''}。`;
+}
+
+function isLyricTimingSequenceOrdered(lines) {
+    let previousTime = -1;
+    return lines.every(line => {
+        if (line.time === null) return false;
+        if (line.time < previousTime) return false;
+        previousTime = line.time;
+        return true;
+    });
+}
+
+function formatLyricTimingClock(value) {
+    const safeValue = Math.max(0, Number(value) || 0);
+    const minutes = Math.floor(safeValue / 60);
+    const seconds = (safeValue % 60).toFixed(2).padStart(5, '0');
+    return `${String(minutes).padStart(2, '0')}:${seconds}`;
+}
+
+async function syncLyricTimingSession() {
+    if (!lyricTimingSession) return;
+    syncCreateLyricTextToForm();
+
+    if (lyricTimingSession.origin === 'create') {
+        newMusicLyricTimingDraft = lyricTimingSession;
+        lyricTimingSession.hasUnsyncedChanges = false;
+        renderLyricTimingVersionSelect();
+        renderLyricTimingStatus();
+        showToast('打点已同步到新音乐草稿');
+        return;
+    }
+
+    const index = getSourceItems('music')
+        .findIndex(item => String(item.id) === String(lyricTimingSession.resourceId));
+    if (index === -1) {
+        showToast('这首音乐已不在资源库里');
+        return;
+    }
+
+    const item = clone(getSourceItems('music')[index]);
+    const lyricText = getSharedLyricTimingText(lyricTimingSession);
+    item.lyricTimings = serializeLyricTimingSession(lyricTimingSession);
+    if (!item.lyricId || item.lyricText) {
+        item.lyricText = lyricText;
+    } else if (lyricTimingSession.hasTextChanges && lyricTimingSession.lyricContentPath) {
+        try {
+            await stageEditableTextFile(lyricTimingSession.lyricContentPath, lyricText);
+        } catch (error) {
+            showToast(error.message || '歌词正文保存失败');
+            return;
+        }
+    } else if (lyricTimingSession.hasTextChanges) {
+        item.lyricText = lyricText;
+    }
+    state.files[DATA_FILES.music][index] = item;
+    lyricTimingSession.hasUnsyncedChanges = false;
+    lyricTimingSession.hasTextChanges = false;
+    renderAll();
+    renderLyricTimingVersionSelect();
+    renderLyricTimingStatus();
+    showToast('打点已保存到待发布列表');
+}
+
+function syncCreateLyricTextToForm() {
+    if (!lyricTimingSession || lyricTimingSession.origin !== 'create') return;
+    const form = $('#music-form');
+    form.elements.lyricMarkdownText.value = getSharedLyricTimingText(lyricTimingSession);
+}
+
+function syncNewMusicLyricTimingDraftText() {
+    if (!newMusicLyricTimingDraft) return;
+    const lineTexts = splitLyricTimingText(
+        markdownToPlainText($('#music-form').elements.lyricMarkdownText.value)
+    );
+    newMusicLyricTimingDraft.versions.forEach(version => {
+        newMusicLyricTimingDraft.linesByVersion[version.key] = reconcileLyricTimingLines(
+            newMusicLyricTimingDraft.linesByVersion[version.key],
+            lineTexts
+        );
+    });
+    newMusicLyricTimingDraft.hasUnsyncedChanges = true;
+
+    if (lyricTimingSession === newMusicLyricTimingDraft) {
+        renderLyricTimingLines();
+        renderLyricTimingStatus();
+    }
+}
+
+function getSharedLyricTimingText(session) {
+    const firstVersion = session && session.versions ? session.versions[0] : null;
+    const lines = firstVersion && session.linesByVersion[firstVersion.key]
+        ? session.linesByVersion[firstVersion.key]
+        : [];
+    return lines.map(line => line.text).join('\n');
+}
+
+function serializeLyricTimingSession(session) {
+    return session.versions.reduce((result, version) => {
+        const finalUrl = normalizeAssetInput(version.finalUrl);
+        const lines = session.linesByVersion[version.key];
+        if (!finalUrl || !Array.isArray(lines)) return result;
+        result[finalUrl] = lines.map(line => ({
+            time: normalizeLyricTimingTime(line.time),
+            text: String(line.text || '').trim()
+        })).filter(line => line.text);
+        return result;
+    }, {});
+}
+
+function buildNewMusicLyricTimings(versionCandidates) {
+    if (!newMusicLyricTimingDraft || !Array.isArray(versionCandidates)) return null;
+    const result = {};
+    let hasTimestamp = false;
+
+    versionCandidates.forEach(candidate => {
+        const finalUrl = normalizeAssetInput(candidate && candidate.url);
+        const timingKey = candidate && candidate.timingKey
+            ? candidate.timingKey
+            : getLyricTimingCandidateKey(candidate);
+        const lines = newMusicLyricTimingDraft.linesByVersion[timingKey];
+        if (!finalUrl || !Array.isArray(lines)) return;
+        const serializedLines = lines.map(line => ({
+            time: normalizeLyricTimingTime(line.time),
+            text: String(line.text || '').trim()
+        })).filter(line => line.text);
+        if (serializedLines.some(line => line.time !== null)) hasTimestamp = true;
+        result[finalUrl] = serializedLines;
+    });
+
+    return hasTimestamp && Object.keys(result).length > 0 ? result : null;
+}
+
+function closeLyricTimingWorkspace() {
+    clearTimeout(lyricTimingClickTimer);
+    const audio = $('#lyric-timing-audio');
+    if (audio) {
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+    }
+    $('#lyric-timing-view').classList.add('is-hidden');
+    $('#library-view').classList.remove('is-hidden');
+    lyricTimingSession = null;
+    renderLibrary();
+    renderIcons();
+}
+
+function resetNewMusicLyricTimingDraft() {
+    if (lyricTimingSession && lyricTimingSession.origin === 'create') {
+        closeLyricTimingWorkspace();
+    }
+    newMusicLyricTimingDraft = null;
+    lyricTimingObjectUrls.forEach(url => URL.revokeObjectURL(url));
+    lyricTimingObjectUrls.clear();
+    lyricTimingAudioUrls = new WeakMap();
 }
 
 function bindImageCropperModal() {
@@ -2803,7 +3495,7 @@ function removeDraftItem(source, id) {
         restoreBaseRecommendationReferences(source, id);
     }
 
-    if (entry.kind === 'new' && item && item.contentPath) {
+    if (item && item.contentPath) {
         delete state.textFiles[item.contentPath];
     }
     if (entry.kind === 'new' && item && item.filename) {
@@ -3126,7 +3818,8 @@ function renderPendingList() {
 
     const cards = entries.map(({ source, item, kind }) => {
         const availability = getSinglePublishAvailability(source, item);
-        const textFiles = kind === 'new' ? getTextFilePathsForItem(source, item) : [];
+        const textFiles = getTextFilePathsForItem(source, item)
+            .filter(path => state.textFiles[path] !== undefined);
         const recommendationLabels = getRecommendationLabelsForItem(source, item.id);
         const badges = [
             `<span>${escapeHtml(SOURCE_META[source].label)}</span>`,
@@ -3255,6 +3948,11 @@ function renderResourceCard(source, item, isLarge = false) {
                         <i data-lucide="rotate-ccw"></i>
                     </button>
                 ` : ''}
+                ${source === 'music' && !isDeleted ? `
+                    <button class="icon-action resource-timing-action" type="button" title="歌词打点" aria-label="为${escapeAttribute(item.title || item.id)}进行歌词打点" data-lyric-timing-resource="${escapeAttribute(item.id)}">
+                        <i data-lucide="audio-lines"></i>
+                    </button>
+                ` : ''}
                 <button class="icon-action" type="button" title="查看" data-view-button="${escapeAttribute(item.id)}" data-source="${source}">
                     <i data-lucide="eye"></i>
                 </button>
@@ -3267,6 +3965,12 @@ function renderResourceCard(source, item, isLarge = false) {
 }
 
 function handleResourceCardClick(event) {
+    const timingButton = event.target.closest('[data-lyric-timing-resource]');
+    if (timingButton) {
+        openResourceLyricTiming(timingButton.dataset.lyricTimingResource);
+        return;
+    }
+
     const editButton = event.target.closest('[data-edit-resource]');
     if (editButton) {
         openResourceEditor(editButton.dataset.source, editButton.dataset.editResource);
@@ -3684,6 +4388,9 @@ async function publishAllDrafts() {
         if (payload.files[DATA_FILES.recommendations]) {
             state.files[DATA_FILES.recommendations] = clone(payload.files[DATA_FILES.recommendations]);
         }
+        Object.entries(payload.textFiles).forEach(([path, content]) => {
+            state.baseTextFiles[path] = normalizeEditableTextContent(content);
+        });
         state.baseFiles = clone(state.files);
         state.textFiles = {};
         state.pendingAssets = [];
@@ -3772,12 +4479,14 @@ async function publishSingleDraft(source, id) {
             state.baseFiles[path] = clone(value);
         });
 
+        Object.entries(payload.textFiles).forEach(([path, content]) => {
+            state.baseTextFiles[path] = normalizeEditableTextContent(content);
+            delete state.textFiles[path];
+        });
+
         entries.forEach(({ source: entrySource, item, kind }) => {
             if (kind === 'new') {
                 state.newIds[entrySource].delete(String(item.id));
-                getTextFilePathsForItem(entrySource, item).forEach(path => {
-                    delete state.textFiles[path];
-                });
             }
         });
 
@@ -3956,7 +4665,7 @@ async function copyDraftBundle() {
     }
 }
 
-function openResourceEditor(source, id) {
+async function openResourceEditor(source, id) {
     const item = getSourceItems(source).find(entry => String(entry.id) === String(id));
     const schema = RESOURCE_EDIT_SCHEMAS[source];
 
@@ -3965,8 +4674,19 @@ function openResourceEditor(source, id) {
         return;
     }
 
+    const editorItem = clone(item);
+    const editorFieldBaselines = {};
+    for (const field of schema) {
+        const editablePath = getEditorTextFilePath(field, item);
+        if (!editablePath) continue;
+        const value = await getEditableTextFileValue(editablePath);
+        editorItem[field.key] = value;
+        editorFieldBaselines[field.key] = { path: editablePath, value };
+    }
+
     const form = $('#resource-editor-form');
     clearFormFeedback(form);
+    form.__editorFieldBaselines = editorFieldBaselines;
     form.elements.source.value = source;
     form.elements.resourceId.value = item.id;
     const isDeleted = isResourceDeleted(item);
@@ -3990,7 +4710,7 @@ function openResourceEditor(source, id) {
             <span>资源 ID</span>
             <input value="${escapeAttribute(item.id)}" disabled>
         </label>
-        ${schema.map(field => renderEditorField(field, item)).join('')}
+        ${schema.map(field => renderEditorField(field, editorItem)).join('')}
     `;
 
     $('#resource-editor-modal').classList.remove('is-hidden');
@@ -4008,7 +4728,9 @@ function openResourceEditor(source, id) {
 }
 
 function closeResourceEditor() {
-    clearFormFeedback($('#resource-editor-form'));
+    const form = $('#resource-editor-form');
+    clearFormFeedback(form);
+    form.__editorFieldBaselines = {};
     $('#resource-editor-modal').classList.add('is-hidden');
     $('#resource-editor-modal').setAttribute('aria-hidden', 'true');
 }
@@ -4037,7 +4759,7 @@ function renderEditorField(field, item) {
         return renderResourceSelectField(field, item, value);
     }
 
-    if (field.type === 'markdownText') {
+    if (field.type === 'markdownText' || field.type === 'contentMarkdown') {
         return renderMarkdownTextField(field, value);
     }
 
@@ -4304,7 +5026,10 @@ async function handleResourceEditorSubmit(event) {
     closeResourceEditor();
     renderAll();
 
-    if (getResourceChangeKind(source, updated)) {
+    const hasRelatedLyricDraft = source === 'music'
+        && updated.lyricId
+        && Boolean(getDraftEntry('lyrics', updated.lyricId));
+    if (getResourceChangeKind(source, updated) || hasRelatedLyricDraft) {
         setPanel('pending-panel');
         showToast('修改已保存到待发布列表');
     } else {
@@ -4429,8 +5154,13 @@ async function applyEditorFieldValue(item, field, input, form, context = {}) {
         return;
     }
 
+    if (field.type === 'contentMarkdown') {
+        await applyContentMarkdownFieldValue(item, field, input, form);
+        return;
+    }
+
     if (field.type === 'markdownText') {
-        await applyMarkdownTextFieldValue(item, field, input, form);
+        await applyMarkdownTextFieldValue(item, field, input, form, context);
         return;
     }
 
@@ -4572,12 +5302,46 @@ async function applyMusicVersionsEditorValue(item, field, form, context = {}) {
     }
 }
 
-async function applyMarkdownTextFieldValue(item, field, input, form) {
-    const fileInput = form && form.elements[getMarkdownFileInputName(field)];
-    const markdownFile = fileInput && fileInput.files ? fileInput.files[0] : null;
-    const rawValue = markdownFile
-        ? (await readTextFile(markdownFile)).trim()
-        : String(input.value || '').trim();
+async function applyContentMarkdownFieldValue(item, field, input, form) {
+    const rawValue = await getMarkdownEditorInputValue(field, input, form);
+    if (field.required && !rawValue) {
+        throw new Error(`${field.label}不能为空`);
+    }
+
+    const path = normalizeAssetInput(item[field.pathKey || 'contentPath']);
+    if (!isEditableLyricMarkdownPath(path)) {
+        throw new Error('歌词正文路径必须是 assets/lyrics/ 下的 Markdown 文件');
+    }
+
+    await stageEditableTextFile(path, rawValue);
+}
+
+async function applyMarkdownTextFieldValue(item, field, input, form, context = {}) {
+    const rawValue = await getMarkdownEditorInputValue(field, input, form);
+
+    if (field.linkedLyricContent && item.lyricId && !context.original?.lyricText) {
+        const baseline = form && form.__editorFieldBaselines
+            ? form.__editorFieldBaselines[field.key]
+            : null;
+        const fileInput = form && form.elements[getMarkdownFileInputName(field)];
+        const hasUploadedFile = Boolean(fileInput && fileInput.files && fileInput.files[0]);
+        const wasEdited = hasUploadedFile
+            || normalizeEditableTextContent(rawValue) !== normalizeEditableTextContent(baseline?.value);
+
+        if (wasEdited) {
+            if (!rawValue) throw new Error('歌词内容不能为空');
+            const lyricItem = getSourceItems('lyrics')
+                .find(entry => String(entry.id) === String(item.lyricId));
+            const path = lyricItem && lyricItem.contentPath ? lyricItem.contentPath : '';
+            if (!isEditableLyricMarkdownPath(path)) {
+                throw new Error('关联词作没有可编辑的 Markdown 正文');
+            }
+            await stageEditableTextFile(path, rawValue);
+        }
+
+        delete item[field.key];
+        return;
+    }
 
     if (field.required && !rawValue) {
         throw new Error(`${field.label}不能为空`);
@@ -4589,6 +5353,74 @@ async function applyMarkdownTextFieldValue(item, field, input, form) {
     }
 
     item[field.key] = markdownToPlainText(rawValue);
+}
+
+async function getMarkdownEditorInputValue(field, input, form) {
+    const fileInput = form && form.elements[getMarkdownFileInputName(field)];
+    const markdownFile = fileInput && fileInput.files ? fileInput.files[0] : null;
+    return markdownFile
+        ? (await readTextFile(markdownFile)).trim()
+        : String(input.value || '').trim();
+}
+
+function getEditorTextFilePath(field, item) {
+    if (field.type === 'contentMarkdown') {
+        return normalizeAssetInput(item[field.pathKey || 'contentPath']);
+    }
+
+    if (field.linkedLyricContent && !item[field.key] && item.lyricId) {
+        const lyricItem = getSourceItems('lyrics')
+            .find(entry => String(entry.id) === String(item.lyricId));
+        return normalizeAssetInput(lyricItem && lyricItem.contentPath);
+    }
+
+    return '';
+}
+
+async function getEditableTextFileValue(path) {
+    const normalizedPath = normalizeAssetInput(path);
+    if (!normalizedPath) return '';
+    if (state.textFiles[normalizedPath] !== undefined) {
+        return normalizeEditableTextContent(state.textFiles[normalizedPath]);
+    }
+    if (state.baseTextFiles[normalizedPath] === undefined) {
+        state.baseTextFiles[normalizedPath] = normalizeEditableTextContent(
+            await fetchOptionalText(normalizedPath)
+        );
+    }
+    return state.baseTextFiles[normalizedPath];
+}
+
+async function stageEditableTextFile(path, content) {
+    const normalizedPath = normalizeAssetInput(path);
+    if (!isEditableLyricMarkdownPath(normalizedPath)) {
+        throw new Error('不允许修改该歌词文件');
+    }
+
+    const normalizedContent = normalizeEditableTextContent(content);
+    if (state.baseTextFiles[normalizedPath] === undefined) {
+        state.baseTextFiles[normalizedPath] = normalizeEditableTextContent(
+            await fetchOptionalText(normalizedPath)
+        );
+    }
+
+    if (normalizedContent === state.baseTextFiles[normalizedPath]) {
+        delete state.textFiles[normalizedPath];
+    } else {
+        state.textFiles[normalizedPath] = normalizedContent;
+    }
+}
+
+function normalizeEditableTextContent(value) {
+    return String(value || '').replace(/\r\n?/g, '\n').trim();
+}
+
+function isEditableLyricMarkdownPath(path) {
+    const normalizedPath = String(path || '');
+    return normalizedPath.startsWith('assets/lyrics/')
+        && normalizedPath.endsWith('.md')
+        && !normalizedPath.includes('\\')
+        && normalizedPath.split('/').every(segment => segment && segment !== '.' && segment !== '..');
 }
 
 function getDraftEntries() {
@@ -4615,6 +5447,9 @@ function getResourceChangeKind(source, item) {
 
     const baseItem = getBaseResourceItem(source, id);
     if (!baseItem) return '';
+    if (getTextFilePathsForItem(source, item).some(path => state.textFiles[path] !== undefined)) {
+        return 'edit';
+    }
     const baseDeleted = isResourceDeleted(baseItem);
     const currentDeleted = isResourceDeleted(item);
     if (!baseDeleted && currentDeleted) return 'delete';
@@ -4701,7 +5536,7 @@ function expandEntriesWithDependencies(entries) {
     });
 
     entries.forEach(({ source, item }) => {
-        if (source !== 'music' || !item.lyricId || !state.newIds.lyrics.has(String(item.lyricId))) {
+        if (source !== 'music' || !item.lyricId) {
             return;
         }
 

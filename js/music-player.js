@@ -189,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.timeCurr.textContent = '0:00';
         elements.timeTotal.textContent = '0:00';
         updateVersionStripState();
+        loadLyrics(song);
 
         if (shouldResume) {
             playAudio();
@@ -289,19 +290,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const requestId = ++lyricsRequestId;
         const nextLyrics = [];
         let lrcText = null;
+        const catalogTiming = getCatalogLyricTiming(song);
 
         elements.lyricsBox.innerHTML = '';
         activeLyricIndex = -1;
         lyricFollowSuspendedUntil = 0;
 
-        try {
-            const lrcRes = await fetch(`assets/lyrics/${song.id}.lrc`);
-            if (lrcRes.ok) lrcText = await lrcRes.text();
-        } catch (error) {
-            // A missing timed-lyrics file is expected for older tracks.
+        if (catalogTiming.lines.length > 0) {
+            nextLyrics.push(...catalogTiming.lines);
+        } else if (!catalogTiming.hasAnyVersion) {
+            try {
+                const lrcRes = await fetch(`assets/lyrics/${song.id}.lrc`);
+                if (lrcRes.ok) lrcText = await lrcRes.text();
+            } catch (error) {
+                // A missing timed-lyrics file is expected for older tracks.
+            }
         }
 
-        if (lrcText) {
+        if (nextLyrics.length > 0) {
+            // The timing saved by the admin is already in lyric order.
+        } else if (lrcText) {
             const linePattern = /\[(\d{2}):(\d{2}(?:\.\d{1,3})?)\](.*)/;
             lrcText.split('\n').forEach(line => {
                 const match = linePattern.exec(line);
@@ -318,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     nextLyrics.push(...song.lyricText
                         .split('\n')
                         .filter(line => line.trim())
-                        .map(line => ({ text: line, time: 0 })));
+                        .map(line => ({ text: line, time: null })));
                 } else if (song.lyricId) {
                     const res = await fetch('assets/data/lyrics.json');
                     const data = getVisibleResources(await res.json());
@@ -329,7 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         nextLyrics.push(...text
                             .split('\n')
                             .filter(line => line.trim())
-                            .map(line => ({ text: line.replace(/^#+\s*/, '').trim(), time: 0 })));
+                            .map(line => ({ text: line.replace(/^#+\s*/, '').trim(), time: null })));
                     }
                 }
             } catch (error) {
@@ -339,7 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Ignore a slow response from a track the user has already left.
         if (requestId !== lyricsRequestId) return;
-        if (nextLyrics.length === 0) nextLyrics.push({ text: 'No lyrics available', time: 0 });
+        if (nextLyrics.length === 0) nextLyrics.push({ text: 'No lyrics available', time: null });
         lyrics = nextLyrics;
 
         const fragment = document.createDocumentFragment();
@@ -390,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!lines.length) return;
 
         let activeIdx = 0;
-        const hasTimestamps = lyrics.some(line => line.time > 0);
+        const hasTimestamps = hasUsableLyricTiming(lyrics);
 
         if (hasTimestamps) {
             for (let i = lyrics.length - 1; i >= 0; i--) {
@@ -488,6 +496,56 @@ document.addEventListener('DOMContentLoaded', () => {
     function prevTrack() {
         currentIndex = (currentIndex - 1 + songs.length) % songs.length;
         loadTrack(currentIndex);
+    }
+
+    function getCatalogLyricTiming(song) {
+        const timingMap = song && song.lyricTimings;
+        if (!timingMap || typeof timingMap !== 'object' || Array.isArray(timingMap)) {
+            return { lines: [], hasAnyVersion: false };
+        }
+
+        const entries = Object.entries(timingMap)
+            .filter(([, lines]) => Array.isArray(lines));
+        if (entries.length === 0) return { lines: [], hasAnyVersion: false };
+
+        const selectedVersion = getSongVersions(song)[currentVersionIndex];
+        const selectedUrl = normalizeAudioUrl(selectedVersion && selectedVersion.url);
+        const selectedEntry = entries.find(([url]) => normalizeAudioUrl(url) === selectedUrl);
+        const selectedLines = normalizeCatalogLyricLines(selectedEntry && selectedEntry[1]);
+        if (selectedLines.length > 0) {
+            return { lines: selectedLines, hasAnyVersion: true };
+        }
+
+        // A different mix may not have been timed yet. Reuse only its text so
+        // the player never applies another version's incorrect timestamps.
+        const fallbackLines = normalizeCatalogLyricLines(entries[0][1])
+            .map(line => ({ text: line.text, time: null }));
+        return { lines: fallbackLines, hasAnyVersion: true };
+    }
+
+    function normalizeCatalogLyricLines(lines) {
+        if (!Array.isArray(lines)) return [];
+        return lines.map(line => {
+            const text = String(line && line.text || '').trim();
+            if (!text) return null;
+            const rawTime = line.time;
+            const numericTime = rawTime === null || rawTime === undefined || rawTime === ''
+                ? null
+                : Number(rawTime);
+            return {
+                text,
+                time: Number.isFinite(numericTime) && numericTime >= 0 ? numericTime : null
+            };
+        }).filter(Boolean);
+    }
+
+    function hasUsableLyricTiming(lines) {
+        let previousTime = -1;
+        return lines.length > 0 && lines.every(line => {
+            if (!Number.isFinite(line.time) || line.time < previousTime) return false;
+            previousTime = line.time;
+            return true;
+        });
     }
 
     function getSongVersions(song) {

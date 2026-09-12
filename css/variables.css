@@ -24,9 +24,9 @@
     --radius-full: 9999px;
     
     /* Fonts */
-    --font-heading: 'Playfair Display', serif;
-    --font-body: 'Inter', sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    --font-heading: 'Playfair Display', 'Songti SC', STSong, Georgia, serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
     
     /* Transitions */
     --transition-fast: 0.2s ease;

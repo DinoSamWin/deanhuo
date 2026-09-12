@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    fetch('assets/data/lyrics.json?v=' + Date.now())
+    fetch('assets/data/lyrics.json')
         .then(res => res.json())
         .then(data => {
             data = getVisibleResources(data);
@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Load Markdown Content
-        fetch(lyric.contentPath + '?v=' + Date.now())
+        fetch(lyric.contentPath)
             .then(res => res.text())
             .then(text => {
                 const cleanedText = text.replace(/\xA0/g, ' ');

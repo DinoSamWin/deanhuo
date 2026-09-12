@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
+  <title id="title">Dean Huo</title>
+  <rect width="128" height="128" rx="64" fill="#0d0d0d"/>
+  <circle cx="64" cy="64" r="61" fill="none" stroke="#00ff88" stroke-opacity=".5" stroke-width="2"/>
+  <text x="64" y="73" fill="#fff" font-family="Inter,Arial,sans-serif" font-size="34" font-weight="600" text-anchor="middle">DH</text>
+</svg>

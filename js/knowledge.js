@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!grid) return;
 
     Promise.all([
-        fetch('assets/data/knowledge-index.json?v=' + Date.now()).then(res => {
+        fetch('assets/data/knowledge-index.json').then(res => {
             if (!res.ok) throw new Error('Network response was not ok');
             return res.json();
         }),

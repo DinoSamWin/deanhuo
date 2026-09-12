@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fetch lyrics data
     Promise.all([
-        fetch('assets/data/lyrics.json?v=' + Date.now()).then(response => response.json()),
+        fetch('assets/data/lyrics.json').then(response => response.json()),
         window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
     ])
         .then(([data, recommendationConfig]) => {
@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             card.innerHTML = `
                 <div class="lyrics-card-img-container">
-                    <img src="${lyric.cover}" alt="${lyric.title}" class="lyrics-card-img">
+                    <img src="${lyric.cover}" alt="${lyric.title}" class="lyrics-card-img" loading="lazy" decoding="async">
                 </div>
                 <div class="lyrics-card-content">
                     <h3 class="lyrics-card-title">${lyric.title}</h3>
