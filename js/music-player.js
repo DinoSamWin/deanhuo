@@ -8,12 +8,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentVersionIndex = 0;
     let isPlaying = false;
     let lyrics = [];
+    let lyricsHaveTimestamps = false;
     let activeLyricIndex = -1;
     let lyricScrollIndex = -1;
     let lyricFollowSuspendedUntil = 0;
     let lyricAnimationFrameId = null;
+    let lyricScrollAnimationFrameId = null;
     let lyricsRequestId = 0;
     const LYRIC_SCROLL_LEAD_SECONDS = 0.28;
+    const LYRIC_SCROLL_DURATION_MS = 240;
+    const reduceMotionQuery = window.matchMedia
+        ? window.matchMedia('(prefers-reduced-motion: reduce)')
+        : null;
 
     const elements = {
         audio: document.getElementById('audio-element'),
@@ -307,9 +313,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const catalogTiming = getCatalogLyricTiming(song);
 
         elements.lyricsBox.innerHTML = '';
+        lyricsHaveTimestamps = false;
         activeLyricIndex = -1;
         lyricScrollIndex = -1;
         lyricFollowSuspendedUntil = 0;
+        cancelLyricScrollAnimation();
 
         if (catalogTiming.lines.length > 0) {
             nextLyrics.push(...catalogTiming.lines);
@@ -364,6 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (requestId !== lyricsRequestId) return;
         if (nextLyrics.length === 0) nextLyrics.push({ text: 'No lyrics available', time: null });
         lyrics = nextLyrics;
+        lyricsHaveTimestamps = hasUsableLyricTiming(lyrics);
 
         const fragment = document.createDocumentFragment();
         lyrics.forEach((line, index) => {
@@ -385,6 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const suspendFollow = () => {
             lyricFollowSuspendedUntil = Date.now() + 8000;
             lyricScrollIndex = -1;
+            cancelLyricScrollAnimation();
         };
 
         if ('PointerEvent' in window) {
@@ -410,24 +420,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateLyricsDisplay(currentTime, force = false) {
-        const lines = elements.lyricsBox.querySelectorAll('.lyric-line');
+        const lines = elements.lyricsBox.children;
         if (!lines.length) return;
 
         let activeIdx = 0;
-        const hasTimestamps = hasUsableLyricTiming(lyrics);
-
-        if (hasTimestamps) {
-            for (let i = lyrics.length - 1; i >= 0; i--) {
-                if (currentTime >= lyrics[i].time) {
-                    activeIdx = i;
-                    if (currentTime - lyrics[i].time < 0.5) {
-                        while (activeIdx > 0 && lyrics[activeIdx - 1].time === lyrics[activeIdx].time) {
-                            activeIdx--;
-                        }
-                    }
-                    break;
-                }
-            }
+        if (lyricsHaveTimestamps) {
+            activeIdx = findActiveLyricIndex(currentTime);
         } else if (elements.audio.duration) {
             const ratio = elements.audio.currentTime / elements.audio.duration;
             activeIdx = Math.floor(ratio * lyrics.length);
@@ -439,7 +437,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // The highlight always changes at the exact saved timestamp. Only
             // the scroll position below is allowed to anticipate the next line.
-            lines.forEach((line, index) => {
+            for (let index = 0; index < lines.length; index++) {
+                const line = lines[index];
                 line.classList.remove('active', 'near-prev', 'near-next', 'far-prev', 'far-next');
                 line.removeAttribute('aria-current');
                 if (index === activeIdx) {
@@ -454,11 +453,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     line.classList.add('far-next');
                 }
-            });
+            }
         }
 
         let scrollIdx = activeIdx;
-        if (!force && isPlaying && hasTimestamps && activeIdx < lyrics.length - 1) {
+        if (!force && isPlaying && lyricsHaveTimestamps && activeIdx < lyrics.length - 1) {
             const nextTime = lyrics[activeIdx + 1].time;
             const timeUntilNext = nextTime - currentTime;
             if (timeUntilNext > 0 && timeUntilNext <= LYRIC_SCROLL_LEAD_SECONDS) {
@@ -473,13 +472,69 @@ document.addEventListener('DOMContentLoaded', () => {
             lyricScrollIndex = scrollIdx;
             const targetLine = lines[scrollIdx];
             const targetTop = targetLine.offsetTop - ((elements.lyricsBox.clientHeight - targetLine.offsetHeight) / 2);
-            const reduceMotion = window.matchMedia
-                && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            elements.lyricsBox.scrollTo({
-                top: Math.max(0, targetTop),
-                behavior: force || reduceMotion ? 'auto' : 'smooth'
-            });
+            scrollLyricsTo(Math.max(0, targetTop), force);
         }
+    }
+
+    function findActiveLyricIndex(currentTime) {
+        let low = 0;
+        let high = lyrics.length - 1;
+        let activeIdx = 0;
+
+        while (low <= high) {
+            const middle = Math.floor((low + high) / 2);
+            if (currentTime >= lyrics[middle].time) {
+                activeIdx = middle;
+                low = middle + 1;
+            } else {
+                high = middle - 1;
+            }
+        }
+
+        if (currentTime - lyrics[activeIdx].time < 0.5) {
+            while (activeIdx > 0 && lyrics[activeIdx - 1].time === lyrics[activeIdx].time) {
+                activeIdx--;
+            }
+        }
+
+        return activeIdx;
+    }
+
+    function scrollLyricsTo(targetTop, immediate = false) {
+        cancelLyricScrollAnimation();
+
+        if (immediate || (reduceMotionQuery && reduceMotionQuery.matches)) {
+            elements.lyricsBox.scrollTop = targetTop;
+            return;
+        }
+
+        const startTop = elements.lyricsBox.scrollTop;
+        const distance = targetTop - startTop;
+        if (Math.abs(distance) < 0.5) {
+            elements.lyricsBox.scrollTop = targetTop;
+            return;
+        }
+
+        const startedAt = performance.now();
+        const animateScroll = now => {
+            const progress = Math.min(1, (now - startedAt) / LYRIC_SCROLL_DURATION_MS);
+            const easedProgress = 1 - Math.pow(1 - progress, 3);
+            elements.lyricsBox.scrollTop = startTop + (distance * easedProgress);
+
+            if (progress < 1) {
+                lyricScrollAnimationFrameId = requestAnimationFrame(animateScroll);
+            } else {
+                lyricScrollAnimationFrameId = null;
+            }
+        };
+
+        lyricScrollAnimationFrameId = requestAnimationFrame(animateScroll);
+    }
+
+    function cancelLyricScrollAnimation() {
+        if (lyricScrollAnimationFrameId === null) return;
+        cancelAnimationFrame(lyricScrollAnimationFrameId);
+        lyricScrollAnimationFrameId = null;
     }
 
     function startLyricSync() {
@@ -524,8 +579,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setPlayingState(nextState) {
         isPlaying = nextState;
-        if (isPlaying) startLyricSync();
-        else stopLyricSync();
+        if (isPlaying) {
+            startLyricSync();
+        } else {
+            stopLyricSync();
+            cancelLyricScrollAnimation();
+            if (Date.now() >= lyricFollowSuspendedUntil) {
+                updateLyricsDisplay(elements.audio.currentTime || 0, true);
+            }
+        }
         updatePlayState();
     }
 

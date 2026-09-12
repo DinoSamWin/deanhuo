@@ -411,9 +411,9 @@
             -webkit-overflow-scrolling: touch;
             touch-action: pan-y;
             scrollbar-width: none;
-            padding-block: calc((clamp(80px, 15vh, 120px) - 38px) / 2);
-            /* Programmatic lyric following opts into smooth scrolling. Keeping
-               the default instant makes seeking and reduced-motion exact. */
+            padding-block: calc((clamp(80px, 15vh, 120px) - 42px) / 2);
+            /* Smooth following is timed in JavaScript; native smoothing stays
+               off so seeking and reduced-motion positioning remain exact. */
             scroll-behavior: auto;
             z-index: 20;
             /* Ensure lyrics render above background cleanly */
@@ -426,16 +426,22 @@
         .lyric-line {
             position: relative;
             width: 100%;
-            min-height: 38px;
+            min-height: 42px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 17px;
+            font-size: 22px;
+            font-weight: 500;
             line-height: 1.35;
             color: #6a7c93;
-            transition: color 0.25s ease, opacity 0.25s ease, font-size 0.25s ease;
+            transition:
+                color 0.18s ease-out,
+                opacity 0.18s ease-out,
+                transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+                text-shadow 0.18s ease-out;
             opacity: 0.16;
-            transform: none;
+            transform: scale(0.78);
+            transform-origin: center;
             pointer-events: auto;
             margin: 0;
             padding: 6px 20px;
@@ -443,22 +449,21 @@
 
         .lyric-line.active {
             opacity: 1;
-            font-weight: 500;
             color: #fff;
-            font-size: 22px;
+            transform: scale(1);
             text-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
         }
 
         .lyric-line.near-prev {
             opacity: 0.35;
             color: #6a7c93;
-            font-size: 17px;
+            transform: scale(0.8);
         }
 
         .lyric-line.near-next {
             opacity: 0.35;
             color: #6a7c93;
-            font-size: 17px;
+            transform: scale(0.8);
         }
 
         .lyric-line.far-prev {
@@ -723,18 +728,14 @@
                 width: 100%;
                 height: clamp(100px, 15dvh, 132px);
                 margin: 0 0 8px;
-                padding-block: calc((clamp(100px, 15dvh, 132px) - 38px) / 2);
+                padding-block: calc((clamp(100px, 15dvh, 132px) - 42px) / 2);
                 flex: 0 0 auto;
                 touch-action: pan-y !important;
             }
 
             .lyric-line {
-                font-size: 15px;
-                padding-inline: 22px;
-            }
-
-            .lyric-line.active {
                 font-size: 19px;
+                padding-inline: 22px;
             }
 
             .player-controls {
@@ -906,7 +907,7 @@
     <audio id="audio-element" preload="metadata" playsinline></audio>
 
     <script src="js/wechat-share.js?v=20260912-song-route-3"></script>
-    <script src="js/music-player.js?v=20260912-lyric-sync-1"></script>
+    <script src="js/music-player.js?v=20260912-lyric-motion-1"></script>
 </body>
 
 </html>
