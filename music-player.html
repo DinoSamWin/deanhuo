@@ -7,18 +7,18 @@
     <link rel="icon" type="image/png" sizes="32x32" href="assets/images/brand/dean-logo-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="assets/images/brand/dean-logo-16.png">
     <link rel="apple-touch-icon" sizes="180x180" href="assets/images/brand/dean-logo-180.png">
-    <title>Music Player | Dean Huo</title>
+    <title>Dean Huo｜Music Player</title>
     <!-- SHARE_META_START -->
     <meta name="description" content="聆听 Dean Huo 的原创音乐作品。">
     <meta property="og:type" content="music.song">
     <meta property="og:site_name" content="Dean Huo">
-    <meta property="og:title" content="Music Player | Dean Huo">
+    <meta property="og:title" content="Dean Huo｜Music Player">
     <meta property="og:description" content="聆听 Dean Huo 的原创音乐作品。">
     <meta property="og:image" content="https://www.deanhuo.com/assets/images/brand/dean-logo-512.png">
     <meta property="og:image:width" content="512">
     <meta property="og:image:height" content="512">
     <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="Music Player | Dean Huo">
+    <meta name="twitter:title" content="Dean Huo｜Music Player">
     <meta name="twitter:description" content="聆听 Dean Huo 的原创音乐作品。">
     <meta name="twitter:image" content="https://www.deanhuo.com/assets/images/brand/dean-logo-512.png">
     <!-- SHARE_META_END -->
@@ -817,7 +817,7 @@
     </style>
 </head>
 
-<body id="player-body">
+<body id="player-body" data-share-dynamic="true">
     <div class="dynamic-bg-container" id="bg-container">
         <div class="cover-blur-bg" id="cover-blur"></div>
         <div class="stars-container" id="stars-container"></div>
@@ -897,7 +897,8 @@
 
     <audio id="audio-element" preload="metadata" playsinline></audio>
 
-    <script src="js/music-player.js?v=20260912-lyric-timing"></script>
+    <script src="js/wechat-share.js?v=20260912-brand-share"></script>
+    <script src="js/music-player.js?v=20260912-brand-share"></script>
 </body>
 
 </html>

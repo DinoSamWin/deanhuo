@@ -144,6 +144,14 @@ button {
     box-shadow: 0 0 18px rgba(0, 255, 136, 0.9);
 }
 
+.brand-logo {
+    display: block;
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    object-fit: contain;
+}
+
 .side-link,
 .ghost-action,
 .danger-action,

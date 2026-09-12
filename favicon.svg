@@ -1,4 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="16" fill="#1f4d3a"/>
-  <path d="M18 14h13c12.2 0 20 7.1 20 18s-7.8 18-20 18H18V14Zm12.4 28c7.2 0 11.6-3.7 11.6-10s-4.4-10-11.6-10H27v20h3.4Z" fill="#f5efe3"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
+  <title>Dean Huo</title>
+  <defs>
+    <clipPath id="rounded-logo">
+      <rect width="800" height="800" rx="144"/>
+    </clipPath>
+  </defs>
+  <image href="assets/images/brand/dean-logo-source.jpg" width="800" height="800" clip-path="url(#rounded-logo)"/>
 </svg>

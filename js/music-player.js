@@ -133,6 +133,10 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.blurBg.style.backgroundImage = `url(${song.cover})`;
         elements.audio.src = getSongVersions(song)[currentVersionIndex]?.url || song.url || '';
 
+        if (window.DeanShare) {
+            window.DeanShare.configureTrack(song);
+        }
+
         updateCarouselUI();
         renderVersionStrip(song);
         loadLyrics(song);

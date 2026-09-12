@@ -117,6 +117,15 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('article-title').innerText = articleMeta.title;
             document.getElementById('article-date').innerText = articleMeta.date;
 
+            if (window.DeanShare) {
+                window.DeanShare.configure({
+                    title: `${articleMeta.title} | 知识冰箱`,
+                    description: articleMeta.description || '阅读 Dean Huo 的知识笔记与思考。',
+                    image: 'https://www.deanhuo.com/assets/images/brand/dean-logo-512.png',
+                    link: window.location.href.split('#')[0]
+                });
+            }
+
             const tagsContainer = document.getElementById('article-tags');
             if (articleMeta.tags && articleMeta.tags.length > 0) {
                 tagsContainer.innerHTML = articleMeta.tags.map(tag => `<span class="a-tag">${tag}</span>`).join('');
