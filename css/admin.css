@@ -1525,6 +1525,49 @@ button {
     grid-column: 1 / -1;
 }
 
+.editor-lyric-bootstrap-note {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    padding: 13px;
+    color: #d8ffe9;
+    background: rgba(0, 255, 136, 0.08);
+    border: 1px solid rgba(0, 255, 136, 0.24);
+    border-radius: 8px;
+}
+
+.editor-lyric-bootstrap-note > svg {
+    width: 40px;
+    height: 40px;
+    padding: 9px;
+    color: var(--accent-color);
+    background: rgba(0, 255, 136, 0.1);
+    border-radius: 8px;
+}
+
+.editor-lyric-bootstrap-note > div {
+    display: grid;
+    gap: 4px;
+}
+
+.editor-lyric-bootstrap-note strong {
+    font-size: 14px;
+}
+
+.editor-lyric-bootstrap-note span {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.65;
+}
+
+.editor-form.is-lyric-bootstrap textarea[name="lyricText"] {
+    min-height: 240px;
+    border-color: rgba(0, 255, 136, 0.5);
+    box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.08);
+}
+
 .modal-actions {
     display: flex;
     justify-content: flex-end;

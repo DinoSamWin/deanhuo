@@ -56,6 +56,7 @@ let photoBatchActiveIndex = 0;
 let photoBatchDraftSaveTimer = null;
 let photoBatchDraftRestoring = false;
 let lyricTimingSession = null;
+let pendingLyricTimingResourceId = '';
 let newMusicLyricTimingDraft = null;
 let lyricTimingClickTimer = null;
 let lyricTimingAudioUrls = new WeakMap();
@@ -2381,26 +2382,27 @@ async function openResourceLyricTiming(id) {
     const item = getSourceItems('music').find(entry => String(entry.id) === String(id));
     if (!item) {
         showToast('没有找到这首音乐');
-        return;
+        return false;
     }
 
     const musicVersions = getMusicVersionsForItem(item);
     if (musicVersions.length === 0) {
         showToast('这首音乐还没有可播放的音频');
-        return;
+        return false;
     }
 
-    setPanel('resources-panel');
-    activateResourceForm('music-form');
     showToast('正在读取已有歌词…');
 
     try {
         const seed = await loadResourceLyricTimingSeed(item, musicVersions);
         if (seed.lineTexts.length === 0) {
-            showToast('这首音乐还没有可打点的歌词');
-            return;
+            await openMissingResourceLyricsEditor(item);
+            return false;
         }
 
+        resetMissingResourceLyricsEditor();
+        setPanel('resources-panel');
+        activateResourceForm('music-form');
         const versions = musicVersions.map((version, index) => ({
             key: getLyricTimingUrlKey(version.url),
             label: version.label || `版本${index + 1}`,
@@ -2437,8 +2439,52 @@ async function openResourceLyricTiming(id) {
             hasCanonicalTextChanges: false
         };
         showLyricTimingWorkspace();
+        return true;
     } catch (error) {
         showToast(error.message || '读取歌词失败');
+        return false;
+    }
+}
+
+async function openMissingResourceLyricsEditor(item) {
+    await openResourceEditor('music', item.id);
+    pendingLyricTimingResourceId = String(item.id);
+
+    const form = $('#resource-editor-form');
+    const fields = $('#resource-editor-fields');
+    const lyricInput = form.elements.lyricText;
+    const submitButton = form.querySelector('button[type="submit"]');
+    form.classList.add('is-lyric-bootstrap');
+    $('#resource-editor-title').textContent = '先添加歌词';
+    $('#resource-editor-subtitle').textContent = `${item.title || item.id}·保存后自动进入歌词打点`;
+    fields.insertAdjacentHTML('afterbegin', `
+        <div class="editor-lyric-bootstrap-note">
+            <i data-lucide="file-plus-2"></i>
+            <div>
+                <strong>这是已发布歌曲，不会新建重复音乐</strong>
+                <span>原歌曲的标题、封面、音频和其他资料已完整读取。请在下方“歌词内容”上传 Markdown 或直接填写，系统会创建关联词作并继续打点。</span>
+            </div>
+        </div>
+    `);
+    submitButton.innerHTML = '<i data-lucide="audio-lines"></i> 保存歌词并开始打点';
+    setFormMessage(form, '请先添加歌词内容，其他字段已从线上资源自动带入。', 'info');
+    renderIcons();
+
+    if (lyricInput) {
+        lyricInput.focus();
+        lyricInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    showToast(`《${item.title || item.id}》还没有歌词，请先添加后再打点`);
+}
+
+function resetMissingResourceLyricsEditor() {
+    pendingLyricTimingResourceId = '';
+    const form = $('#resource-editor-form');
+    if (!form) return;
+    form.classList.remove('is-lyric-bootstrap');
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) {
+        submitButton.innerHTML = '<i data-lucide="save"></i> 保存到待发布';
     }
 }
 
@@ -4938,6 +4984,7 @@ async function openResourceEditor(source, id) {
         return;
     }
 
+    resetMissingResourceLyricsEditor();
     const editorItem = clone(item);
     const editorFieldBaselines = {};
     for (const field of schema) {
@@ -4993,6 +5040,7 @@ async function openResourceEditor(source, id) {
 
 function closeResourceEditor() {
     const form = $('#resource-editor-form');
+    resetMissingResourceLyricsEditor();
     clearFormFeedback(form);
     form.__editorFieldBaselines = {};
     $('#resource-editor-modal').classList.add('is-hidden');
@@ -5250,6 +5298,9 @@ async function handleResourceEditorSubmit(event) {
     const schema = RESOURCE_EDIT_SCHEMAS[source] || [];
     const path = DATA_FILES[source];
     const index = getSourceItems(source).findIndex(item => String(item.id) === String(id));
+    const shouldResumeLyricTiming = source === 'music'
+        && String(pendingLyricTimingResourceId) === String(id);
+    let bootstrapLyricMarkdown = '';
 
     if (index === -1) {
         showToast('这条资源已经不在资源库里');
@@ -5268,8 +5319,53 @@ async function handleResourceEditorSubmit(event) {
 
     try {
         progress.set(14, '正在读取编辑字段');
+        if (shouldResumeLyricTiming) {
+            const lyricField = schema.find(field => field.key === 'lyricText');
+            bootstrapLyricMarkdown = lyricField
+                ? await getMarkdownEditorInputValue(lyricField, form.elements.lyricText, form)
+                : '';
+            const selectedLyricId = String(form.elements.lyricId?.value || '').trim();
+            let selectedLyricHasContent = false;
+            if (selectedLyricId && !bootstrapLyricMarkdown) {
+                const selectedLyric = getSourceItems('lyrics')
+                    .find(entry => String(entry.id) === selectedLyricId);
+                const selectedPath = normalizeAssetInput(selectedLyric?.contentPath);
+                const selectedContent = selectedPath
+                    ? await getEditableTextFileValue(selectedPath)
+                    : '';
+                selectedLyricHasContent = splitLyricTimingText(markdownToPlainText(selectedContent)).length > 0;
+            }
+            if (!bootstrapLyricMarkdown && !selectedLyricHasContent) {
+                throw new Error('请先上传歌词 Markdown 或填写歌词内容');
+            }
+        }
+
         for (const field of schema) {
             await applyEditorFieldValue(updated, field, form.elements[field.key], form, { progress, original });
+        }
+
+        if (shouldResumeLyricTiming && !updated.lyricId) {
+            const lyricId = makeUniqueId('lyric', updated.title || original.title, 'lyrics');
+            const contentPath = `assets/lyrics/admin-generated/${lyricId}.md`;
+            const audioPath = getDefaultMusicAudioPath(updated);
+            state.textFiles[contentPath] = bootstrapLyricMarkdown;
+            appendResource('lyrics', {
+                id: lyricId,
+                title: updated.title || original.title || lyricId,
+                author: updated.artist || original.artist || 'Dean Huo',
+                date: formatInputDate(new Date()),
+                cover: normalizeAssetInput(updated.cover || original.cover),
+                summary: updated.description || original.description || summarizeMarkdown(bootstrapLyricMarkdown),
+                contentPath,
+                ...(audioPath ? { audioPath } : {}),
+                linkedMusicId: original.id,
+                order: getNextNumber('lyrics', 'order'),
+                showOnHome: false,
+                homeOrder: getNextHomeOrder('lyrics'),
+                releaseYear: String(updated.year || original.year || new Date().getFullYear())
+            });
+            updated.lyricId = lyricId;
+            delete updated.lyricText;
         }
         progress.set(88, '正在写入待发布列表');
     } catch (error) {
@@ -5289,6 +5385,14 @@ async function handleResourceEditorSubmit(event) {
     submitButton.innerHTML = originalButtonHtml;
     closeResourceEditor();
     renderAll();
+
+    if (shouldResumeLyricTiming) {
+        const opened = await openResourceLyricTiming(id);
+        if (opened) {
+            showToast('歌词已保存并关联原歌曲，现在可以开始打点');
+        }
+        return;
+    }
 
     const hasRelatedLyricDraft = source === 'music'
         && updated.lyricId
