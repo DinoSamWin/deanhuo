@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         timeTotal: document.getElementById('time-total'),
         slider: document.getElementById('progress-slider'),
         lyricsBox: document.getElementById('lyrics-display'),
-        playerBody: document.getElementById('player-body'),
+        playerBody: document.body,
         versionStrip: document.getElementById('version-strip')
     };
 
@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.starsContainer.innerHTML = '';
         const isCompact = window.matchMedia('(max-width: 600px)').matches;
         const hasLowMemory = navigator.deviceMemory && navigator.deviceMemory <= 4;
-        const count = hasLowMemory ? 36 : (isCompact ? 64 : 140);
+        const count = isCompact ? (hasLowMemory ? 6 : 10) : (hasLowMemory ? 80 : 140);
         const colors = ['#ffffff', '#cce0ff', '#ffe8cc', '#e6f2ff']; // White, blueish, yellowish
         const fragment = document.createDocumentFragment();
 
@@ -248,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
         songs.forEach((song, i) => {
             const card = document.createElement('div');
             card.className = 'cover-card';
-            card.style.backgroundImage = `url(${song.cover})`;
+            card.dataset.cover = song.cover;
             card.dataset.index = i;
             card.onclick = () => {
                 if (i !== currentIndex) {
@@ -271,12 +271,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (i === currentIndex) {
                 card.classList.add('active');
+                card.style.backgroundImage = `url(${card.dataset.cover})`;
             } else if (i === (currentIndex - 1 + len) % len) {
                 card.classList.add('prev');
+                card.style.backgroundImage = `url(${card.dataset.cover})`;
             } else if (i === (currentIndex + 1) % len) {
                 card.classList.add('next');
+                card.style.backgroundImage = `url(${card.dataset.cover})`;
             } else {
                 card.classList.add('hidden');
+                card.style.backgroundImage = 'none';
             }
         });
     }
@@ -441,8 +445,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function togglePlay() {
-        if (isPlaying) pauseAudio();
-        else playAudio();
+        if (elements.audio.paused || elements.audio.ended) playAudio();
+        else pauseAudio();
     }
 
     async function playAudio() {
