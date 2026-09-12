@@ -7,7 +7,7 @@
     function absoluteUrl(value) {
         if (!value) return DEFAULT_IMAGE;
         try {
-            return new URL(value, window.location.href).href;
+            return new URL(value, document.baseURI || window.location.href).href;
         } catch (error) {
             return DEFAULT_IMAGE;
         }
@@ -132,8 +132,7 @@
         if (!song) return configurePage();
         const title = `${song.title}｜作词：霍澍`;
         const description = String(song.description || '').trim();
-        const link = new URL('/music-player.html', window.location.origin);
-        link.searchParams.set('id', song.id);
+        const link = new URL(`/song/${encodeURIComponent(song.id)}`, window.location.origin);
 
         return configure({
             title,

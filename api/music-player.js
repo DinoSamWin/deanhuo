@@ -17,8 +17,9 @@ module.exports = async function handler(req, res) {
         const songId = String(requestUrl.searchParams.get('id') || '').trim();
         const song = songId ? await findSong(songId) : null;
         const siteOrigin = getSiteOrigin();
-        const pageUrl = new URL('/music-player.html', siteOrigin);
-        if (songId) pageUrl.searchParams.set('id', songId);
+        const pageUrl = songId
+            ? new URL(`/song/${encodeURIComponent(songId)}`, siteOrigin)
+            : new URL('/music-player.html', siteOrigin);
 
         const share = {
             title: song ? `${song.title}｜作词：霍澍` : DEFAULT_TITLE,

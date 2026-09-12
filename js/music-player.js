@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
-    const initialId = urlParams.get('id');
+    const songPathMatch = window.location.pathname.match(/^\/song\/([^/]+)\/?$/);
+    const initialId = urlParams.get('id') || (songPathMatch ? decodeURIComponent(songPathMatch[1]) : null);
 
     let songs = [];
     let currentIndex = 0;
@@ -128,6 +129,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadTrack(index, initial = false) {
         const song = songs[index];
         currentVersionIndex = 0;
+        const songPath = `/song/${encodeURIComponent(song.id)}`;
+        if (window.location.pathname !== songPath && window.history?.replaceState) {
+            window.history.replaceState(null, '', songPath);
+        }
         elements.title.textContent = song.title;
         elements.artist.textContent = song.artist || 'Unknown Artist';
         elements.blurBg.style.backgroundImage = `url(${song.cover})`;
