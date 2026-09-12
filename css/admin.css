@@ -473,6 +473,148 @@ button {
     font-size: 20px;
 }
 
+#resources-panel.is-resource-lyric-timing #resource-type-tabs {
+    display: none;
+}
+
+.lyric-timing-resource-context {
+    align-content: start;
+}
+
+.lyric-timing-context-heading {
+    display: grid;
+    gap: 7px;
+}
+
+.lyric-timing-context-heading h3 {
+    margin: 0;
+}
+
+.lyric-timing-context-heading p,
+.lyric-timing-context-hero small {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.65;
+}
+
+.lyric-timing-context-badge {
+    justify-self: start;
+    padding: 5px 8px;
+    color: var(--accent-color);
+    background: rgba(0, 255, 136, 0.08);
+    border: 1px solid rgba(0, 255, 136, 0.22);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.lyric-timing-context-hero {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    gap: 13px;
+    align-items: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.lyric-timing-context-hero img,
+.lyric-timing-context-cover {
+    width: 88px;
+    aspect-ratio: 1;
+    border-radius: 8px;
+}
+
+.lyric-timing-context-hero img {
+    object-fit: cover;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.lyric-timing-context-cover {
+    display: grid;
+    place-items: center;
+    color: var(--accent-color);
+    background: rgba(0, 255, 136, 0.08);
+}
+
+.lyric-timing-context-cover svg {
+    width: 30px;
+    height: 30px;
+}
+
+.lyric-timing-context-hero > div:last-child {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+
+.lyric-timing-context-hero strong {
+    font-size: 18px;
+}
+
+.lyric-timing-context-hero span {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.lyric-timing-context-grid,
+.lyric-timing-context-versions {
+    display: grid;
+    gap: 7px;
+}
+
+.lyric-timing-context-row,
+.lyric-timing-context-version {
+    display: grid;
+    gap: 5px;
+    padding: 10px 11px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.lyric-timing-context-row span,
+.lyric-timing-context-version span,
+.lyric-timing-context-version small,
+.lyric-timing-context-section-title span,
+.lyric-timing-context-empty {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.lyric-timing-context-row strong,
+.lyric-timing-context-version strong {
+    font-size: 13px;
+    font-weight: 550;
+    overflow-wrap: anywhere;
+}
+
+.lyric-timing-context-section-title,
+.lyric-timing-context-version,
+.lyric-timing-context-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.lyric-timing-context-version > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.lyric-timing-context-version small {
+    flex: 0 0 auto;
+}
+
+.lyric-timing-context-actions {
+    flex-wrap: wrap;
+    padding-top: 4px;
+}
+
 .field,
 .check-field {
     display: grid;

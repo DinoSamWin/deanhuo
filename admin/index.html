@@ -10,7 +10,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/brand/dean-logo-180.png?v=20260912-2">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260912-lyric-version-edit">
+    <link rel="stylesheet" href="../css/admin.css?v=20260912-published-lyric-context">
     <script src="../assets/vendor/lucide-1.45.0.min.js"></script>
 </head>
 
@@ -154,8 +154,8 @@
             <section class="panel" id="resources-panel">
                 <div class="section-header">
                     <div>
-                        <h2>新增资源</h2>
-                        <p>选择资源类型后填写字段；右侧资源库可以搜索和编辑线上资源。</p>
+                        <h2 id="resources-panel-title">新增资源</h2>
+                        <p id="resources-panel-description">选择资源类型后填写字段；右侧资源库可以搜索和编辑线上资源。</p>
                     </div>
                     <div class="segmented-control" id="resource-type-tabs">
                         <button class="is-active" data-resource-form="photo-form">图片</button>
@@ -379,6 +379,20 @@
                             创建音乐资源
                         </button>
                     </form>
+
+                    <div class="resource-form lyric-timing-resource-context" id="lyric-timing-resource-context">
+                        <div id="lyric-timing-resource-context-content"></div>
+                        <div class="lyric-timing-context-actions">
+                            <button class="secondary-action" id="lyric-timing-resource-edit-button" type="button">
+                                <i data-lucide="square-pen"></i>
+                                编辑完整资料
+                            </button>
+                            <button class="primary-action" id="lyric-timing-resource-pending-button" type="button">
+                                <i data-lucide="inbox"></i>
+                                保存并查看待发布
+                            </button>
+                        </div>
+                    </div>
 
                     <form class="resource-form" id="knowledge-form">
                         <h3><i data-lucide="book-open"></i> 新增知识</h3>
@@ -767,7 +781,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260912-lyric-version-edit"></script>
+    <script src="../admin/admin.js?v=20260912-published-lyric-context"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();

@@ -633,6 +633,8 @@ function bindForms() {
     $('#lyric-timing-close-button').addEventListener('click', closeLyricTimingWorkspace);
     $('#lyric-timing-reset-button').addEventListener('click', resetActiveLyricTimingVersion);
     $('#lyric-timing-sync-button').addEventListener('click', syncLyricTimingSession);
+    $('#lyric-timing-resource-edit-button').addEventListener('click', editActiveLyricTimingResource);
+    $('#lyric-timing-resource-pending-button').addEventListener('click', saveActiveLyricTimingAndOpenPending);
     $('#lyric-timing-version-select').addEventListener('change', event => {
         if (!lyricTimingSession) return;
         lyricTimingSession.activeKey = event.target.value;
@@ -2613,11 +2615,119 @@ function copyLyricTimingLines(lines) {
 
 function showLyricTimingWorkspace() {
     if (!lyricTimingSession) return;
+    if (lyricTimingSession.origin === 'resource') {
+        enterResourceLyricTimingMode();
+    } else {
+        exitResourceLyricTimingMode();
+    }
     $('#library-view').classList.add('is-hidden');
     $('#lyric-timing-view').classList.remove('is-hidden');
     $('#lyric-timing-title').textContent = `${lyricTimingSession.title}·歌词打点`;
+    $('#lyric-timing-sync-button').innerHTML = lyricTimingSession.origin === 'resource'
+        ? '<i data-lucide="save"></i> 保存到待发布'
+        : '<i data-lucide="save"></i> 同步打点';
     renderLyricTimingVersionSelect();
     loadActiveLyricTimingVersion();
+    renderIcons();
+}
+
+function enterResourceLyricTimingMode() {
+    if (!lyricTimingSession || lyricTimingSession.origin !== 'resource') return;
+    const item = getSourceItems('music')
+        .find(entry => String(entry.id) === String(lyricTimingSession.resourceId));
+    if (!item) return;
+
+    $('#resources-panel').classList.add('is-resource-lyric-timing');
+    $$('.resource-form').forEach(form => form.classList.remove('is-active'));
+    $('#lyric-timing-resource-context').classList.add('is-active');
+    $('#resources-panel-title').textContent = '编辑已发布音乐歌词';
+    $('#resources-panel-description').textContent = '已读取原资源的完整资料；打点保存后会更新这条资源，不会新建重复音乐。';
+    $('#panel-title').textContent = '编辑已发布音乐歌词';
+}
+
+function exitResourceLyricTimingMode() {
+    const panel = $('#resources-panel');
+    if (!panel?.classList.contains('is-resource-lyric-timing')) return;
+
+    panel.classList.remove('is-resource-lyric-timing');
+    $('#lyric-timing-resource-context').classList.remove('is-active');
+    $('#resources-panel-title').textContent = '新增资源';
+    $('#resources-panel-description').textContent = '选择资源类型后填写字段；右侧资源库可以搜索和编辑线上资源。';
+
+    const activeFormId = $('#resource-type-tabs button.is-active')?.dataset.resourceForm || 'music-form';
+    $('#' + activeFormId)?.classList.add('is-active');
+}
+
+function renderResourceLyricTimingContext(item) {
+    const container = $('#lyric-timing-resource-context-content');
+    if (!container || !item) return;
+
+    const versions = getMusicVersionsForItem(item);
+    const timingsByUrl = normalizeMusicLyricTimings(item.lyricTimings);
+    const linkedLyric = item.lyricId
+        ? getSourceItems('lyrics').find(entry => String(entry.id) === String(item.lyricId))
+        : null;
+    const cover = normalizeAssetInput(item.cover);
+    const detailRows = [
+        ['资源 ID', item.id],
+        ['艺术家', item.artist || '未填写'],
+        ['年份 / 曲风', [item.year, item.genre].filter(Boolean).join(' · ') || '未填写'],
+        ['摘要', item.description || '未填写'],
+        ['封面路径', cover || '未设置'],
+        ['关联词作', linkedLyric
+            ? `${linkedLyric.title || linkedLyric.id} · ${linkedLyric.id}`
+            : (item.lyricId || '未关联')]
+    ];
+
+    container.innerHTML = `
+        <div class="lyric-timing-context-heading">
+            <span class="lyric-timing-context-badge">已发布资源 · ${escapeHtml(getResourceStatusLabel('music', item))}</span>
+            <h3><i data-lucide="database"></i> ${escapeHtml(item.title || item.id)}</h3>
+            <p>下面是系统已读取的原资源资料。右侧只修改这条音乐的歌词和时间轴。</p>
+        </div>
+        <div class="lyric-timing-context-hero">
+            ${cover
+                ? `<img src="${escapeAttribute(resolveAssetUrl(cover))}" alt="${escapeAttribute(item.title || item.id)}">`
+                : '<div class="lyric-timing-context-cover"><i data-lucide="music"></i></div>'}
+            <div>
+                <strong>${escapeHtml(item.title || item.id)}</strong>
+                <span>${escapeHtml(item.artist || '未填写艺术家')}</span>
+                <small>发布时会保留原资源的全部字段，不会使用空白的新建表单。</small>
+            </div>
+        </div>
+        <div class="lyric-timing-context-grid">
+            ${detailRows.map(([label, value]) => `
+                <div class="lyric-timing-context-row">
+                    <span>${escapeHtml(label)}</span>
+                    <strong>${escapeHtml(value)}</strong>
+                </div>
+            `).join('')}
+        </div>
+        <div class="lyric-timing-context-versions">
+            <div class="lyric-timing-context-section-title">
+                <strong>已读取的音频版本</strong>
+                <span>${versions.length} 个</span>
+            </div>
+            ${versions.map((version, index) => {
+                const sessionVersion = lyricTimingSession?.versions?.find(entry => (
+                    normalizeAssetInput(entry.finalUrl) === normalizeAssetInput(version.url)
+                ));
+                const lines = sessionVersion
+                    ? lyricTimingSession.linesByVersion[sessionVersion.key] || []
+                    : timingsByUrl[normalizeAssetInput(version.url)] || [];
+                const timedCount = lines.filter(line => line.time !== null).length;
+                return `
+                    <div class="lyric-timing-context-version">
+                        <div>
+                            <strong>${escapeHtml(version.label || `版本${index + 1}`)}${index === 0 ? '（默认）' : ''}</strong>
+                            <span>${escapeHtml(version.url)}</span>
+                        </div>
+                        <small>${lines.length}句 · ${timedCount}句已打点</small>
+                    </div>
+                `;
+            }).join('') || '<div class="lyric-timing-context-empty">未读取到音频版本</div>'}
+        </div>
+    `;
     renderIcons();
 }
 
@@ -2636,6 +2746,14 @@ function renderLyricTimingVersionSelect() {
         `;
     }).join('');
     select.closest('.lyric-timing-version-field')?.classList.toggle('is-hidden', lyricTimingSession.versions.length <= 1);
+    refreshResourceLyricTimingContext();
+}
+
+function refreshResourceLyricTimingContext() {
+    if (!lyricTimingSession || lyricTimingSession.origin !== 'resource') return;
+    const item = getSourceItems('music')
+        .find(entry => String(entry.id) === String(lyricTimingSession.resourceId));
+    if (item) renderResourceLyricTimingContext(item);
 }
 
 function loadActiveLyricTimingVersion() {
@@ -2936,8 +3054,35 @@ function formatLyricTimingClock(value) {
     return `${String(minutes).padStart(2, '0')}:${seconds}`;
 }
 
+async function editActiveLyricTimingResource() {
+    if (!lyricTimingSession || lyricTimingSession.origin !== 'resource') return;
+    const resourceId = lyricTimingSession.resourceId;
+    if (lyricTimingSession.hasUnsyncedChanges) {
+        const saved = await syncLyricTimingSession();
+        if (!saved) return;
+    }
+
+    closeLyricTimingWorkspace();
+    await openResourceEditor('music', resourceId);
+}
+
+async function saveActiveLyricTimingAndOpenPending() {
+    if (!lyricTimingSession || lyricTimingSession.origin !== 'resource') return;
+    const resourceId = lyricTimingSession.resourceId;
+    const saved = await syncLyricTimingSession();
+    if (!saved) return;
+    if (!getDraftEntry('music', resourceId)) {
+        showToast('当前没有新的歌词或打点修改，无需发布');
+        return;
+    }
+
+    closeLyricTimingWorkspace();
+    setPanel('pending-panel');
+    showToast('已保留原资源资料并进入待发布列表');
+}
+
 async function syncLyricTimingSession() {
-    if (!lyricTimingSession) return;
+    if (!lyricTimingSession) return false;
     syncCreateLyricTextToForm();
 
     if (lyricTimingSession.origin === 'create') {
@@ -2946,14 +3091,14 @@ async function syncLyricTimingSession() {
         renderLyricTimingVersionSelect();
         renderLyricTimingStatus();
         showToast('打点已同步到新音乐草稿');
-        return;
+        return true;
     }
 
     const index = getSourceItems('music')
         .findIndex(item => String(item.id) === String(lyricTimingSession.resourceId));
     if (index === -1) {
         showToast('这首音乐已不在资源库里');
-        return;
+        return false;
     }
 
     const item = clone(getSourceItems('music')[index]);
@@ -2967,7 +3112,7 @@ async function syncLyricTimingSession() {
                 await stageEditableTextFile(lyricTimingSession.lyricContentPath, lyricText);
             } catch (error) {
                 showToast(error.message || '歌词正文保存失败');
-                return;
+                return false;
             }
         } else {
             item.lyricText = lyricText;
@@ -2980,6 +3125,7 @@ async function syncLyricTimingSession() {
     renderLyricTimingVersionSelect();
     renderLyricTimingStatus();
     showToast('打点已保存到待发布列表');
+    return true;
 }
 
 function syncCreateLyricTextToForm() {
@@ -3061,9 +3207,13 @@ function closeLyricTimingWorkspace() {
         audio.removeAttribute('src');
         audio.load();
     }
+    exitResourceLyricTimingMode();
     $('#lyric-timing-view').classList.add('is-hidden');
     $('#library-view').classList.remove('is-hidden');
     lyricTimingSession = null;
+    if (state.activePanel === 'resources-panel') {
+        $('#panel-title').textContent = '新增资源';
+    }
     renderLibrary();
     renderIcons();
 }
@@ -4437,6 +4587,12 @@ function renderPublishChecks() {
 }
 
 async function publishAllDrafts() {
+    if (lyricTimingSession?.origin === 'resource') {
+        const saved = await syncLyricTimingSession();
+        if (!saved) return;
+        closeLyricTimingWorkspace();
+    }
+
     setPanel('publish-panel');
     setPublishProgress(6, '正在检查待发布内容');
     renderPublishChecks();
@@ -5982,7 +6138,11 @@ function setPanel(panelId) {
         'publish-panel': '发布检查'
     };
 
-    $('#panel-title').textContent = titleMap[panelId] || '资源配置后台';
+    const isPublishedLyricTiming = panelId === 'resources-panel'
+        && lyricTimingSession?.origin === 'resource';
+    $('#panel-title').textContent = isPublishedLyricTiming
+        ? '编辑已发布音乐歌词'
+        : titleMap[panelId] || '资源配置后台';
     renderIcons();
 }
 
