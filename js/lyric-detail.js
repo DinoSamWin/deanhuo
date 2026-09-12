@@ -86,6 +86,15 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.title.textContent = lyric.title;
         elements.author.textContent = lyric.author || 'Dean Huo';
 
+        if (window.DeanShare) {
+            window.DeanShare.configure({
+                title: `${lyric.title} | Dean Huo`,
+                description: lyric.summary || `阅读 Dean Huo 的原创歌词《${lyric.title}》。`,
+                image: lyric.cover,
+                link: window.location.href.split('#')[0]
+            });
+        }
+
         if (elements.date) {
             elements.date.textContent = formatDate(lyric.date);
         }

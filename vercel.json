@@ -1,5 +1,16 @@
 {
     "$schema": "https://openapi.vercel.sh/vercel.json",
+    "functions": {
+        "api/music-player.js": {
+            "includeFiles": "music-player.html"
+        }
+    },
+    "rewrites": [
+        {
+            "source": "/music-player.html",
+            "destination": "/api/music-player"
+        }
+    ],
     "headers": [
         {
             "source": "/assets/vendor/(.*)",
