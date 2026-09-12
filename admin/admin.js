@@ -2339,11 +2339,19 @@ function openNewMusicLyricTiming() {
     const previous = newMusicLyricTimingDraft;
     const versions = candidates.map((candidate, index) => buildCreateLyricTimingVersion(candidate, index));
     const linesByVersion = {};
-    versions.forEach(version => {
+    const previousCustomizedVersionKeys = previous?.textCustomizedVersionKeys instanceof Set
+        ? previous.textCustomizedVersionKeys
+        : new Set();
+    versions.forEach((version, index) => {
         const previousLines = previous && previous.linesByVersion
             ? previous.linesByVersion[version.key]
             : null;
-        linesByVersion[version.key] = reconcileLyricTimingLines(previousLines, lineTexts);
+        const keepIndependentLyrics = index > 0
+            && previousCustomizedVersionKeys.has(version.key)
+            && Array.isArray(previousLines);
+        linesByVersion[version.key] = keepIndependentLyrics
+            ? copyLyricTimingLines(previousLines)
+            : reconcileLyricTimingLines(previousLines, lineTexts);
     });
 
     lyricTimingSession = {
@@ -2355,7 +2363,13 @@ function openNewMusicLyricTiming() {
             ? previous.activeKey
             : versions[0].key,
         linesByVersion,
-        hasUnsyncedChanges: Boolean(previous?.hasUnsyncedChanges)
+        textCustomizedVersionKeys: new Set(
+            versions
+                .map(version => version.key)
+                .filter(key => previousCustomizedVersionKeys.has(key))
+        ),
+        hasUnsyncedChanges: Boolean(previous?.hasUnsyncedChanges),
+        hasCanonicalTextChanges: Boolean(previous?.hasCanonicalTextChanges)
     };
     newMusicLyricTimingDraft = lyricTimingSession;
     showLyricTimingWorkspace();
@@ -2393,13 +2407,19 @@ async function openResourceLyricTiming(id) {
             finalUrl: version.url
         }));
         const linesByVersion = {};
+        const textCustomizedVersionKeys = new Set();
         versions.forEach((version, index) => {
-            const storedLines = seed.storedByUrl[version.finalUrl];
-            const legacyLines = index === 0 ? seed.legacyLines : null;
-            linesByVersion[version.key] = reconcileLyricTimingLines(
-                storedLines || legacyLines,
-                seed.lineTexts
-            );
+            const normalizedUrl = normalizeAssetInput(version.finalUrl);
+            const hasStoredLyrics = Object.prototype.hasOwnProperty.call(seed.storedByUrl, normalizedUrl);
+            const storedLines = seed.storedByUrl[normalizedUrl];
+            if (hasStoredLyrics) {
+                linesByVersion[version.key] = copyLyricTimingLines(storedLines);
+                textCustomizedVersionKeys.add(version.key);
+            } else if (index === 0 && seed.legacyLines.length > 0) {
+                linesByVersion[version.key] = copyLyricTimingLines(seed.legacyLines);
+            } else {
+                linesByVersion[version.key] = reconcileLyricTimingLines(null, seed.lineTexts);
+            }
         });
 
         lyricTimingSession = {
@@ -2410,8 +2430,9 @@ async function openResourceLyricTiming(id) {
             versions,
             activeKey: versions[0].key,
             linesByVersion,
+            textCustomizedVersionKeys,
             hasUnsyncedChanges: false,
-            hasTextChanges: false
+            hasCanonicalTextChanges: false
         };
         showLyricTimingWorkspace();
     } catch (error) {
@@ -2466,9 +2487,11 @@ function getLyricTimingFilePlaybackUrl(file) {
 
 async function loadResourceLyricTimingSeed(item, musicVersions) {
     const storedByUrl = normalizeMusicLyricTimings(item.lyricTimings);
-    const storedLines = Object.values(storedByUrl).find(lines => lines.length > 0) || [];
+    const canonicalUrl = normalizeAssetInput(musicVersions[0]?.url);
+    const canonicalStoredLines = storedByUrl[canonicalUrl] || [];
+    const anyStoredLines = Object.values(storedByUrl).find(lines => lines.length > 0) || [];
     let legacyLines = [];
-    let lineTexts = storedLines.map(line => line.text);
+    let lineTexts = canonicalStoredLines.map(line => line.text);
     let lyricContentPath = '';
     let linkedLyricText = '';
 
@@ -2494,9 +2517,8 @@ async function loadResourceLyricTimingSeed(item, musicVersions) {
         lineTexts = splitLyricTimingText(markdownToPlainText(linkedLyricText));
     }
 
-    if (lineTexts.length === 0 && musicVersions.length === 1) {
-        const onlyStoredLines = storedByUrl[musicVersions[0].url] || [];
-        lineTexts = onlyStoredLines.map(line => line.text);
+    if (lineTexts.length === 0) {
+        lineTexts = anyStoredLines.map(line => line.text);
     }
 
     return { storedByUrl, legacyLines, lineTexts, lyricContentPath };
@@ -2583,6 +2605,12 @@ function reconcileLyricTimingLines(existingLines, lineTexts) {
     }));
 }
 
+function copyLyricTimingLines(lines) {
+    return Array.isArray(lines)
+        ? lines.map(normalizeLyricTimingLine).filter(Boolean).map(line => ({ ...line }))
+        : [];
+}
+
 function showLyricTimingWorkspace() {
     if (!lyricTimingSession) return;
     $('#library-view').classList.add('is-hidden');
@@ -2598,10 +2626,12 @@ function renderLyricTimingVersionSelect() {
     const select = $('#lyric-timing-version-select');
     select.innerHTML = lyricTimingSession.versions.map((version, index) => {
         const lines = lyricTimingSession.linesByVersion[version.key] || [];
-        const completed = lines.length > 0 && lines.every(line => line.time !== null);
+        const completed = lines.length > 0
+            && lines.every(line => line.time !== null)
+            && isLyricTimingSequenceOrdered(lines);
         return `
             <option value="${escapeAttribute(version.key)}" ${version.key === lyricTimingSession.activeKey ? 'selected' : ''}>
-                ${escapeHtml(version.label || `版本${index + 1}`)}${completed ? ' · 已完成' : ''}
+                ${escapeHtml(version.label || `版本${index + 1}`)} · ${lines.length}句${completed ? ' · 已完成' : ''}
             </option>
         `;
     }).join('');
@@ -2649,9 +2679,20 @@ function renderLyricTimingLines(options = {}) {
                 ${line.time === null ? '--:--.--' : escapeHtml(formatLyricTimingClock(line.time))}
             </span>
             <span class="lyric-timing-text" title="双击修改歌词">${escapeHtml(line.text)}</span>
-            <button class="icon-action lyric-timing-clear" type="button" title="清除这一句时间" aria-label="清除第 ${index + 1} 句时间" data-clear-lyric-timing="${index}" ${line.time === null ? 'disabled' : ''}>
-                <i data-lucide="x"></i>
-            </button>
+            <div class="lyric-timing-line-actions">
+                <button class="icon-action lyric-timing-line-action" type="button" title="上移这句歌词" aria-label="上移第 ${index + 1} 句歌词" data-move-lyric-timing="-1" ${index === 0 ? 'disabled' : ''}>
+                    <i data-lucide="arrow-up"></i>
+                </button>
+                <button class="icon-action lyric-timing-line-action" type="button" title="下移这句歌词" aria-label="下移第 ${index + 1} 句歌词" data-move-lyric-timing="1" ${index === lines.length - 1 ? 'disabled' : ''}>
+                    <i data-lucide="arrow-down"></i>
+                </button>
+                <button class="icon-action lyric-timing-line-action" type="button" title="清除这一句时间" aria-label="清除第 ${index + 1} 句时间" data-clear-lyric-timing="${index}" ${line.time === null ? 'disabled' : ''}>
+                    <i data-lucide="clock-3"></i>
+                </button>
+                <button class="icon-action lyric-timing-line-action is-danger" type="button" title="删除这句歌词" aria-label="删除第 ${index + 1} 句歌词" data-delete-lyric-timing="${index}">
+                    <i data-lucide="trash-2"></i>
+                </button>
+            </div>
         </div>
     `).join('') || '<div class="draft-item"><span>没有可打点的歌词</span></div>';
     container.scrollTop = previousScrollTop;
@@ -2677,6 +2718,24 @@ function handleLyricTimingControlClick(event) {
 
 function handleLyricTimingLineClick(event) {
     if (!lyricTimingSession) return;
+
+    const moveButton = event.target.closest('[data-move-lyric-timing]');
+    if (moveButton) {
+        clearTimeout(lyricTimingClickTimer);
+        const row = moveButton.closest('[data-lyric-timing-index]');
+        moveActiveLyricTimingLine(
+            Number(row?.dataset.lyricTimingIndex),
+            Number(moveButton.dataset.moveLyricTiming)
+        );
+        return;
+    }
+
+    const deleteButton = event.target.closest('[data-delete-lyric-timing]');
+    if (deleteButton) {
+        clearTimeout(lyricTimingClickTimer);
+        deleteActiveLyricTimingLine(Number(deleteButton.dataset.deleteLyricTiming));
+        return;
+    }
 
     const clearButton = event.target.closest('[data-clear-lyric-timing]');
     if (clearButton) {
@@ -2742,10 +2801,8 @@ function handleLyricTimingLineFocusOut(event) {
     const safeText = nextText || originalText;
     const index = Number(row.dataset.lyricTimingIndex);
 
-    lyricTimingSession.versions.forEach(version => {
-        const line = lyricTimingSession.linesByVersion[version.key]?.[index];
-        if (line) line.text = safeText;
-    });
+    const line = getActiveLyricTimingLines()[index];
+    if (line) line.text = safeText;
     textNode.textContent = safeText;
     textNode.removeAttribute('contenteditable');
     textNode.removeAttribute('role');
@@ -2753,11 +2810,56 @@ function handleLyricTimingLineFocusOut(event) {
     delete textNode.dataset.originalText;
 
     if (!cancelled && safeText !== originalText) {
-        lyricTimingSession.hasUnsyncedChanges = true;
-        lyricTimingSession.hasTextChanges = true;
-        syncCreateLyricTextToForm();
+        markActiveLyricTextCustomized();
+        renderLyricTimingVersionSelect();
         renderLyricTimingStatus();
     }
+}
+
+function moveActiveLyricTimingLine(index, offset) {
+    const lines = getActiveLyricTimingLines();
+    const targetIndex = index + offset;
+    if (!Number.isInteger(index) || !Number.isInteger(targetIndex)
+        || !lines[index] || !lines[targetIndex]) return;
+
+    [lines[index], lines[targetIndex]] = [lines[targetIndex], lines[index]];
+    markActiveLyricTextCustomized();
+    renderLyricTimingLines();
+    renderLyricTimingVersionSelect();
+    renderLyricTimingStatus();
+}
+
+function deleteActiveLyricTimingLine(index) {
+    const lines = getActiveLyricTimingLines();
+    if (!Number.isInteger(index) || !lines[index]) return;
+
+    lines.splice(index, 1);
+    markActiveLyricTextCustomized();
+    renderLyricTimingLines();
+    renderLyricTimingVersionSelect();
+    renderLyricTimingStatus();
+}
+
+function markActiveLyricTextCustomized() {
+    if (!lyricTimingSession) return;
+    const version = getActiveLyricTimingVersion();
+    if (!version) return;
+
+    if (!(lyricTimingSession.textCustomizedVersionKeys instanceof Set)) {
+        lyricTimingSession.textCustomizedVersionKeys = new Set();
+    }
+    lyricTimingSession.textCustomizedVersionKeys.add(version.key);
+    lyricTimingSession.hasUnsyncedChanges = true;
+
+    if (isCanonicalLyricTimingVersion(version)) {
+        lyricTimingSession.hasCanonicalTextChanges = true;
+        syncCreateLyricTextToForm();
+    }
+}
+
+function isCanonicalLyricTimingVersion(version = getActiveLyricTimingVersion()) {
+    const canonicalVersion = lyricTimingSession?.versions?.[0];
+    return Boolean(version && canonicalVersion && version.key === canonicalVersion.key);
 }
 
 function setLyricTimingAtIndex(index, value, revealNext = false) {
@@ -2766,6 +2868,7 @@ function setLyricTimingAtIndex(index, value, revealNext = false) {
     lines[index].time = normalizeLyricTimingTime(value);
     lyricTimingSession.hasUnsyncedChanges = true;
     renderLyricTimingLines({ revealNext });
+    renderLyricTimingVersionSelect();
     renderLyricTimingStatus();
 }
 
@@ -2778,6 +2881,7 @@ function resetActiveLyricTimingVersion() {
     lyricTimingSession.hasUnsyncedChanges = true;
     $('#lyric-timing-audio').currentTime = 0;
     renderLyricTimingLines();
+    renderLyricTimingVersionSelect();
     renderLyricTimingStatus();
     showToast('已清空当前版本的时间点');
 }
@@ -2855,21 +2959,23 @@ async function syncLyricTimingSession() {
     const item = clone(getSourceItems('music')[index]);
     const lyricText = getSharedLyricTimingText(lyricTimingSession);
     item.lyricTimings = serializeLyricTimingSession(lyricTimingSession);
-    if (!item.lyricId || item.lyricText) {
-        item.lyricText = lyricText;
-    } else if (lyricTimingSession.hasTextChanges && lyricTimingSession.lyricContentPath) {
-        try {
-            await stageEditableTextFile(lyricTimingSession.lyricContentPath, lyricText);
-        } catch (error) {
-            showToast(error.message || '歌词正文保存失败');
-            return;
+    if (lyricTimingSession.hasCanonicalTextChanges) {
+        if (!item.lyricId || item.lyricText) {
+            item.lyricText = lyricText;
+        } else if (lyricTimingSession.lyricContentPath) {
+            try {
+                await stageEditableTextFile(lyricTimingSession.lyricContentPath, lyricText);
+            } catch (error) {
+                showToast(error.message || '歌词正文保存失败');
+                return;
+            }
+        } else {
+            item.lyricText = lyricText;
         }
-    } else if (lyricTimingSession.hasTextChanges) {
-        item.lyricText = lyricText;
     }
     state.files[DATA_FILES.music][index] = item;
     lyricTimingSession.hasUnsyncedChanges = false;
-    lyricTimingSession.hasTextChanges = false;
+    lyricTimingSession.hasCanonicalTextChanges = false;
     renderAll();
     renderLyricTimingVersionSelect();
     renderLyricTimingStatus();
@@ -2887,7 +2993,11 @@ function syncNewMusicLyricTimingDraftText() {
     const lineTexts = splitLyricTimingText(
         markdownToPlainText($('#music-form').elements.lyricMarkdownText.value)
     );
-    newMusicLyricTimingDraft.versions.forEach(version => {
+    const customizedVersionKeys = newMusicLyricTimingDraft.textCustomizedVersionKeys instanceof Set
+        ? newMusicLyricTimingDraft.textCustomizedVersionKeys
+        : new Set();
+    newMusicLyricTimingDraft.versions.forEach((version, index) => {
+        if (index > 0 && customizedVersionKeys.has(version.key)) return;
         newMusicLyricTimingDraft.linesByVersion[version.key] = reconcileLyricTimingLines(
             newMusicLyricTimingDraft.linesByVersion[version.key],
             lineTexts
@@ -2925,7 +3035,6 @@ function serializeLyricTimingSession(session) {
 function buildNewMusicLyricTimings(versionCandidates) {
     if (!newMusicLyricTimingDraft || !Array.isArray(versionCandidates)) return null;
     const result = {};
-    let hasTimestamp = false;
 
     versionCandidates.forEach(candidate => {
         const finalUrl = normalizeAssetInput(candidate && candidate.url);
@@ -2938,11 +3047,10 @@ function buildNewMusicLyricTimings(versionCandidates) {
             time: normalizeLyricTimingTime(line.time),
             text: String(line.text || '').trim()
         })).filter(line => line.text);
-        if (serializedLines.some(line => line.time !== null)) hasTimestamp = true;
         result[finalUrl] = serializedLines;
     });
 
-    return hasTimestamp && Object.keys(result).length > 0 ? result : null;
+    return Object.keys(result).length > 0 ? result : null;
 }
 
 function closeLyricTimingWorkspace() {

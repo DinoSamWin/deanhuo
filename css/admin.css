@@ -1000,7 +1000,7 @@ button {
 
 .lyric-timing-line {
     display: grid;
-    grid-template-columns: 30px 82px minmax(0, 1fr) 30px;
+    grid-template-columns: 30px 82px minmax(0, 1fr) auto;
     gap: 8px;
     align-items: center;
     min-height: 44px;
@@ -1063,7 +1063,13 @@ button {
     outline: none;
 }
 
-.lyric-timing-clear {
+.lyric-timing-line-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.lyric-timing-line-action {
     width: 28px;
     min-height: 28px;
     padding: 0;
@@ -1073,14 +1079,25 @@ button {
     opacity: 0;
 }
 
-.lyric-timing-line:hover .lyric-timing-clear,
-.lyric-timing-clear:focus-visible {
+.lyric-timing-line:hover .lyric-timing-line-action,
+.lyric-timing-line-action:focus-visible {
     opacity: 1;
 }
 
-.lyric-timing-clear svg {
+.lyric-timing-line-action.is-danger:hover,
+.lyric-timing-line-action.is-danger:focus-visible {
+    color: #ff8c8c;
+}
+
+.lyric-timing-line-action svg {
     width: 14px;
     height: 14px;
+}
+
+@media (hover: none) {
+    .lyric-timing-line-action {
+        opacity: 1;
+    }
 }
 
 .resource-timing-action {
@@ -1806,8 +1823,17 @@ pre {
     }
 
     .lyric-timing-line {
-        grid-template-columns: 24px 74px minmax(0, 1fr) 28px;
+        grid-template-columns: 24px 74px minmax(0, 1fr);
         gap: 5px;
+    }
+
+    .lyric-timing-line-actions {
+        grid-column: 2 / -1;
+        justify-content: flex-end;
+    }
+
+    .lyric-timing-line-action {
+        opacity: 1;
     }
 
     .segmented-control {
