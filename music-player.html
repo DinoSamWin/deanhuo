@@ -483,8 +483,9 @@
         .play-btn {
             width: 76px;
             height: 76px;
-            background: #fff;
-            color: #000;
+            background: #f2f4f3;
+            color: #111;
+            border: 1px solid rgba(255, 255, 255, 0.72);
             border-radius: 50%;
             font-size: 32px;
             box-shadow: 0 10px 25px rgba(255, 255, 255, 0.15);
@@ -497,13 +498,23 @@
         .play-btn svg {
             width: 30px;
             height: 30px;
-            color: #05070a;
-            stroke: #05070a;
+            color: #111;
+            stroke: #111;
         }
 
         .play-btn .icon-play {
-            fill: #05070a;
+            fill: #111;
             transform: translateX(2px);
+        }
+
+        .play-btn .icon-play path {
+            fill: #111;
+            stroke: #111;
+        }
+
+        .play-btn .icon-pause path {
+            fill: none;
+            stroke: #111;
         }
 
         .play-btn:hover {
@@ -572,8 +583,7 @@
 
         @media (max-width: 600px) {
             .cover-blur-bg {
-                inset: -48px;
-                filter: blur(48px) brightness(0.16);
+                display: none;
             }
 
             .star {
@@ -630,14 +640,14 @@
 
             .cover-card.prev {
                 transform: translateX(calc(-50vw - 18px)) scale(0.68);
-                opacity: 0.2;
-                filter: brightness(0.58);
+                opacity: 0.12;
+                filter: none;
             }
 
             .cover-card.next {
                 transform: translateX(calc(50vw + 18px)) scale(0.68);
-                opacity: 0.2;
-                filter: brightness(0.58);
+                opacity: 0.12;
+                filter: none;
             }
 
             .version-strip {
@@ -675,14 +685,7 @@
             }
 
             .time-display {
-                right: auto;
-                bottom: 75px;
-                left: 50%;
-                width: calc(100% - 40px);
-                max-width: none;
-                transform: translateX(-50%);
-                font-size: 12px;
-                color: rgba(255, 255, 255, 0.46);
+                display: none;
             }
 
             .progress-hitbox {
@@ -697,6 +700,7 @@
                 margin: 0 0 8px;
                 padding-block: calc((clamp(100px, 15dvh, 132px) - 38px) / 2);
                 flex: 0 0 auto;
+                touch-action: pan-y !important;
             }
 
             .lyric-line {
