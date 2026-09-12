@@ -315,8 +315,8 @@
                             </label>
                         </div>
                         <label class="field">
-                            <span>封面图片</span>
-                            <input type="file" name="coverFile" accept="image/*" required>
+                            <span>封面图片（可稍后补传）</span>
+                            <input type="file" name="coverFile" accept="image/*">
                         </label>
                         <button class="secondary-action file-picker-action" id="music-cover-paste-button" type="button">
                             <i data-lucide="clipboard-paste"></i>
@@ -781,7 +781,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260912-missing-lyrics-flow"></script>
+    <script src="../admin/admin.js?v=20260912-optional-music-cover"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();

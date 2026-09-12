@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         elements.title.textContent = song.title;
         elements.artist.textContent = song.artist || 'Unknown Artist';
-        elements.blurBg.style.backgroundImage = `url(${song.cover})`;
+        elements.blurBg.style.backgroundImage = song.cover ? `url(${song.cover})` : 'none';
         elements.audio.src = getSongVersions(song)[currentVersionIndex]?.url || song.url || '';
 
         if (window.DeanShare) {
@@ -269,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         songs.forEach((song, i) => {
             const card = document.createElement('div');
             card.className = 'cover-card';
-            card.dataset.cover = song.cover;
+            card.dataset.cover = song.cover || '';
             card.dataset.index = i;
             card.onclick = () => {
                 if (i !== currentIndex) {
@@ -292,13 +292,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (i === currentIndex) {
                 card.classList.add('active');
-                card.style.backgroundImage = `url(${card.dataset.cover})`;
+                card.style.backgroundImage = card.dataset.cover ? `url(${card.dataset.cover})` : 'none';
             } else if (i === (currentIndex - 1 + len) % len) {
                 card.classList.add('prev');
-                card.style.backgroundImage = `url(${card.dataset.cover})`;
+                card.style.backgroundImage = card.dataset.cover ? `url(${card.dataset.cover})` : 'none';
             } else if (i === (currentIndex + 1) % len) {
                 card.classList.add('next');
-                card.style.backgroundImage = `url(${card.dataset.cover})`;
+                card.style.backgroundImage = card.dataset.cover ? `url(${card.dataset.cover})` : 'none';
             } else {
                 card.classList.add('hidden');
                 card.style.backgroundImage = 'none';

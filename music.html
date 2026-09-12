@@ -18,214 +18,46 @@
     <meta name="twitter:card" content="summary">
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/music.css?v=20260912-shelf-6">
     <script defer src="js/wechat-share.js?v=20260912-song-summary-2"></script>
     <script src="assets/vendor/lucide-1.45.0.min.js"></script>
-    <style>
-        .music-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: var(--spacing-lg);
-            padding-top: 100px;
-            padding-bottom: 60px;
-        }
-
-        .album-card {
-            background: var(--bg-secondary);
-            border-radius: var(--radius-lg);
-            padding: var(--spacing-md);
-            transition: var(--transition-normal);
-            cursor: pointer;
-        }
-
-        .album-card:hover {
-            background: var(--bg-tertiary);
-            transform: translateY(-4px);
-        }
-
-        .album-cover {
-            width: 100%;
-            aspect-ratio: 1;
-            border-radius: var(--radius-md);
-            background: #333;
-            margin-bottom: var(--spacing-md);
-            background-size: cover;
-            background-position: center;
-            position: relative;
-        }
-
-        .play-overlay {
-            position: absolute;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transition: var(--transition-fast);
-            border-radius: var(--radius-md);
-        }
-
-        .album-card:hover .play-overlay {
-            opacity: 1;
-        }
-
-        .play-btn-lg {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: var(--accent-color);
-            color: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: none;
-            cursor: pointer;
-            transform: scale(0.8);
-            transition: var(--transition-fast);
-        }
-
-        .album-card:hover .play-btn-lg {
-            transform: scale(1);
-        }
-
-        /* Fixed Player */
-        .music-player {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background: rgba(26, 26, 26, 0.95);
-            backdrop-filter: blur(20px);
-            border-top: 1px solid var(--border-color);
-            padding: var(--spacing-md) 0;
-            z-index: 100;
-        }
-
-        .player-content {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: var(--spacing-lg);
-        }
-
-        .track-info {
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-md);
-            width: 300px;
-        }
-
-        .player-controls {
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-lg);
-        }
-
-        .control-btn {
-            background: none;
-            border: none;
-            color: var(--text-primary);
-            cursor: pointer;
-            transition: var(--transition-fast);
-        }
-
-        .control-btn:hover {
-            color: var(--accent-color);
-        }
-
-        .progress-bar {
-            flex: 1;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 2px;
-            position: relative;
-            cursor: pointer;
-        }
-
-        .progress-fill {
-            width: 30%;
-            height: 100%;
-            background: var(--accent-color);
-            border-radius: 2px;
-        }
-    </style>
 </head>
 
-<body>
-    <!-- Sidebar Navigation -->
-    <nav class="sidebar-nav">
-        <a href="index.html" class="nav-btn" data-tooltip="Home" aria-label="首页"><i data-lucide="house" style="width: 20px;"></i></a>
-        <a href="photos.html" class="nav-btn" data-tooltip="Photos"><i data-lucide="camera"
-                style="width: 20px;"></i></a>
-        <a href="lyrics.html" class="nav-btn" data-tooltip="Lyrics"><i data-lucide="file-text"
-                style="width: 20px;"></i></a>
-        <a href="music.html" class="nav-btn active" data-tooltip="Music"><i data-lucide="music"
-                style="width: 20px;"></i></a>
-        <a href="projects.html" class="nav-btn" data-tooltip="Projects"><i data-lucide="briefcase"
-                style="width: 20px;"></i></a>
-        <a href="knowledge.html" class="nav-btn" data-tooltip="Knowledge Base"><i data-lucide="book"
-                style="width: 20px;"></i></a>
+<body class="music-page">
+    <nav class="sidebar-nav" aria-label="主导航">
+        <a href="index.html" class="nav-btn" data-tooltip="Home" aria-label="首页"><i data-lucide="house"></i></a>
+        <a href="photos.html" class="nav-btn" data-tooltip="Photos" aria-label="摄影"><i data-lucide="camera"></i></a>
+        <a href="lyrics.html" class="nav-btn" data-tooltip="Lyrics" aria-label="词作"><i data-lucide="file-text"></i></a>
+        <a href="music.html" class="nav-btn active" data-tooltip="Music" aria-label="音乐" aria-current="page"><i data-lucide="music"></i></a>
+        <a href="projects.html" class="nav-btn" data-tooltip="Projects" aria-label="项目"><i data-lucide="briefcase"></i></a>
+        <a href="knowledge.html" class="nav-btn" data-tooltip="Knowledge Base" aria-label="知识库"><i data-lucide="book"></i></a>
     </nav>
 
-    <main class="container">
-        <div style="padding-top: 100px; text-align: center;">
-            <h1 class="font-heading" style="font-size: 48px;">Music Works</h1>
-            <p class="text-secondary">Original compositions and covers.</p>
-        </div>
+    <aside class="music-side-panel music-side-panel-left" aria-hidden="true">
+        <p class="side-copy side-copy-top">MUSIC<br>LIVES<br>HERE.</p>
+        <span class="side-rule"></span>
+        <div class="side-copy side-copy-bottom">SMALL<br>SONGS<br>BIG<br>STORIES.</div>
+    </aside>
 
-        <div id="music-grid" class="music-grid">
-            <!-- Dynamically populated -->
-        </div>
+    <aside class="music-side-panel music-side-panel-right" aria-hidden="true">
+        <p class="side-script">Good<br>Music.<br>Better Days.</p>
+        <span class="side-stroke"></span>
+        <div class="side-copy side-copy-bottom">A<br>MORE<br>MUSICAL<br>YOU.</div>
+    </aside>
+
+    <main class="music-main">
+        <header class="music-header">
+            <h1 class="font-heading">Music Works</h1>
+            <p>Original compositions and covers.</p>
+        </header>
+
+        <section id="music-shelves" class="music-shelves" aria-label="音乐作品">
+            <p class="music-loading" role="status">Loading the record shelf…</p>
+        </section>
     </main>
 
     <script src="js/recommendations.js?v=trash-progress"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const grid = document.getElementById('music-grid');
-
-            Promise.all([
-                fetch('assets/data/music.json').then(res => res.json()),
-                window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
-            ])
-                .then(([data, recommendationConfig]) => {
-                    data = getVisibleResources(data);
-                    if (window.DeanRecommendations) {
-                        data = window.DeanRecommendations.prioritizeByModule(data, recommendationConfig, 'musicPageFeatured');
-                    }
-                    grid.innerHTML = data.map(song => `
-                        <div class="album-card" onclick="location.href='music-player.html?id=${song.id}'">
-                            <div class="album-cover" style="background-image: url('${song.cover}');">
-                                <div class="play-overlay">
-                                    <button class="play-btn-lg"><i data-lucide="play" style="fill: #000;"></i></button>
-                                </div>
-                            </div>
-                            <h3>${song.title}</h3>
-                            <p class="text-secondary" style="font-size: 14px;">${song.genre || 'Original'} • ${song.year}</p>
-                        </div>
-                    `).join('');
-
-                    if (window.lucide) {
-                        lucide.createIcons();
-                    }
-                })
-                .catch(err => {
-                    console.error('Error loading music:', err);
-                    grid.innerHTML = '<p>Failed to load music works.</p>';
-                });
-
-            function getVisibleResources(items) {
-                if (window.DeanRecommendations && window.DeanRecommendations.filterVisible) {
-                    return window.DeanRecommendations.filterVisible(items);
-                }
-
-                return Array.isArray(items) ? items.filter(item => item && !item.deletedAt) : [];
-            }
-        });
-
-        if (window.lucide) {
-            lucide.createIcons();
-        }
-    </script>
+    <script src="js/music-shelf.js?v=20260912-shelf-6"></script>
 </body>
 
 </html>

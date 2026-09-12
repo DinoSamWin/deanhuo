@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300" fill="none">
+  <defs>
+    <linearGradient id="fold"><stop stop-color="#f4faff" stop-opacity=".3"/><stop offset=".35" stop-color="#fff" stop-opacity=".02"/><stop offset=".7" stop-color="#fff" stop-opacity=".14"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  </defs>
+  <path d="M2 2 28 6 9 29Z M296 3 274 7 292 31Z M2 298 26 294 7 276Z M298 297 270 294 295 269Z" fill="url(#fold)"/>
+  <g stroke="#f1f7f4" stroke-width=".7">
+    <path d="M3 3 12 20 7 44M3 4 32 9M297 4 286 18 294 42M297 4 270 11M3 296 14 281 8 261M3 296 32 290M297 297 282 282 292 267M297 297 264 291" opacity=".42"/>
+    <path d="M6 30 4 98 6 144 4 221 6 269M294 37 296 102 294 161 296 239M12 294 82 296 159 293 222 296 282 294" opacity=".24"/>
+    <path d="m9 19 6 10-3 18m276-27-5 12 8 24m-9 230-12-9-8 3m-234 8 16-5 8 2" opacity=".17"/>
+  </g>
+  <g stroke="#080b0c" stroke-width=".5" opacity=".25">
+    <path d="M4 5 13 21 8 43M296 6 285 20 292 41M5 295 15 282 9 262M295 297 280 283 291 266"/>
+  </g>
+  <g stroke="#fff" stroke-width=".5" opacity=".13">
+    <path d="m41 61 8-9m-3 21 11-15m172 176 4-8m-63 24 9-3m-44-217 14-2m108 104 2-11"/>
+  </g>
+</svg>

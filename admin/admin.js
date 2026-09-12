@@ -809,13 +809,12 @@ async function handleMusicSubmit(event) {
     const audioFile = getSelectedInputFile(form.elements.audioFile);
     const versionAudioFiles = getSelectedInputFiles(form.elements.versionAudioFiles);
     const audioUrl = normalizeAssetInput(form.elements.audioUrl.value);
-    if (!coverFile) return showFormError(form, '请选择封面图片');
     if (!audioFile && !audioUrl) return showFormError(form, '请选择音频文件，或填写音频外链/已上传路径');
 
     await runFormTask(form, async progress => {
         progress.set(8, '正在读取音乐信息');
         validateUploads([
-            { file: coverFile, uploadType: 'musicCover' },
+            ...(coverFile ? [{ file: coverFile, uploadType: 'musicCover' }] : []),
             ...(audioFile && !audioUrl ? [{ file: audioFile, uploadType: 'musicAudio' }] : []),
             ...versionAudioFiles.map(file => ({ file, uploadType: 'musicAudio' }))
         ]);
@@ -829,7 +828,9 @@ async function handleMusicSubmit(event) {
             : '';
         const lyricMarkdown = pastedLyricMarkdown || fileLyricMarkdown;
         const shouldSyncLyric = Boolean(lyricMarkdown && form.elements.syncLyric.checked);
-        state.previewUrls[id] = URL.createObjectURL(coverFile);
+        if (coverFile) {
+            state.previewUrls[id] = URL.createObjectURL(coverFile);
+        }
         const versionUploadItems = versionAudioFiles.map((file, index) => ({
             key: `version${index}`,
             file,
@@ -837,11 +838,11 @@ async function handleMusicSubmit(event) {
             label: `版本音频${index + 1}`
         }));
         const uploaded = await uploadFiles([
-            { key: 'cover', file: coverFile, uploadType: 'musicCover', label: '音乐封面' },
+            ...(coverFile ? [{ key: 'cover', file: coverFile, uploadType: 'musicCover', label: '音乐封面' }] : []),
             ...(audioFile && !audioUrl ? [{ key: 'url', file: audioFile, uploadType: 'musicAudio', label: '音乐音频' }] : []),
             ...versionUploadItems
         ], progress, 22, 78);
-        const cover = uploaded.cover;
+        const cover = uploaded.cover || '';
         const primaryUrl = audioUrl || uploaded.url;
         const primarySource = audioUrl ? 'primary-url' : 'primary-file';
         const versionCandidates = [
