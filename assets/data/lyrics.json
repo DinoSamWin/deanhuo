@@ -359,5 +359,33 @@
         "showOnHome": false,
         "homeOrder": 4,
         "releaseYear": "2026"
+    },
+    {
+        "id": "lyric-mtxrncfv",
+        "title": "云对风说",
+        "author": "Dean Huo",
+        "date": "2026-09-12",
+        "cover": "assets/images/admin-uploads/music/1789180045108-clipboard-image-1789180027131-cover.jpg",
+        "summary": "云对风说",
+        "contentPath": "assets/lyrics/admin-generated/lyric-mtxrncfv.md",
+        "audioPath": "assets/audio/admin-uploads/1789180106380-musicAudio.mp3",
+        "order": 27,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2026"
+    },
+    {
+        "id": "lyric-mtxs6gjb",
+        "title": "威尼斯杀手",
+        "author": "Dean Huo",
+        "date": "2026-09-12",
+        "cover": "assets/images/admin-uploads/music/1789180924700-clipboard-image-1789180910032-cover.jpg",
+        "summary": "威尼斯的水",
+        "contentPath": "assets/lyrics/admin-generated/lyric-mtxs6gjb.md",
+        "audioPath": "assets/audio/admin-uploads/1789180997926-musicAudio.mp3",
+        "order": 28,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2026"
     }
 ]

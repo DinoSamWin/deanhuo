@@ -137,5 +137,49 @@
             }
         ],
         "lyricId": "lyric-mteekl1i"
+    },
+    {
+        "id": "music-mtxrlomf",
+        "title": "云对风说",
+        "artist": "Dean Huo",
+        "year": "2026",
+        "cover": "assets/images/admin-uploads/music/1789180045108-clipboard-image-1789180027131-cover.jpg",
+        "url": "assets/audio/admin-uploads/1789180106380-musicAudio.mp3",
+        "genre": "Original",
+        "description": "",
+        "versions": [
+            {
+                "label": "版本1",
+                "url": "assets/audio/admin-uploads/1789180106380-musicAudio.mp3",
+                "isDefault": true
+            },
+            {
+                "label": "版本2",
+                "url": "assets/audio/admin-uploads/1789180117556-musicAudio.mp3"
+            }
+        ],
+        "lyricId": "lyric-mtxrncfv"
+    },
+    {
+        "id": "music-mtxs4ho2",
+        "title": "威尼斯杀手",
+        "artist": "Dean Huo",
+        "year": "2026",
+        "cover": "assets/images/admin-uploads/music/1789180924700-clipboard-image-1789180910032-cover.jpg",
+        "url": "assets/audio/admin-uploads/1789180997926-musicAudio.mp3",
+        "genre": "Original",
+        "description": "",
+        "versions": [
+            {
+                "label": "版本1",
+                "url": "assets/audio/admin-uploads/1789180997926-musicAudio.mp3",
+                "isDefault": true
+            },
+            {
+                "label": "版本2",
+                "url": "assets/audio/admin-uploads/1789181010013-musicAudio.mp3"
+            }
+        ],
+        "lyricId": "lyric-mtxs6gjb"
     }
 ]
