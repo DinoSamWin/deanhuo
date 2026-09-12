@@ -14,7 +14,7 @@ const EDITABLE_RESOURCE_FILES = new Set([
 ]);
 
 const TEXT_FILE_PREFIXES = [
-    'assets/lyrics/admin-generated/',
+    'assets/lyrics/',
     'assets/data/knowledge/admin-generated/'
 ];
 
@@ -326,6 +326,41 @@ function assertEditableResourceList(path, currentValue, incomingValue) {
         }
         seen.add(id);
     });
+
+    if (path === JSON_FILES.music) {
+        incomingValue.forEach(validateMusicLyricTimings);
+    }
+}
+
+function validateMusicLyricTimings(item) {
+    if (!item || item.lyricTimings === undefined) return;
+    const value = item.lyricTimings;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw createHttpError(400, `歌词打点结构不正确：${item.id || '未知音乐'}`);
+    }
+
+    const versionEntries = Object.entries(value);
+    if (versionEntries.length > 30) {
+        throw createHttpError(400, `歌词打点版本过多：${item.id || '未知音乐'}`);
+    }
+
+    versionEntries.forEach(([url, lines]) => {
+        if (!String(url || '').trim() || !Array.isArray(lines)) {
+            throw createHttpError(400, `歌词打点版本结构不正确：${item.id || '未知音乐'}`);
+        }
+        if (lines.length > 5000) {
+            throw createHttpError(400, `歌词打点条目过多：${item.id || '未知音乐'}`);
+        }
+        lines.forEach((line, index) => {
+            const time = line && line.time;
+            const hasValidTime = time === null
+                || (typeof time === 'number' && Number.isFinite(time) && time >= 0);
+            const text = line && typeof line.text === 'string' ? line.text.trim() : '';
+            if (!text || text.length > 2000 || !hasValidTime) {
+                throw createHttpError(400, `歌词打点第 ${index + 1} 条不正确：${item.id || '未知音乐'}`);
+            }
+        });
+    });
 }
 
 function validateRecommendations(value) {
@@ -353,7 +388,10 @@ function validateRecommendations(value) {
 function validateTextFiles(textFiles) {
     for (const [path, content] of Object.entries(textFiles)) {
         const isAllowedPath = TEXT_FILE_PREFIXES.some(prefix => path.startsWith(prefix));
-        if (!isAllowedPath || !path.endsWith('.md')) {
+        const isSafePath = !path.startsWith('/')
+            && !path.includes('\\')
+            && path.split('/').every(segment => segment && segment !== '.' && segment !== '..');
+        if (!isAllowedPath || !isSafePath || !path.endsWith('.md')) {
             throw createHttpError(400, `不允许写入该文本文件：${path}`);
         }
         if (typeof content !== 'string') {

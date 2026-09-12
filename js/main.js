@@ -148,7 +148,7 @@ async function initLyricsCarousel() {
 
     try {
         const [lyricsResponse, recommendationConfig] = await Promise.all([
-            fetch('assets/data/lyrics.json?v=' + Date.now()),
+            fetch('assets/data/lyrics.json'),
             window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
         ]);
         const lyrics = getVisibleResources(await lyricsResponse.json());
@@ -190,7 +190,8 @@ function renderCarousel(container, lyrics) {
                     NOW PLAYING
                 </div>
                 <div class="album-art-container">
-                    <img src="${item.cover}" alt="${item.title}" class="album-cover">
+                    <img src="${item.cover}" alt="${item.title}" class="album-cover"
+                        loading="${index === 0 ? 'eager' : 'lazy'}" decoding="async" ${index === 0 ? 'fetchpriority="high"' : ''}>
                     <div class="vinyl-disc"></div>
                 </div>
                 <div class="lyrics-info">
@@ -274,7 +275,7 @@ async function initMusicModule() {
 
     try {
         const [musicResponse, recommendationConfig] = await Promise.all([
-            fetch('assets/data/music.json?v=' + Date.now()),
+            fetch('assets/data/music.json'),
             window.DeanRecommendations ? window.DeanRecommendations.loadConfig() : Promise.resolve(null)
         ]);
         const musicData = getVisibleResources(await musicResponse.json());
@@ -289,7 +290,7 @@ async function initMusicModule() {
 
         listContainer.innerHTML = homeMusic.map((item) => `
             <div class="music-item" onclick="location.href='music-player.html?id=${item.id}'">
-                <img src="${item.cover}" alt="${item.title}" class="music-art">
+                <img src="${item.cover}" alt="${item.title}" class="music-art" loading="lazy" decoding="async">
                 <div class="music-details">
                     <div class="music-name">${item.title}</div>
                     <div class="music-meta">${item.artist} • ${item.genre}</div>
@@ -332,35 +333,42 @@ async function initPhotographyModule() {
         const featureTitle = document.getElementById('feature-photo-title');
         const featureDesc = document.getElementById('feature-photo-desc');
 
-        function updateFeature(photo) {
-            // Check if already cached
-            const tempImg = new Image();
-            tempImg.src = photo.src;
-
-            if (tempImg.complete) {
-                // Instant update for cached
-                featureImg.src = photo.src;
-                featureTitle.innerText = photo.title + ' —';
-                featureDesc.innerText = photo.description;
-                featureImg.style.opacity = '1';
-                return;
-            }
-
-            // Normal fade for new
+        function updateFeature(photo, eager = false) {
             featureImg.style.opacity = '0.3';
-            setTimeout(() => {
-                featureImg.src = photo.src;
+            featureImg.onload = () => {
                 featureTitle.innerText = photo.title + ' —';
                 featureDesc.innerText = photo.description;
                 featureImg.style.opacity = '1';
-            }, 300);
+            };
+
+            if (window.DeanImages) {
+                window.DeanImages.applyResponsivePhoto(featureImg, photo.src, {
+                    eager,
+                    defaultWidth: 1280,
+                    sizes: '(max-width: 768px) 100vw, 50vw'
+                });
+            } else {
+                featureImg.src = photo.src;
+            }
         }
 
         thumbTrack.innerHTML = homePhotos.map((photo, index) => `
             <div class="thumbnail-item ${index === 0 ? 'active' : ''}" data-index="${index}">
-                <img src="${photo.src}" alt="${photo.title}">
+                <img src="${photo.src}" alt="${photo.title}" data-photo-source="${photo.src}">
             </div>
         `).join('');
+
+        thumbTrack.querySelectorAll('img[data-photo-source]').forEach(image => {
+            if (window.DeanImages) {
+                window.DeanImages.applyResponsivePhoto(image, image.dataset.photoSource, {
+                    defaultWidth: 640,
+                    sizes: '160px'
+                });
+            } else {
+                image.loading = 'lazy';
+                image.decoding = 'async';
+            }
+        });
 
         const thumbs = thumbTrack.querySelectorAll('.thumbnail-item');
         thumbs.forEach((thumb, i) => {
@@ -372,7 +380,7 @@ async function initPhotographyModule() {
         });
 
         // Init first one
-        updateFeature(homePhotos[0]);
+        updateFeature(homePhotos[0], true);
 
     } catch (e) {
         console.error("Photo error:", e);

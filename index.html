@@ -4,17 +4,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/images/brand/dean-logo-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/images/brand/dean-logo-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/images/brand/dean-logo-180.png">
     <title>Dean Huo | Personal Website</title>
+    <meta name="description" content="Dean Huo 的个人网站：产品、光影、词句与音乐作品。">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Dean Huo">
+    <meta property="og:title" content="Dean Huo | Personal Website">
+    <meta property="og:description" content="在结构之外，留一束光。浏览 Dean Huo 的产品、摄影、词句与音乐作品。">
+    <meta property="og:image" content="https://www.deanhuo.com/assets/images/brand/dean-logo-512.png">
+    <meta property="og:image:width" content="512">
+    <meta property="og:image:height" content="512">
+    <meta name="twitter:card" content="summary">
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/style.css">
     <!-- Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="assets/vendor/lucide-1.45.0.min.js"></script>
 </head>
 
 <body>
 
     <!-- New Header Section -->
     <header class="site-header container">
+        <a href="index.html" class="site-logo-link" aria-label="Dean Huo 首页">
+            <img src="assets/images/brand/dean-logo-rounded.png" alt="Dean Huo" class="site-logo" width="800"
+                height="800">
+        </a>
         <h1 class="header-title font-heading">
             在结构之外，留一束光
         </h1>
@@ -34,8 +50,11 @@
     <!-- Sticky Navigation -->
     <div class="sticky-nav-container">
         <nav class="sticky-nav">
-            <a href="index.html" class="nav-btn active" data-tooltip="Home">
-                <i data-lucide="home" style="width: 20px;"></i>
+            <a href="index.html" class="nav-btn active" data-tooltip="Home" aria-label="Dean Huo 首页">
+                <img src="assets/images/brand/dean-logo-32.png" alt="" class="brand-nav-logo" width="32" height="32">
+            </a>
+            <a href="resume.html" class="nav-btn" data-tooltip="About Me">
+                <i data-lucide="user" style="width: 20px;"></i>
             </a>
             <a href="photos.html" target="_blank" class="nav-btn" data-tooltip="Photos">
                 <i data-lucide="camera" style="width: 20px;"></i>
@@ -150,7 +169,7 @@
                             </div>
                             <div class="ecard-qr-section">
                                 <div class="ecard-qr-wrapper">
-                                    <img src="assets/images/wechat-qr.png" alt="WeChat QR Code" class="ecard-qr">
+                                    <img src="assets/images/wechat-qr.png" alt="WeChat QR Code" class="ecard-qr" width="300" height="300" loading="lazy" decoding="async">
                                 </div>
                                 <span class="ecard-qr-label">微信扫一扫</span>
                             </div>
@@ -221,8 +240,8 @@
                     in the search of life in different prospective</p>
 
                 <div class="photo-author-tag">
-                    <img src="https://ui-avatars.com/api/?name=Dean+Huo&background=0D0D0D&color=fff" alt="Dean Huo"
-                        class="author-avatar">
+                    <img src="assets/images/dean-avatar.svg" alt="Dean Huo" class="author-avatar" width="128"
+                        height="128" loading="lazy" decoding="async">
                     <div class="author-info">
                         <span class="author-name">DEAN HUO</span>
                         <span class="author-role">Member of SPI</span>
@@ -240,7 +259,7 @@
                     <i data-lucide="chevron-down"></i>
                 </div>
                 <div class="main-image-wrapper">
-                    <img src="" alt="Feature Photo" id="main-feature-img">
+                    <img src="" alt="Feature Photo" id="main-feature-img" decoding="async">
                 </div>
             </div>
 
@@ -266,6 +285,7 @@
         </defs>
     </svg>
 
+    <script src="js/image-utils.js?v=china-performance-1"></script>
     <script src="js/recommendations.js?v=trash-progress"></script>
     <script src="js/main.js?v=trash-progress"></script>
     <script>

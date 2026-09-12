@@ -882,6 +882,203 @@ button {
     padding-right: 4px;
 }
 
+.lyric-timing-entry {
+    width: 100%;
+    margin-top: -4px;
+    border-color: rgba(0, 255, 136, 0.28);
+}
+
+.lyric-timing-view {
+    display: grid;
+    gap: 14px;
+}
+
+.lyric-timing-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.lyric-timing-heading h3 {
+    margin: 3px 0 5px;
+    font-size: 20px;
+}
+
+.lyric-timing-heading p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.lyric-timing-eyebrow {
+    color: var(--accent-color);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.lyric-timing-player {
+    display: grid;
+    gap: 11px;
+    padding: 13px;
+    background: rgba(0, 255, 136, 0.055);
+    border: 1px solid rgba(0, 255, 136, 0.22);
+    border-radius: 8px;
+}
+
+.lyric-timing-version-field {
+    min-width: 0;
+}
+
+.lyric-timing-player audio {
+    width: 100%;
+}
+
+.lyric-timing-transport {
+    display: grid;
+    grid-template-columns: auto auto minmax(86px, 1fr) auto auto;
+    gap: 6px;
+    align-items: center;
+}
+
+.lyric-timing-transport .ghost-action {
+    min-height: 34px;
+    padding: 7px 9px;
+    font-size: 12px;
+}
+
+.lyric-timing-transport strong {
+    color: var(--accent-color);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.lyric-timing-toolbar {
+    display: grid;
+    gap: 10px;
+}
+
+.lyric-timing-status {
+    min-height: 22px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
+.lyric-timing-status.is-warning {
+    color: #ffd38a;
+}
+
+.lyric-timing-status.is-complete {
+    color: var(--accent-color);
+}
+
+.lyric-timing-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.lyric-timing-lines {
+    display: grid;
+    gap: 7px;
+    max-height: 430px;
+    overflow: auto;
+    padding-right: 4px;
+}
+
+.lyric-timing-line {
+    display: grid;
+    grid-template-columns: 30px 82px minmax(0, 1fr) 30px;
+    gap: 8px;
+    align-items: center;
+    min-height: 44px;
+    padding: 7px 8px;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.lyric-timing-line:hover,
+.lyric-timing-line.is-next {
+    color: var(--text-primary);
+    border-color: rgba(0, 255, 136, 0.3);
+}
+
+.lyric-timing-line.is-next {
+    background: rgba(0, 255, 136, 0.055);
+}
+
+.lyric-timing-line.is-playing {
+    color: var(--text-primary);
+    background: rgba(0, 255, 136, 0.1);
+    border-color: rgba(0, 255, 136, 0.48);
+}
+
+.lyric-timing-index {
+    color: var(--text-muted, #777);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.lyric-timing-stamp {
+    color: var(--accent-color);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.lyric-timing-stamp.is-empty {
+    color: var(--text-secondary);
+}
+
+.lyric-timing-text {
+    min-width: 0;
+    padding: 4px 5px;
+    border-radius: 5px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.lyric-timing-text[contenteditable="true"] {
+    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.38);
+    box-shadow: 0 0 0 1px rgba(0, 255, 136, 0.45);
+    cursor: text;
+    outline: none;
+}
+
+.lyric-timing-clear {
+    width: 28px;
+    min-height: 28px;
+    padding: 0;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 0;
+    opacity: 0;
+}
+
+.lyric-timing-line:hover .lyric-timing-clear,
+.lyric-timing-clear:focus-visible {
+    opacity: 1;
+}
+
+.lyric-timing-clear svg {
+    width: 14px;
+    height: 14px;
+}
+
+.resource-timing-action {
+    color: var(--accent-color);
+}
+
 .resource-list {
     display: grid;
     gap: 10px;
@@ -1589,6 +1786,20 @@ pre {
     .pending-toolbar {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .lyric-timing-transport {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .lyric-timing-transport strong {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+
+    .lyric-timing-line {
+        grid-template-columns: 24px 74px minmax(0, 1fr) 28px;
+        gap: 5px;
     }
 
     .segmented-control {

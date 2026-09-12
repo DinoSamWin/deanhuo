@@ -42,7 +42,7 @@
 
     async function fetchJson(path, fallback) {
         try {
-            const response = await fetch(path + (path.includes('?') ? '&' : '?') + 'v=' + Date.now());
+            const response = await fetch(path);
             if (!response.ok) throw new Error('Request failed: ' + path);
             return await response.json();
         } catch (error) {

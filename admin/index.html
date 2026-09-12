@@ -4,10 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/images/brand/dean-logo-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/images/brand/dean-logo-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="../assets/images/brand/dean-logo-180.png">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
-    <link rel="stylesheet" href="../css/admin.css?v=20260830-photo-optimize">
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="../css/admin.css?v=20260912-lyric-timing">
+    <script src="../assets/vendor/lucide-1.45.0.min.js"></script>
 </head>
 
 <body>
@@ -41,7 +44,7 @@
     <div class="admin-shell is-hidden" id="admin-app">
         <aside class="admin-sidebar">
             <a class="brand" href="../index.html">
-                <span class="brand-dot"></span>
+                <img src="../assets/images/brand/dean-logo-32.png" alt="" class="brand-logo" width="32" height="32">
                 <span>Dean CMS</span>
             </a>
             <button class="side-link is-active" data-panel="dashboard-panel">
@@ -354,6 +357,10 @@
                             <span>手动填写歌词</span>
                             <textarea name="lyricMarkdownText" rows="8" placeholder="可以直接粘贴歌词，也可以先上传 Markdown 后再修改"></textarea>
                         </label>
+                        <button class="secondary-action lyric-timing-entry" id="music-lyric-timing-button" type="button">
+                            <i data-lucide="audio-lines"></i>
+                            歌词打点
+                        </button>
                         <label class="check-field">
                             <input type="checkbox" name="syncLyric" checked>
                             <span>上传歌词后，同步创建词作并自动关联音乐</span>
@@ -411,23 +418,71 @@
                     </form>
 
                     <div class="library-panel">
-                        <div class="library-toolbar">
-                            <label class="field compact-field">
-                                <span>资源库</span>
-                                <select id="library-source-select">
-                                    <option value="all">全部资源</option>
-                                    <option value="photos">图片</option>
-                                    <option value="lyrics">词作</option>
-                                    <option value="music">音乐</option>
-                                    <option value="knowledge">知识</option>
-                                </select>
-                            </label>
-                            <label class="field compact-field">
-                                <span>搜索</span>
-                                <input id="library-search" placeholder="标题 / ID / 标签">
-                            </label>
+                        <div id="library-view">
+                            <div class="library-toolbar">
+                                <label class="field compact-field">
+                                    <span>资源库</span>
+                                    <select id="library-source-select">
+                                        <option value="all">全部资源</option>
+                                        <option value="photos">图片</option>
+                                        <option value="lyrics">词作</option>
+                                        <option value="music">音乐</option>
+                                        <option value="knowledge">知识</option>
+                                    </select>
+                                </label>
+                                <label class="field compact-field">
+                                    <span>搜索</span>
+                                    <input id="library-search" placeholder="标题 / ID / 标签">
+                                </label>
+                            </div>
+                            <div class="resource-library" id="resource-library"></div>
                         </div>
-                        <div class="resource-library" id="resource-library"></div>
+                        <div class="lyric-timing-view is-hidden" id="lyric-timing-view">
+                            <div class="lyric-timing-heading">
+                                <div>
+                                    <span class="lyric-timing-eyebrow">Lyric Timing</span>
+                                    <h3 id="lyric-timing-title">歌词打点</h3>
+                                    <p>播放时点击歌词条目记录当前时间；双击歌词可修改文字。</p>
+                                </div>
+                                <button class="icon-action" id="lyric-timing-close-button" type="button" aria-label="关闭歌词打点" title="关闭歌词打点">
+                                    <i data-lucide="x"></i>
+                                </button>
+                            </div>
+                            <div class="lyric-timing-player">
+                                <label class="field compact-field lyric-timing-version-field">
+                                    <span>歌曲版本</span>
+                                    <select id="lyric-timing-version-select"></select>
+                                </label>
+                                <audio id="lyric-timing-audio" controls preload="metadata"></audio>
+                                <div class="lyric-timing-transport">
+                                    <button class="ghost-action" type="button" data-lyric-timing-seek="-5">
+                                        <i data-lucide="rotate-ccw"></i>
+                                        后退 5 秒
+                                    </button>
+                                    <button class="ghost-action" type="button" data-lyric-timing-seek="-0.1">-0.1s</button>
+                                    <strong id="lyric-timing-current-time">00:00.00</strong>
+                                    <button class="ghost-action" type="button" data-lyric-timing-seek="0.1">+0.1s</button>
+                                    <button class="ghost-action" type="button" data-lyric-timing-seek="5">
+                                        前进 5 秒
+                                        <i data-lucide="rotate-cw"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="lyric-timing-toolbar">
+                                <div class="lyric-timing-status" id="lyric-timing-status"></div>
+                                <div class="lyric-timing-actions">
+                                    <button class="secondary-action" id="lyric-timing-reset-button" type="button">
+                                        <i data-lucide="eraser"></i>
+                                        清空本版本时间
+                                    </button>
+                                    <button class="primary-action" id="lyric-timing-sync-button" type="button">
+                                        <i data-lucide="save"></i>
+                                        同步打点
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="lyric-timing-lines" id="lyric-timing-lines"></div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -711,7 +766,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260830-photo-optimize"></script>
+    <script src="../admin/admin.js?v=20260912-published-lyric-edit"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();

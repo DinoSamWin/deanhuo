@@ -1,0 +1,38 @@
+name: Build mainland-China static package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out selected revision
+        uses: actions/checkout@v4
+
+      - name: Build public OSS/CDN package
+        run: ./scripts/build_cn_static.sh
+
+      - name: Verify key pages over HTTP
+        run: |
+          python3 -m http.server 4173 --directory dist-cn >/tmp/deanhuo-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for attempt in {1..20}; do
+            curl --fail --silent http://127.0.0.1:4173/index.html >/dev/null && break
+            sleep 0.25
+          done
+          for page in index photos lyrics lyric-detail music music-player knowledge knowledge-detail projects resume resume-proof; do
+            curl --fail --silent "http://127.0.0.1:4173/${page}.html" >/dev/null
+          done
+
+      - name: Upload review artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deanhuo-cn-static-${{ github.sha }}
+          path: dist-cn/
+          if-no-files-found: error
+          retention-days: 14

@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (bvMatch) {
                     const bvid = bvMatch[1];
                     return `<div class="video-embed-container">
-                        <iframe src="//player.bilibili.com/player.html?bvid=${bvid}&page=1&high_quality=1&danmaku=0" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>
+                        <iframe src="//player.bilibili.com/player.html?bvid=${bvid}&page=1&high_quality=1&danmaku=0" loading="lazy" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>
                     </div>`;
                 }
             }
@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (ytId) {
                 return `<div class="video-embed-container">
-                    <iframe src="https://www.youtube.com/embed/${ytId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                    <iframe src="https://www.youtube.com/embed/${ytId}" loading="lazy" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
                 </div>`;
             }
 
@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return `<div class="embed-wrapper">
                     <div class="gamma-scroll-overlay"></div>
                     <div class="video-embed-container gamma-embed">
-                        <iframe src="${embedUrl}" allow="fullscreen" title="Gamma Presentation"></iframe>
+                        <iframe src="${embedUrl}" loading="lazy" allow="fullscreen" title="Gamma Presentation"></iframe>
                     </div>
                     <button class="gamma-fullscreen-btn" aria-label="建议全屏预览">
                         <i data-lucide="maximize"></i> 建议全屏预览
@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
     marked.use({ extensions: [embedExtension, iframeHtmlExtension] });
 
     // Step 1: Fetch metadata from knowledge-index.json to populate header
-    fetch('assets/data/knowledge-index.json?v=' + Date.now())
+    fetch('assets/data/knowledge-index.json')
         .then(res => res.json())
         .then(data => {
             data = getVisibleResources(data);
@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Step 2: Fetch the actual markdown file content
-            return fetch(`assets/data/knowledge/${articleMeta.filename}?v=${Date.now()}`);
+            return fetch(`assets/data/knowledge/${articleMeta.filename}`);
         })
         .then(res => {
             if (!res) return; // Prevent cascading error if not found
@@ -132,7 +132,15 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .then(text => {
             if (text) {
-                document.getElementById('article-body').innerHTML = marked.parse(text);
+                const articleBody = document.getElementById('article-body');
+                articleBody.innerHTML = marked.parse(text);
+                articleBody.querySelectorAll('img').forEach(image => {
+                    image.loading = 'lazy';
+                    image.decoding = 'async';
+                });
+                articleBody.querySelectorAll('iframe').forEach(frame => {
+                    frame.loading = 'lazy';
+                });
 
                 // Re-initialize icons for newly added buttons
                 if (window.lucide) {

@@ -1,5 +1,35 @@
 /* Global Styles */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
+@font-face {
+    font-family: 'Inter';
+    src: url('../assets/fonts/inter-latin-variable.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: url('../assets/fonts/inter-latin-variable-italic.woff2') format('woff2');
+    font-style: italic;
+    font-weight: 100 900;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Playfair Display';
+    src: url('../assets/fonts/playfair-display-latin-variable.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 400 900;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Playfair Display';
+    src: url('../assets/fonts/playfair-display-latin-variable-italic.woff2') format('woff2');
+    font-style: italic;
+    font-weight: 400 900;
+    font-display: swap;
+}
 
 body {
     background-color: var(--bg-primary);
@@ -411,7 +441,7 @@ h6 {
     grid-column: span 6;
     min-height: 520px;
     /* Portrait 3:4-ish feel */
-    background-image: url('../assets/images/album-cover-reptiles.png');
+    background-image: url('../assets/images/album-cover-reptiles.webp');
     background-size: cover;
     background-position: center;
     position: relative;

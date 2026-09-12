@@ -4,10 +4,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/images/brand/dean-logo-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/images/brand/dean-logo-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/images/brand/dean-logo-180.png">
     <title>Projects | Dean Huo</title>
+    <meta name="description" content="Dean Huo 的产品与创作项目。">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Dean Huo">
+    <meta property="og:title" content="Projects | Dean Huo">
+    <meta property="og:description" content="查看 Dean Huo 的产品实践与创作项目。">
+    <meta property="og:image" content="https://www.deanhuo.com/assets/images/brand/dean-logo-512.png">
+    <meta name="twitter:card" content="summary">
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/style.css">
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="assets/vendor/lucide-1.45.0.min.js"></script>
     <style>
         .projects-grid {
             display: grid;
@@ -68,7 +78,8 @@
 <body>
     <!-- Sidebar Navigation -->
     <nav class="sidebar-nav">
-        <a href="index.html" class="nav-btn" data-tooltip="Home"><i data-lucide="home" style="width: 20px;"></i></a>
+        <a href="index.html" class="nav-btn" data-tooltip="Home" aria-label="Dean Huo 首页"><img src="assets/images/brand/dean-logo-32.png" alt="" class="brand-nav-logo" width="32" height="32"></a>
+        <a href="resume.html" class="nav-btn" data-tooltip="About Me"><i data-lucide="user" style="width: 20px;"></i></a>
         <a href="photos.html" class="nav-btn" data-tooltip="Photos"><i data-lucide="camera"
                 style="width: 20px;"></i></a>
         <a href="lyrics.html" class="nav-btn" data-tooltip="Lyrics"><i data-lucide="file-text"
@@ -89,8 +100,8 @@
         <div class="projects-grid">
             <!-- Project 1 -->
             <a href="#" target="_blank" class="project-card">
-                <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800" alt="SaaS Dashboard"
-                    class="project-img">
+                <img src="assets/images/projects/saas-dashboard.jpg" alt="SaaS Dashboard" class="project-img"
+                    width="800" height="570" loading="lazy" decoding="async">
                 <div class="project-body">
                     <h2 style="font-size: 20px; margin-bottom: 8px;">SaaS Analytics Dashboard</h2>
                     <p class="text-secondary" style="font-size: 14px; margin-bottom: 16px;">
@@ -107,8 +118,8 @@
 
             <!-- Project 2 -->
             <a href="#" target="_blank" class="project-card">
-                <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800" alt="E-commerce App"
-                    class="project-img">
+                <img src="assets/images/projects/ecommerce-dashboard.jpg" alt="E-commerce App" class="project-img"
+                    width="800" height="533" loading="lazy" decoding="async">
                 <div class="project-body">
                     <h2 style="font-size: 20px; margin-bottom: 8px;">Modern E-commerce App</h2>
                     <p class="text-secondary" style="font-size: 14px; margin-bottom: 16px;">
@@ -124,8 +135,8 @@
 
             <!-- Project 3 -->
             <a href="#" target="_blank" class="project-card">
-                <img src="https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800" alt="Dev Portfolio"
-                    class="project-img">
+                <img src="assets/images/projects/developer-portfolio.jpg" alt="Dev Portfolio" class="project-img"
+                    width="800" height="533" loading="lazy" decoding="async">
                 <div class="project-body">
                     <h2 style="font-size: 20px; margin-bottom: 8px;">Developer Portfolio Theme</h2>
                     <p class="text-secondary" style="font-size: 14px; margin-bottom: 16px;">

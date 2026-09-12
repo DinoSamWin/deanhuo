@@ -24,24 +24,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const img = document.createElement('img');
             img.alt = photo.description || 'Photo';
+            img.decoding = 'async';
+            img.loading = 'lazy';
 
             // Set up load handler BEFORE setting src
             img.onload = function () {
                 this.classList.add('loaded');
             };
 
-            img.src = photo.src;
+            if (window.DeanImages) {
+                window.DeanImages.applyResponsivePhoto(img, photo.src, {
+                    defaultWidth: 1280,
+                    sizes: '(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 33vw',
+                    onError: () => {
+                        item.style.display = 'none';
+                    }
+                });
+            } else {
+                img.src = photo.src;
+            }
 
             // CRITICAL: If image is already in cache, it will be 'complete' immediately
             if (img.complete) {
                 img.classList.add('loaded');
                 img.style.transition = 'none'; // No animation for cached images
             }
-
-            // Error handling
-            img.onerror = function () {
-                this.parentElement.style.display = 'none';
-            };
 
             item.appendChild(img);
             masonryGrid.appendChild(item);
