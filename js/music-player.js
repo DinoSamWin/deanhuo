@@ -9,8 +9,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let isPlaying = false;
     let lyrics = [];
     let activeLyricIndex = -1;
+    let lyricScrollIndex = -1;
     let lyricFollowSuspendedUntil = 0;
+    let lyricAnimationFrameId = null;
     let lyricsRequestId = 0;
+    const LYRIC_SCROLL_LEAD_SECONDS = 0.28;
 
     const elements = {
         audio: document.getElementById('audio-element'),
@@ -62,8 +65,9 @@ document.addEventListener('DOMContentLoaded', () => {
         bindVersionStripScroll();
         bindLyricsInteraction();
 
-        elements.audio.addEventListener('timeupdate', updateProgress);
-        elements.audio.addEventListener('seeking', updateProgress);
+        elements.audio.addEventListener('timeupdate', () => updateProgress());
+        elements.audio.addEventListener('seeking', () => updateProgress(true));
+        elements.audio.addEventListener('seeked', () => updateProgress(true));
         elements.audio.addEventListener('loadedmetadata', updateDuration);
         elements.audio.addEventListener('durationchange', updateDuration);
         elements.audio.addEventListener('play', () => setPlayingState(true));
@@ -73,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.slider.addEventListener('input', (e) => {
             if (elements.audio.duration) {
                 elements.audio.currentTime = (e.target.value / 100) * elements.audio.duration;
+                updateProgress(true);
             }
         });
 
@@ -303,6 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         elements.lyricsBox.innerHTML = '';
         activeLyricIndex = -1;
+        lyricScrollIndex = -1;
         lyricFollowSuspendedUntil = 0;
 
         if (catalogTiming.lines.length > 0) {
@@ -378,6 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let pointerActive = false;
         const suspendFollow = () => {
             lyricFollowSuspendedUntil = Date.now() + 8000;
+            lyricScrollIndex = -1;
         };
 
         if ('PointerEvent' in window) {
@@ -427,38 +434,74 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         activeIdx = Math.max(0, Math.min(activeIdx, lines.length - 1));
-        if (!force && activeIdx === activeLyricIndex) return;
-        activeLyricIndex = activeIdx;
+        if (force || activeIdx !== activeLyricIndex) {
+            activeLyricIndex = activeIdx;
 
-        // Avoid touching every lyric node on every audio timeupdate. The DOM
-        // changes only when playback advances to another line.
-        lines.forEach((line, index) => {
-            line.classList.remove('active', 'near-prev', 'near-next', 'far-prev', 'far-next');
-            line.removeAttribute('aria-current');
-            if (index === activeIdx) {
-                line.classList.add('active');
-                line.setAttribute('aria-current', 'true');
-            } else if (index === activeIdx - 1) {
-                line.classList.add('near-prev');
-            } else if (index === activeIdx + 1) {
-                line.classList.add('near-next');
-            } else if (index < activeIdx - 1) {
-                line.classList.add('far-prev');
-            } else {
-                line.classList.add('far-next');
+            // The highlight always changes at the exact saved timestamp. Only
+            // the scroll position below is allowed to anticipate the next line.
+            lines.forEach((line, index) => {
+                line.classList.remove('active', 'near-prev', 'near-next', 'far-prev', 'far-next');
+                line.removeAttribute('aria-current');
+                if (index === activeIdx) {
+                    line.classList.add('active');
+                    line.setAttribute('aria-current', 'true');
+                } else if (index === activeIdx - 1) {
+                    line.classList.add('near-prev');
+                } else if (index === activeIdx + 1) {
+                    line.classList.add('near-next');
+                } else if (index < activeIdx - 1) {
+                    line.classList.add('far-prev');
+                } else {
+                    line.classList.add('far-next');
+                }
+            });
+        }
+
+        let scrollIdx = activeIdx;
+        if (!force && isPlaying && hasTimestamps && activeIdx < lyrics.length - 1) {
+            const nextTime = lyrics[activeIdx + 1].time;
+            const timeUntilNext = nextTime - currentTime;
+            if (timeUntilNext > 0 && timeUntilNext <= LYRIC_SCROLL_LEAD_SECONDS) {
+                scrollIdx = activeIdx + 1;
             }
-        });
+        }
 
         // A touch/wheel gesture temporarily owns the lyric position; playback
         // resumes auto-following after the user has finished reading.
-        if (Date.now() >= lyricFollowSuspendedUntil) {
-            const activeLine = lines[activeIdx];
-            const targetTop = activeLine.offsetTop - ((elements.lyricsBox.clientHeight - activeLine.offsetHeight) / 2);
+        if ((force || Date.now() >= lyricFollowSuspendedUntil)
+            && (force || scrollIdx !== lyricScrollIndex)) {
+            lyricScrollIndex = scrollIdx;
+            const targetLine = lines[scrollIdx];
+            const targetTop = targetLine.offsetTop - ((elements.lyricsBox.clientHeight - targetLine.offsetHeight) / 2);
+            const reduceMotion = window.matchMedia
+                && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
             elements.lyricsBox.scrollTo({
                 top: Math.max(0, targetTop),
-                behavior: force ? 'auto' : 'smooth'
+                behavior: force || reduceMotion ? 'auto' : 'smooth'
             });
         }
+    }
+
+    function startLyricSync() {
+        if (lyricAnimationFrameId !== null) return;
+
+        const syncLyrics = () => {
+            if (elements.audio.paused || elements.audio.ended) {
+                lyricAnimationFrameId = null;
+                return;
+            }
+
+            updateLyricsDisplay(elements.audio.currentTime);
+            lyricAnimationFrameId = requestAnimationFrame(syncLyrics);
+        };
+
+        lyricAnimationFrameId = requestAnimationFrame(syncLyrics);
+    }
+
+    function stopLyricSync() {
+        if (lyricAnimationFrameId === null) return;
+        cancelAnimationFrame(lyricAnimationFrameId);
+        lyricAnimationFrameId = null;
     }
 
     function togglePlay() {
@@ -481,6 +524,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setPlayingState(nextState) {
         isPlaying = nextState;
+        if (isPlaying) startLyricSync();
+        else stopLyricSync();
         updatePlayState();
     }
 
@@ -600,7 +645,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return String(value || '').trim();
     }
 
-    function updateProgress() {
+    function updateProgress(forceLyrics = false) {
         const audio = elements.audio;
         if (!audio.duration) return;
 
@@ -619,7 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.timeCurr.textContent = formatTime(audio.currentTime);
         elements.timeTotal.textContent = formatTime(audio.duration);
 
-        updateLyricsDisplay(audio.currentTime);
+        updateLyricsDisplay(audio.currentTime, forceLyrics);
     }
 
     function updateDuration() {

@@ -409,7 +409,9 @@
             touch-action: pan-y;
             scrollbar-width: none;
             padding-block: calc((clamp(80px, 15vh, 120px) - 38px) / 2);
-            scroll-behavior: smooth;
+            /* Programmatic lyric following opts into smooth scrolling. Keeping
+               the default instant makes seeking and reduced-motion exact. */
+            scroll-behavior: auto;
             z-index: 20;
             /* Ensure lyrics render above background cleanly */
         }
@@ -901,7 +903,7 @@
     <audio id="audio-element" preload="metadata" playsinline></audio>
 
     <script src="js/wechat-share.js?v=20260912-song-route-3"></script>
-    <script src="js/music-player.js?v=20260912-song-route-3"></script>
+    <script src="js/music-player.js?v=20260912-lyric-sync-1"></script>
 </body>
 
 </html>
