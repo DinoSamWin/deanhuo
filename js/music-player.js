@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
             button.classList.toggle('is-active', index === currentVersionIndex);
         });
         const active = elements.versionStrip.querySelector('.version-btn.is-active');
-        if (active && typeof active.scrollIntoView === 'function') {
+        if (active && elements.versionStrip.classList.contains('is-overflowing') && typeof active.scrollIntoView === 'function') {
             active.scrollIntoView({ inline: 'nearest', block: 'nearest' });
         }
     }

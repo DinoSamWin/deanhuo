@@ -246,7 +246,7 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            overflow-x: auto;
+            overflow: visible;
             overscroll-behavior-x: contain;
             scrollbar-width: none;
             -webkit-overflow-scrolling: touch;
@@ -258,6 +258,8 @@
 
         .version-strip.is-overflowing {
             justify-content: flex-start;
+            overflow-x: auto;
+            overflow-y: hidden;
             mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
             -webkit-mask-image: linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent);
         }
