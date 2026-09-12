@@ -102,7 +102,7 @@ const RESOURCE_EDIT_SCHEMAS = {
         { key: 'url', label: '音频路径/URL', empty: 'delete' },
         { key: 'urlFile', label: '替换音频文件', type: 'fileUpload', uploadType: 'musicAudio', targetKey: 'url', accept: 'audio/*', note: '选择新音频后，保存时会上传并替换上面的音频路径。大 WAV 会自动转 MP3。', uploadProgressEnd: 58 },
         { key: 'versions', label: '音频版本', type: 'musicVersions' },
-        { key: 'description', label: '描述', type: 'textarea' },
+        { key: 'description', label: '摘要（用于微信分享描述）', type: 'textarea' },
         { key: 'lyricId', label: '关联词作', type: 'resourceSelect', source: 'lyrics', empty: 'delete' },
         { key: 'lyricText', label: '歌词内容', type: 'markdownText', fileLabel: '歌词 Markdown 文件', rows: 8, empty: 'delete', linkedLyricContent: true }
     ],

@@ -4,9 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" sizes="32x32" href="../assets/images/brand/dean-logo-32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="../assets/images/brand/dean-logo-16.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="../assets/images/brand/dean-logo-180.png">
+    <link rel="shortcut icon" href="/favicon.ico?v=20260912-2">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/brand/dean-logo-32.png?v=20260912-2">
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/brand/dean-logo-16.png?v=20260912-2">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/brand/dean-logo-180.png?v=20260912-2">
     <title>资源配置后台 | Dean Huo</title>
     <link rel="stylesheet" href="../css/variables.css">
     <link rel="stylesheet" href="../css/admin.css?v=20260912-lyric-timing">
@@ -366,8 +367,8 @@
                             <span>上传歌词后，同步创建词作并自动关联音乐</span>
                         </label>
                         <label class="field">
-                            <span>描述</span>
-                            <textarea name="description" rows="4"></textarea>
+                            <span>摘要（用于微信分享描述）</span>
+                            <textarea name="description" rows="4" placeholder="可选填写；分享歌曲时会读取这里的内容"></textarea>
                         </label>
                         <label class="check-field">
                             <input type="checkbox" name="showOnHome">
@@ -766,7 +767,7 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
     <script src="../js/recommendations.js" data-base="../"></script>
-    <script src="../admin/admin.js?v=20260912-published-lyric-edit"></script>
+    <script src="../admin/admin.js?v=20260912-music-summary"></script>
     <script>
         if (window.lucide) {
             lucide.createIcons();

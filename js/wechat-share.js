@@ -14,7 +14,7 @@
     }
 
     function upsertMeta(attribute, key, content) {
-        if (!content) return;
+        if (content === undefined || content === null) return;
         let element = document.head.querySelector(`meta[${attribute}="${key}"]`);
         if (!element) {
             element = document.createElement('meta');
@@ -30,7 +30,9 @@
 
     function normalizeShareData(data) {
         const title = String(data.title || document.title || 'Dean Huo').trim();
-        const description = String(data.description || '').trim() || '在结构之外，留一束光。';
+        const description = Object.prototype.hasOwnProperty.call(data, 'description')
+            ? String(data.description || '').trim()
+            : '在结构之外，留一束光。';
         return {
             title,
             description,
@@ -128,8 +130,8 @@
 
     function configureTrack(song) {
         if (!song) return configurePage();
-        const title = `Dean Huo｜${song.title}`;
-        const description = String(song.description || '').trim() || `聆听 Dean Huo 的原创音乐《${song.title}》。`;
+        const title = `${song.title}｜作词：霍澍`;
+        const description = String(song.description || '').trim();
         const link = new URL('/music-player.html', window.location.origin);
         link.searchParams.set('id', song.id);
 

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_TITLE = 'Dean Huo｜Music Player';
+const DEFAULT_TITLE = '音乐播放器｜作词：霍澍';
 const DEFAULT_DESCRIPTION = '聆听 Dean Huo 的原创音乐作品。';
 const DEFAULT_IMAGE_PATH = '/assets/images/brand/dean-logo-512.png';
 
@@ -21,10 +21,8 @@ module.exports = async function handler(req, res) {
         if (songId) pageUrl.searchParams.set('id', songId);
 
         const share = {
-            title: song ? `Dean Huo｜${song.title}` : DEFAULT_TITLE,
-            description: song && String(song.description || '').trim()
-                ? String(song.description).trim()
-                : song ? `聆听 Dean Huo 的原创音乐《${song.title}》。` : DEFAULT_DESCRIPTION,
+            title: song ? `${song.title}｜作词：霍澍` : DEFAULT_TITLE,
+            description: song ? String(song.description || '').trim() : DEFAULT_DESCRIPTION,
             image: toAbsoluteUrl(song?.cover || DEFAULT_IMAGE_PATH, siteOrigin),
             url: pageUrl.href
         };
