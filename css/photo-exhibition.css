@@ -37,12 +37,14 @@
 .photo-exhibition-backdrop {
     position: absolute;
     inset: 0;
-    background: url('../assets/images/photo-exhibition-courtyard.jpg') center center / cover no-repeat;
+    background: url('../assets/images/photo-exhibition-screen.jpg') center center / cover no-repeat;
     pointer-events: none;
 }
 .photo-exhibition-heading { position: absolute; z-index: 2; top: 6%; left: 0; width: 100%; text-align: center; pointer-events: none; }
 .photo-exhibition-heading p { margin: 0 0 12px; font: 10px/1.4 Arial, sans-serif; letter-spacing: .3em; }
-.photo-exhibition-heading h2 { margin: 0; font: 500 clamp(30px, 4.2vw, 62px)/.99 Georgia, 'Times New Roman', serif; letter-spacing: -.045em; }
+@font-face { font-family: 'Gallery Display'; src: url('../assets/fonts/cormorant-garamond-light.ttf') format('truetype'); font-style: normal; font-weight: 300; font-display: swap; }
+@font-face { font-family: 'Gallery Sans'; src: url('../assets/fonts/inter-latin-variable.woff2') format('woff2'); font-style: normal; font-weight: 100 900; font-display: swap; }
+.photo-exhibition-heading h2 { margin: 0; font: 300 clamp(30px, 4.4vw, 66px)/1.02 'Gallery Display', 'Baskerville', Georgia, serif; letter-spacing: -.025em; font-synthesis: none; }
 .photo-exhibition-heading > span { display: block; margin-top: 18px; font-size: 11px; letter-spacing: .25em; }
 .photo-exhibition-close, .photo-exhibition-arrow {
     position: absolute;
@@ -61,6 +63,16 @@
     font: 24px/1 Arial, sans-serif;
 }
 .photo-exhibition-close { top: max(22px, env(safe-area-inset-top)); right: max(24px, env(safe-area-inset-right)); width: 42px; height: 42px; font-size: 17px; }
+.photo-exhibition-sound {
+    position: absolute; z-index: 4;
+    top: max(22px, env(safe-area-inset-top)); right: max(78px, calc(env(safe-area-inset-right) + 54px));
+    height: 42px; padding: 0 16px; border: 1px solid #ffffff8c; border-radius: 24px;
+    background: #fbfaf1db; color: #40473d; font: 11px/1.4 Arial, sans-serif; cursor: pointer;
+}
+.photo-exhibition-sound:hover { background: #fff; }
+.photo-exhibition-music-credit { margin: 10px 0 0; font: 9px/1.5 Arial, sans-serif; white-space: nowrap; color: #444d39; }
+.photo-exhibition-music-credit a { color: inherit; text-decoration: none; pointer-events: auto; }
+.photo-exhibition-music-credit a:hover { text-decoration: underline; }
 .photo-exhibition-arrow { top: 54%; transform: translateY(-50%); }
 .photo-exhibition-prev { left: 4%; }
 .photo-exhibition-next { right: 4%; }
@@ -68,6 +80,19 @@
 .photo-exhibition-arrow:hover, .photo-exhibition-close:hover { background: #fff; }
 .photo-exhibition-stage { position: absolute; inset: 0; perspective: 1600px; perspective-origin: 50% 54%; touch-action: none; cursor: grab; user-select: none; }
 .photo-exhibition-stage.is-dragging { cursor: grabbing; }
+.photo-exhibition-stage.has-curved-screen { perspective: none !important; }
+.photo-exhibition-stage.is-loading-screen .photo-exhibition-wall { visibility: hidden; }
+.photo-exhibition-canvas { display: block; width: 100%; height: 100%; pointer-events: none; }
+.photo-exhibition-foreground {
+    position: absolute; left: 50%; top: 50%; z-index: 1; pointer-events: none;
+    width: max(100vw, 177.6833dvh); height: max(100dvh, 56.2799vw);
+    transform: translate(-50%, -50%);
+    background: url('../assets/images/photo-exhibition-screen.jpg') center / 100% 100% no-repeat;
+    clip-path: polygon(0% 90.3%, 6% 88.9%, 12% 89%, 20% 89.8%, 30% 91%, 45% 92.6%, 55% 93.3%, 65% 93.3%, 75% 92.8%, 85% 91.7%, 92% 90.5%, 100% 90%, 100% 100%, 0% 100%);
+}
+.photo-exhibition-accessible { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.photo-exhibition:has(.has-curved-screen) .photo-exhibition-footer { bottom: max(10%, env(safe-area-inset-bottom)); }
+.photo-exhibition:has(.has-curved-screen) .photo-exhibition-heading { top: 6%; }
 .photo-exhibition-wall {
     position: absolute;
     left: 50%;
@@ -111,7 +136,7 @@
     box-shadow: 1px 2px 0 #736e60, 2px 3px 4px #37352945;
 }
 .photo-exhibition-mat::after { content: ''; position: absolute; inset: 3px; background: linear-gradient(123deg, #ffffff20 0%, #ffffff08 37%, transparent 38%, #8a987905 65%, #fff2 100%); pointer-events: none; }
-.photo-exhibition-mat img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.photo-exhibition-mat img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; border-radius: 6px; }
 .photo-exhibition-frame figcaption { margin-top: 12px; padding: 0 1px; font: 12px/1.5 Georgia, serif; color: #393e34; text-align: left; }
 .photo-exhibition-frame figcaption strong { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .photo-exhibition-description { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; margin: 5px 0 0; font: 10px/1.65 Arial, sans-serif; color: #646455; white-space: pre-line; overflow-wrap: anywhere; }
@@ -124,6 +149,9 @@
 .photo-exhibition-progress span { display: block; height: 100%; background: #566043; transform-origin: left; }
 .photo-exhibition-autoplay { pointer-events: auto; margin-top: 12px; padding: 5px 12px; border: 0; border-bottom: 1px solid #56604340; background: #f9f7eea6; border-radius: 20px; font: 10px/1.5 Arial, sans-serif; color: #444d39; cursor: pointer; }
 @media (max-width: 800px) {
+    .photo-exhibition:has(.has-curved-screen) .photo-exhibition-heading { top: 9%; }
+    .photo-exhibition:has(.has-curved-screen) .photo-exhibition-footer { bottom: 11%; }
+    .photo-exhibition:has(.has-curved-screen) .photo-exhibition-arrow { top: 69%; }
     .photo-exhibition-heading { top: 11%; }
     .photo-exhibition-heading h2 { font-size: 38px; }
     .photo-exhibition-heading p { font-size: 8px; }
@@ -143,3 +171,75 @@
     .photo-exhibition-footer { bottom: 12px; }
     .photo-exhibition-counter { margin-bottom: 2px; }
 }
+@font-face { font-family: 'Gallery Serif'; src: url('../assets/fonts/playfair-display-latin-variable-italic.woff2') format('woff2'); font-style: italic; font-weight: 400 900; font-display: swap; }
+.photo-exhibition-frame figcaption { text-align: center; }
+.photo-exhibition-frame figcaption strong { font: 300 10px/1.6 'Songti SC', 'Noto Serif CJK SC', STSong, serif; letter-spacing: .08em; color: #666359; }
+.photo-exhibition-subtitle { margin: 4px 0 0; color: #817b6f; font: 400 7px/1.5 'Gallery Sans', Arial, sans-serif; letter-spacing: .2em; text-transform: uppercase; }
+.photo-exhibition-inspect { pointer-events: auto; margin: 12px 0 0 8px; padding: 5px 12px; border: 1px solid #56604340; border-radius: 20px; background: #f9f7eea6; color: #444d39; font: 10px/1.5 Arial, sans-serif; cursor: pointer; white-space: nowrap; }
+.photo-detail-viewer {
+    position: fixed; inset: 0; margin: 0; padding: 0; border: 0;
+    width: 100vw; height: 100dvh; max-width: none; max-height: none; overflow: hidden;
+    color: #f1eee4; background: transparent;
+}
+.photo-detail-viewer::backdrop { background: transparent; }
+.photo-detail-veil { position: absolute; inset: 0; pointer-events: none; background: #141915e6; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.is-awaiting-photo .photo-detail-veil, .is-awaiting-photo .photo-detail-flight, .is-awaiting-photo .photo-detail-header, .is-awaiting-photo .photo-detail-footer { opacity: 0; }
+.photo-detail-header, .photo-detail-footer { z-index: 2; }
+.photo-detail-header { position: absolute; inset: max(22px, env(safe-area-inset-top)) 28px auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.photo-detail-header > span { font: 9px/1.5 Arial, sans-serif; letter-spacing: .28em; color: #d4d7cbb3; }
+.photo-detail-viewer button { border: 1px solid #f6f0dd33; color: #f1eee4; background: #ffffff0d; font: 11px/1.4 Arial, sans-serif; padding: 9px 15px; border-radius: 30px; cursor: pointer; }
+.photo-detail-viewer button:hover { background: #ffffff1f; }
+.photo-detail-viewer button:focus-visible { outline: 2px solid #e3d9b5; outline-offset: 4px; }
+.photo-detail-viewer button:disabled { opacity: .3; cursor: default; }
+.photo-detail-viewport { position: absolute; inset: 84px 32px 186px; overflow: hidden; perspective: 1300px; touch-action: none; user-select: none; }
+.photo-detail-flight { position: absolute; left: 50%; top: 50%; transform-origin: center; will-change: transform; }
+.photo-detail-art { width: 100%; height: 100%; transform-origin: center; will-change: transform; }
+.photo-detail-art img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 7px; box-shadow: 0 20px 90px #0009; pointer-events: none; }
+.photo-detail-viewport.is-zoomed { cursor: grab; }
+.photo-detail-viewport.is-zoomed:active { cursor: grabbing; }
+.photo-detail-footer { position: absolute; bottom: max(20px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(660px, calc(100% - 40px)); text-align: center; }
+.photo-detail-title { margin: 0; font: 300 21px/1.5 'Kaiti SC', STKaiti, KaiTi, 'Songti SC', serif; letter-spacing: .12em; }
+.photo-detail-english { margin: 3px 0 6px; font: italic 12px/1.4 'Gallery Serif', Georgia, serif; color: #d1c8afa6; }
+.photo-detail-description { margin: 6px auto; max-height: 38px; overflow-y: auto; font: 11px/1.7 Arial, sans-serif; color: #dadbd0b3; white-space: pre-line; }
+.photo-detail-description:empty { display: none; }
+.photo-detail-tools { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; }
+.photo-detail-tools button { padding: 6px 13px; }
+.photo-detail-zoom-level { min-width: 42px; font: 10px/1.4 Arial, sans-serif; font-variant-numeric: tabular-nums; color: #ddd9ca; }
+.photo-detail-status { margin: 9px 0 0; color: #c6c9b995; font: 9px/1.5 Arial, sans-serif; }
+@media (max-width: 600px) {
+    .photo-detail-header { left: 18px; right: 18px; }
+    .photo-detail-header > span { letter-spacing: .12em; font-size: 8px; }
+    .photo-detail-viewport { inset: 80px 14px 192px; }
+    .photo-detail-title { font-size: 18px; }
+}
+@media (max-height: 550px) and (min-width: 601px) {
+    .photo-detail-viewport { inset: 65px 24px 128px; }
+    .photo-detail-footer { bottom: 10px; }
+    .photo-detail-title { font-size: 16px; }
+    .photo-detail-english { margin: 0; font-size: 10px; }
+    .photo-detail-description { max-height: 20px; margin: 2px; }
+    .photo-detail-tools { margin-top: 4px; }
+    .photo-detail-status { margin-top: 4px; }
+}
+@media (prefers-reduced-motion: reduce) { .photo-detail-flight { will-change: auto; } }
+.photo-exhibition-world { position: absolute; inset: 0; transform-origin: center; }
+.photo-exhibition { background: #e8e5dd url('../assets/images/photo-exhibition-screen.jpg') center / cover no-repeat; }
+.photo-exhibition-heading, .photo-exhibition-footer, .photo-exhibition-arrow, .photo-exhibition-close, .photo-exhibition-sound { transition: opacity .35s; }
+.is-camera-close > :not(.photo-exhibition-world) { opacity: 0; }
+.photo-gallery-intro { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; color: #eeeadf; background: linear-gradient(#142019e8, #243229ed), url('../assets/images/photo-exhibition-screen.jpg') center / cover; }
+.photo-gallery-intro::backdrop { background: #142019; }
+.photo-intro-content { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+.photo-intro-eyebrow { color: #d6dac299; font: 9px/1.5 Arial, sans-serif; letter-spacing: .34em; }
+.photo-intro-orbit { width: 94px; height: 94px; margin: 38px 0 30px; border: 1px solid #c4cdbb30; border-radius: 50%; display: grid; place-items: center; box-shadow: 0 0 55px #d4d9aa0b; }
+.photo-intro-orbit span { width: 66px; height: 66px; border: 1px solid #d9dab460; border-radius: 50%; animation: photo-intro-breathe 3.8s ease-in-out infinite; }
+.photo-intro-content h2 { margin: 0; font: 300 clamp(26px, 3vw, 40px)/1.5 'Kaiti SC', STKaiti, KaiTi, 'Songti SC', serif; letter-spacing: .16em; }
+.photo-intro-english { margin: 12px 0 28px; color: #d0c8b1ab; font: italic 14px/1.5 'Gallery Serif', Georgia, serif; }
+.photo-intro-status { margin: 0; font: 10px/1.7 Arial, sans-serif; color: #c2cbbbaa; }
+.photo-intro-progress { width: min(220px, 60vw); height: 1px; background: #dce1c827; margin: 20px 0 26px; }
+.photo-intro-progress span { display: block; width: 100%; height: 100%; background: #dce1c8aa; transform: scaleX(0); transform-origin: left; transition: transform .2s linear; }
+.photo-gallery-intro button { cursor: pointer; border: 1px solid #d5dbc339; color: #e0e4d5; background: #e0e4d50a; border-radius: 24px; padding: 10px 19px; font: 11px/1.5 Arial, sans-serif; }
+.photo-gallery-intro button:focus-visible { outline: 2px solid #d5dbc3aa; outline-offset: 4px; }
+.photo-intro-close { position: absolute; z-index: 2; top: max(22px, env(safe-area-inset-top)); right: 24px; }
+.photo-intro-play { margin-bottom: 12px; }
+@keyframes photo-intro-breathe { 50% { transform: scale(.8); opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .photo-intro-orbit span { animation: none; } .photo-exhibition-heading, .photo-exhibition-footer, .photo-exhibition-arrow { transition: none; } }

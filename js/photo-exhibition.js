@@ -5,12 +5,58 @@
     const counter = dialog.querySelector('.photo-exhibition-counter');
     const progress = dialog.querySelector('.photo-exhibition-progress span');
     const autoplayButton = dialog.querySelector('.photo-exhibition-autoplay');
+    const galleryAudio = dialog.querySelector('#photo-exhibition-audio');
+    const soundButton = dialog.querySelector('.photo-exhibition-sound');
+    const music = window.createPhotoGalleryMusic({ audio: galleryAudio, button: soundButton });
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    const entrance = window.createPhotoGalleryIntro({ onStart: music.beginIntro, onCancel: music.stop, onRetry: music.retry });
     const mounts = new Map(), dimensions = new Map();
     let photos = [], position = 0, target = 0, raf = 0, lastTime = 0;
     let width = 1, height = 1, spacing = 1, radius = 1, angleStep = .24;
     let pointer = null, previousOverflow = '', savedFocus = null, announced = -1;
     let autoplay = !reducedMotion.matches, holdUntil = 0, settling = false;
+    let exhibitionScene = null, scenePromise = null;
+    const viewer = window.createPhotoExhibitionViewer({ reducedMotion, onCameraMove(source, destination, duration) {
+        const world = dialog.querySelector('.photo-exhibition-world');
+        const centerX = source.left + source.width / 2, centerY = source.top + source.height / 2;
+        const dx = destination.left + destination.width / 2 - centerX;
+        const dy = destination.top + destination.height / 2 - centerY;
+        const scale = Math.min(destination.width / source.width, destination.height / source.height);
+        const near = `translate3d(${dx}px, ${dy}px, 0) scale(${scale})`;
+        world.style.transformOrigin = `${centerX}px ${centerY}px`;
+        dialog.classList.add('is-camera-close');
+        let motion = world.animate([{ transform: 'translate3d(0,0,0) scale(1)' }, { transform: near }],
+            { duration, easing: 'cubic-bezier(.22,.68,0,1)', fill: 'forwards' });
+        return {
+            finish() { motion.finish(); },
+            reverse() {
+                const current = getComputedStyle(world).transform;
+                motion.cancel();
+                motion = world.animate([{ transform: current }, { transform: 'translate3d(0,0,0) scale(1)' }],
+                    { duration: reducedMotion.matches ? 0 : 520, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' });
+            },
+            reset() { motion.cancel(); world.style.transformOrigin = ''; dialog.classList.remove('is-camera-close'); }
+        };
+    }, onClose() {
+        if (!dialog.open) return;
+        holdUntil = performance.now() + 1500; lastTime = 0;
+        dialog.querySelector('.photo-exhibition-inspect').focus({ preventScroll: true });
+        start();
+    } });
+    function inspectPhoto(candidate) {
+        if (!candidate) return;
+        cancelAnimationFrame(raf); raf = 0; lastTime = 0;
+        viewer.show(candidate);
+    }
+    dialog.querySelector('.photo-exhibition-inspect').addEventListener('click', () => {
+        const current = exhibitionScene?.currentPhoto();
+        if (current) inspectPhoto(current);
+        else {
+            const mount = mounts.get(Math.round(position));
+            if (mount) inspectPhoto({ photo: photos[wrap(Math.round(position))], ratio: mount.ratio,
+                preview: mount.frame.querySelector('img')?.currentSrc, rect: mount.frame.getBoundingClientRect() });
+        }
+    });
     const wrap = index => ((index % photos.length) + photos.length) % photos.length;
     window.DeanPhotoExhibition = {
         setPhotos(items) {
@@ -55,18 +101,12 @@
         } else { img.src = photo.src; img.onerror = onError; }
         mat.append(img);
         const caption = document.createElement('figcaption');
-        const number = document.createElement('small');
-        number.textContent = String(wrap(index) + 1).padStart(2, '0');
         const title = document.createElement('strong');
         title.textContent = /^img\d+$/i.test(photo.title || '') ? '光影记录' : (photo.title || '摄影作品');
-        caption.append(number, title);
-        if (photo.description?.trim()) {
-            const description = document.createElement('p');
-            description.className = 'photo-exhibition-description';
-            description.textContent = photo.description.trim();
-            description.title = photo.description.trim();
-            caption.append(description);
-        }
+        const subtitle = document.createElement('p');
+        subtitle.className = 'photo-exhibition-subtitle';
+        subtitle.textContent = photo.titleEn || 'A moment in light';
+        caption.append(title, subtitle);
         frame.append(mat, caption);
         panel.append(surface, frame);
         stage.append(panel);
@@ -100,6 +140,11 @@
         radius = width * (mobile ? 1.5 : .90);
         angleStep = mobile ? .52 : .24;
         spacing = radius * angleStep;
+        if (exhibitionScene) {
+            exhibitionScene.resize();
+            render();
+            return;
+        }
         stage.style.perspective = radius + 'px';
         mounts.forEach(sizeMount);
         render();
@@ -107,6 +152,11 @@
 
     function render() {
         if (!dialog.open || !photos.length) return;
+        if (exhibitionScene) {
+            exhibitionScene.render(position);
+            announcePosition();
+            return;
+        }
         const center = Math.round(position);
         const reach = width <= 800 ? 2 : 4;
         const visibleKeys = new Set();
@@ -124,7 +174,11 @@
         for (const [key, mount] of mounts) {
             if (!visibleKeys.has(key)) { mount.panel.remove(); mounts.delete(key); }
         }
-        const active = wrap(center);
+        announcePosition();
+    }
+
+    function announcePosition() {
+        const active = wrap(Math.round(position));
         if (active !== announced) {
             counter.textContent = String(active + 1).padStart(2, '0') + ' / ' + String(photos.length).padStart(2, '0');
             progress.style.transform = 'scaleX(' + ((active + 1) / photos.length) + ')';
@@ -132,7 +186,7 @@
         }
     }
 
-    function canAnimate() { return dialog.open && !document.hidden && !pointer; }
+    function canAnimate() { return dialog.open && !viewer.open && !document.hidden && !pointer; }
     function start() {
         if (!raf && canAnimate() && (settling || autoplay)) raf = requestAnimationFrame(animate);
     }
@@ -145,8 +199,8 @@
             position += (target - position) * (1 - Math.exp(-delta / 115));
             if (Math.abs(target - position) < .001) { position = target; settling = false; }
         } else if (autoplay && time >= holdUntil && photos.length > 1) {
-            // One work every 14 seconds, independent of display refresh rate.
-            position += delta / 14000;
+            // Travel at a constant wall-arc speed, without accelerating at format changes.
+            position = exhibitionScene ? exhibitionScene.advance(position, delta / 1000) : position + delta / 14000;
             target = position;
         }
         render();
@@ -166,20 +220,37 @@
         start();
     }
 
-    entry.addEventListener('click', () => {
-        if (!photos.length || dialog.open) return;
-        savedFocus = document.activeElement;
+    function openGallery() {
+        savedFocus = entry;
         previousOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         dialog.showModal();
+        music.enterGallery();
+        if (!scenePromise) {
+            stage.classList.add('is-loading-screen');
+            scenePromise = import('./photo-exhibition-scene.js?v=12').then(module => module.createPhotoScreen(stage, photos)).then(scene => {
+                exhibitionScene = scene;
+                mounts.clear();
+                if (dialog.open) { measure(); render(); }
+            }).catch(error => {
+                console.warn('Curved screen unavailable; retaining CSS exhibition.', error);
+                stage.dataset.renderer = 'css-fallback';
+            }).finally(() => stage.classList.remove('is-loading-screen'));
+        }
         holdUntil = performance.now() + 1800;
         updateAutoplay();
         measure();
         start();
         dialog.querySelector('.photo-exhibition-close').focus({ preventScroll: true });
+    }
+    entry.addEventListener('click', () => {
+        if (!photos.length || dialog.open || entrance.open) return;
+        entrance.begin(openGallery);
     });
     dialog.querySelector('.photo-exhibition-close').addEventListener('click', () => dialog.close());
     dialog.addEventListener('close', () => {
+        viewer.close(true);
+        music.stop();
         cancelAnimationFrame(raf); raf = 0; lastTime = 0;
         position = target = Math.round(position); settling = false;
         pointer = null;
@@ -204,22 +275,36 @@
     stage.addEventListener('pointerdown', event => {
         if (!event.isPrimary || event.button !== 0) return;
         cancelAnimationFrame(raf); raf = 0; lastTime = 0; settling = false;
-        pointer = { id: event.pointerId, x: event.clientX, origin: position };
+        pointer = { id: event.pointerId, x: event.clientX, y: event.clientY, origin: position, moved: false };
         target = position;
         stage.setPointerCapture(event.pointerId);
         stage.classList.add('is-dragging');
     });
     stage.addEventListener('pointermove', event => {
         if (!pointer || event.pointerId !== pointer.id) return;
+        if (Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > 7) pointer.moved = true;
+        if (!pointer.moved) return;
         position = target = pointer.origin + (pointer.x - event.clientX) / spacing;
         if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); });
     });
     function finishDrag(event) {
         if (!pointer || event.pointerId !== pointer.id) return;
+        const tap = event.type === 'pointerup' && !pointer.moved;
         pointer = null;
         stage.classList.remove('is-dragging');
         if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
         cancelAnimationFrame(raf); raf = 0;
+        if (tap) {
+            let selected = exhibitionScene?.pick(event.clientX, event.clientY);
+            if (!exhibitionScene) for (const [index, mount] of mounts) {
+                const rect = mount.frame.getBoundingClientRect();
+                if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
+                    selected = { photo: photos[wrap(index)], preview: mount.frame.querySelector('img')?.currentSrc, ratio: mount.ratio, rect }; break;
+                }
+            }
+            if (selected) { inspectPhoto(selected); return; }
+            start(); return;
+        }
         moveTo(Math.round(position));
     }
     stage.addEventListener('pointerup', finishDrag);

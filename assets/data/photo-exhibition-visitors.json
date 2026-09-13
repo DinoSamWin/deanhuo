@@ -1,0 +1,8 @@
+{
+  "enabled": false,
+  "note": "Awaiting camera-matched live-action greenscreen clips. Do not enable with placeholder people or an unregistered walking video.",
+  "sceneAspect": 1.7777777778,
+  "firstArrivalSeconds": [20, 35],
+  "quietSeconds": [50, 110],
+  "clips": []
+}
