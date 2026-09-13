@@ -18,6 +18,7 @@
     <meta name="twitter:card" content="summary">
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/photo-exhibition.css?v=2">
     <script defer src="js/wechat-share.js?v=20260912-song-summary-2"></script>
     <script src="assets/vendor/lucide-1.45.0.min.js"></script>
 </head>
@@ -41,15 +42,37 @@
         <div style="text-align: center; margin-bottom: 60px;">
             <h1 class="font-heading" style="font-size: 48px;">Photography</h1>
             <p class="text-secondary">Capturing moments in time.</p>
+            <button class="photo-exhibition-entry" id="open-photo-exhibition" type="button" aria-haspopup="dialog" disabled>
+                <i data-lucide="orbit" aria-hidden="true"></i><span>3D展览</span><span aria-hidden="true">↗</span>
+            </button>
         </div>
 
         <div class="masonry-grid">
             <!-- Photos will be loaded dynamically here -->
         </div>
     </main>
+    <dialog class="photo-exhibition" id="photo-exhibition" aria-labelledby="photo-exhibition-title">
+        <div class="photo-exhibition-backdrop" aria-hidden="true"></div>
+        <header class="photo-exhibition-heading">
+            <p>DEAN HUO · PHOTOGRAPHY</p>
+            <h2 id="photo-exhibition-title">Every Frame<br>Has a Story.</h2>
+            <span>光影之间，片刻永恒</span>
+        </header>
+        <button class="photo-exhibition-close" type="button" aria-label="关闭3D展览">✕</button>
+        <div class="photo-exhibition-stage" aria-label="摄影作品展墙，拖动或使用左右方向键浏览"></div>
+        <button class="photo-exhibition-arrow photo-exhibition-prev" type="button" aria-label="上一张照片">←</button>
+        <button class="photo-exhibition-arrow photo-exhibition-next" type="button" aria-label="下一张照片">→</button>
+        <footer class="photo-exhibition-footer">
+            <span class="photo-exhibition-counter" aria-live="polite" aria-atomic="true"></span>
+            <span>自动巡展 · 也可左右拖动</span>
+            <div class="photo-exhibition-progress" aria-hidden="true"><span></span></div>
+            <button class="photo-exhibition-autoplay" type="button" aria-pressed="true">暂停巡展</button>
+        </footer>
+    </dialog>
     <script src="js/image-utils.js?v=china-performance-1"></script>
     <script src="js/recommendations.js?v=trash-progress"></script>
-    <script src="js/photos.js?v=trash-progress"></script>
+    <script src="js/photo-exhibition.js?v=2"></script>
+    <script src="js/photos.js?v=photo-exhibition-1"></script>
     <script>lucide.createIcons();</script>
 </body>
 

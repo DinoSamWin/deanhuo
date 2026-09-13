@@ -1,9 +1,22 @@
+html.music-document {
+    height: 100%;
+    min-height: 100%;
+    overflow: hidden;
+    background: #0c0d0d;
+    color-scheme: dark;
+    overscroll-behavior-y: none;
+}
+
 .music-page {
-    min-height: 100vh;
-    background:
-        radial-gradient(ellipse at 28% -4%, rgba(187, 126, 68, 0.14), transparent 19%),
-        radial-gradient(ellipse at 72% -4%, rgba(187, 126, 68, 0.14), transparent 19%),
-        linear-gradient(90deg, #090a0a 0%, #111110 22%, #0c0d0d 50%, #111110 78%, #090a0a 100%);
+    position: relative;
+    isolation: isolate;
+    height: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: #0c0d0d;
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
     color: #f4f1eb;
 }
 
@@ -13,7 +26,10 @@
     z-index: -1;
     background:
         repeating-linear-gradient(7deg, rgba(255, 255, 255, 0.012) 0 1px, transparent 1px 5px),
-        repeating-linear-gradient(97deg, rgba(0, 0, 0, 0.08) 0 1px, transparent 1px 7px);
+        repeating-linear-gradient(97deg, rgba(0, 0, 0, 0.08) 0 1px, transparent 1px 7px),
+        radial-gradient(ellipse at 28% -4%, rgba(187, 126, 68, 0.14), transparent 19%),
+        radial-gradient(ellipse at 72% -4%, rgba(187, 126, 68, 0.14), transparent 19%),
+        linear-gradient(90deg, #090a0a 0%, #111110 22%, #0c0d0d 50%, #111110 78%, #090a0a 100%);
     content: "";
     pointer-events: none;
 }
@@ -205,6 +221,18 @@
     aspect-ratio: 100 / 70;
 }
 
+.slot-media::before {
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 77%;
+    height: 9px;
+    z-index: 2;
+    content: "";
+    pointer-events: none;
+    background: radial-gradient(ellipse, #000e 15%, #0008 45%, transparent 72%);
+}
+
 .vinyl-record {
     position: absolute;
     right: 0;
@@ -285,11 +313,11 @@
     position: absolute;
     inset: 0;
     overflow: hidden;
-    border: 1px solid rgba(220, 208, 182, 0.75);
-    border-radius: 2px;
+    border: 1px solid rgba(210, 196, 167, 0.53);
+    border-radius: 1px;
     background: linear-gradient(145deg, #242421, #121312);
-    box-shadow: 1px 0 #958a73, 3px 1px #29251f, 4px 2px #090909,
-        9px 4px 7px rgba(0, 0, 0, 0.6), 1px 15px 18px rgba(0, 0, 0, 0.45);
+    box-shadow: 1px 0 #958a73, 2px 1px #29251f, 3px 2px #090909,
+        5px 3px 5px rgba(0, 0, 0, 0.6), 1px 10px 13px rgba(0, 0, 0, 0.45);
     transition: filter 260ms ease, transform 260ms ease;
 }
 
@@ -298,7 +326,7 @@
     inset: 0;
     background:
         linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent 3%, transparent 96%, rgba(32, 21, 9, 0.18));
-    box-shadow: inset 1px 1px 1px rgba(255, 248, 220, 0.65),
+    box-shadow: inset 1px 1px 1px rgba(255, 248, 220, 0.4),
         inset -2px -1px 2px rgba(40, 30, 16, 0.6), inset 4px 0 2px rgba(219, 202, 168, 0.16);
     content: "";
     pointer-events: none;
@@ -328,9 +356,9 @@
 .sleeve-spine {
     position: absolute;
     top: 1px;
-    right: -5px;
+    right: -3px;
     bottom: -1px;
-    width: 6px;
+    width: 4px;
     border-radius: 0 1px 1px 0;
     background:
         repeating-linear-gradient(0deg, transparent 0 4px, #d0c6ac33 4px 5px, transparent 5px 9px),
@@ -341,11 +369,11 @@
 
 .sleeve-film {
     position: absolute;
-    inset: -4px -5px -1px -3px;
+    inset: -5px -3px -1px -2px;
     z-index: 2;
     mix-blend-mode: screen;
     overflow: hidden;
-    border: 1px solid rgba(223, 234, 229, 0.18);
+    border: 1px solid rgba(223, 234, 229, 0.13);
     border-radius: 3px 2px 4px 2px;
     pointer-events: none;
     box-shadow: inset 1px 0 1px #f6f7e919, inset -1px 0 1px #f7ffff19,
@@ -361,6 +389,8 @@
     background-position: var(--film-position, 0% 0%);
     transform: var(--film-transform, none);
     opacity: var(--film-opacity, 0.75);
+    -webkit-mask-image: radial-gradient(ellipse, #0007 15%, #000b 50%, #000 79%);
+    mask-image: radial-gradient(ellipse, #0007 15%, #000b 50%, #000 79%);
 }
 
 .sleeve-film::after {
@@ -368,10 +398,11 @@
     top: 3px;
     left: 1px;
     right: 1px;
-    height: 2px;
+    height: 3px;
     content: "";
-    border-top: 1px solid #f2f6ea1f;
+    border-top: 1px solid #f2f6ea3b;
     border-bottom: 1px solid #00000018;
+    background: linear-gradient(90deg, transparent 6%, #e8edee12 23%, transparent 39%, #e8edee1a 72%, transparent);
     transform: rotate(var(--film-seam, 0deg));
 }
 
@@ -382,6 +413,54 @@
     pointer-events: none;
     border-radius: 2px;
     background: var(--patina-image) center / 100% 100% no-repeat;
+    -webkit-mask-image: radial-gradient(ellipse, #0009 20%, #000 82%);
+    mask-image: radial-gradient(ellipse, #0009 20%, #000 82%);
+}
+
+.record-label-sticker {
+    position: absolute;
+    top: var(--sticker-top, 5px);
+    right: var(--sticker-right, 5px);
+    z-index: 4;
+    width: clamp(26px, 19%, 38px);
+    aspect-ratio: 1;
+    overflow: hidden;
+    border: 1px solid #c6aa884f;
+    border-radius: 1px 1.5px 1px 0.5px;
+    background: #9b3020;
+    box-shadow: 0 0.5px 0 #533321, 0.6px 1px 1.4px #0008;
+    transform: rotate(var(--sticker-angle, -1deg));
+    pointer-events: none;
+}
+
+.record-label-sticker img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: saturate(0.82) brightness(0.92) contrast(0.96);
+}
+
+.record-label-sticker::before {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    content: "";
+    background: url('../assets/images/record-material.svg') center / 100% 100%;
+    opacity: 0.28;
+    mix-blend-mode: soft-light;
+}
+
+.record-label-sticker::after {
+    position: absolute;
+    inset: 0;
+    content: "";
+    border-radius: inherit;
+    z-index: 2;
+    background:
+        radial-gradient(ellipse at 6% 98%, #e0c39366, transparent 17%),
+        linear-gradient(139deg, #fff2, transparent 36%, #fff1 59%, transparent 65%, #34160722 94%, #dcc29c66 99%);
+    box-shadow: inset 0.5px 0.5px 0 #f4dfb64d, inset -0.5px -0.5px 1px #40211666;
 }
 
 .cover-placeholder {
@@ -477,8 +556,9 @@
     border-top: 1px solid rgba(255, 255, 255, 0.2);
     border-bottom: 1px solid rgba(0, 0, 0, 0.88);
     background:
+        url('../assets/images/shelf-wood-grain.svg') center / 540px 24px,
         repeating-linear-gradient(0.4deg, rgba(213, 195, 158, 0.045) 0 1px, transparent 1px 3px, rgba(0, 0, 0, 0.2) 4px 5px, transparent 5px 8px),
-        linear-gradient(180deg, #39362f 0%, #24231f 18%, #151512 42%, #101110 80%, #24221d 100%);
+        linear-gradient(180deg, #494033 0%, #30291f 18%, #211e19 42%, #151513 80%, #2e2920 100%);
     box-shadow: 0 8px 12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
@@ -642,4 +722,402 @@
     }
 
     .sleeve-film::after { transition: none; }
+}
+
+/* Lightweight record carousel over a static, flat exhibition wall. */
+.music-header { position: relative; }
+.exhibition-launch {
+    position: absolute;
+    right: 16px;
+    top: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 16px;
+    border: 1px solid #c7a16a66;
+    border-radius: 30px;
+    background: linear-gradient(130deg, #b7894426, #151512);
+    color: #e9cfaa;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: inset 0 1px #fff1, 0 5px 24px #0004;
+}
+.exhibition-launch svg { width: 18px; height: 18px; }
+.exhibition-launch:hover { border-color: #dfb779; background: #5e452638; }
+.exhibition-launch:disabled { opacity: 0.4; cursor: wait; }
+.exhibition-launch:focus-visible,
+.record-exhibition button:focus-visible { outline: 2px solid #efd0a2; outline-offset: 5px; }
+.record-exhibition {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    color: #f4e9d8;
+    background:
+        radial-gradient(ellipse at 18% 0%, #9c632444, transparent 40%),
+        radial-gradient(ellipse at 82% 0%, #9c632444, transparent 40%),
+        repeating-linear-gradient(90deg, #ffffff02 0 1px, transparent 1px 110px), #100e0c;
+}
+.record-exhibition::backdrop { background: #090806f5; }
+.record-exhibition[open] { animation: exhibition-enter 650ms ease-out both; }
+.record-exhibition::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: radial-gradient(ellipse at 50% 44%, transparent 10%, #160c0355 72%, #090604b3),
+        linear-gradient(#110b0544, transparent 40%, #110b0580);
+    pointer-events: none;
+}
+.exhibition-room {
+    position: absolute;
+    inset: -3px;
+    background: #211c16 url('../assets/images/record-gallery-curved-wall.png') center / cover no-repeat;
+    filter: brightness(0.72) saturate(0.78) blur(0.8px);
+}
+.exhibition-header {
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 30px 40px;
+    background: linear-gradient(#100e0cee, transparent);
+}
+.exhibition-eyebrow { margin: 0 0 9px; color: #bc9764; font-size: 10px; letter-spacing: 0.22em; }
+.exhibition-header h2 { margin: 0; font-size: 24px; font-weight: 500; letter-spacing: 0.16em; }
+.record-exhibition button {
+    min-height: 44px;
+    min-width: 44px;
+    border: 1px solid #bda07866;
+    border-radius: 50%;
+    color: #e9d6b9;
+    background: #201b15e6;
+    font: inherit;
+    cursor: pointer;
+}
+.record-exhibition button:hover { background: #55402c; }
+.exhibition-scene {
+    position: absolute;
+    inset: 110px 0 160px;
+    z-index: 2;
+    perspective: var(--exhibit-perspective, 1800px);
+    perspective-origin: 50% 50%;
+}
+.exhibition-halo {
+    position: absolute;
+    top: 75%;
+    left: 50%;
+    width: min(85vw, 1000px);
+    height: 42%;
+    transform: translate(-50%, -10%);
+    border-radius: 50%;
+    background: radial-gradient(ellipse, #100a0488 20%, #140a0266 50%, transparent 72%);
+    filter: blur(15px);
+}
+.exhibition-ring {
+    position: absolute;
+    top: 49%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    transform-style: preserve-3d;
+    will-change: transform;
+}
+.exhibition-card {
+    position: absolute;
+    width: var(--exhibit-width);
+    height: var(--exhibit-width);
+    margin: calc(var(--exhibit-width) / -2);
+    transform-style: preserve-3d;
+    transform: rotateY(var(--card-angle)) translateZ(var(--exhibit-radius));
+}
+.exhibition-card::before {
+    content: none;
+    position: absolute;
+    inset: auto 25% 12% 0;
+    aspect-ratio: 1;
+    border: 1px solid #927657;
+    background: url('../assets/images/record-material.svg') center / cover, linear-gradient(145deg, #554637, #1f1b16);
+    background-blend-mode: multiply;
+    transform: rotateY(180deg) translateZ(1px);
+    backface-visibility: hidden;
+}
+.exhibition-card .slot-media {
+    --cover-width: 75%;
+    --cover-left: 0%;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    transform: translateZ(3px);
+}
+.exhibition-back {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    transform: rotateY(180deg) translateZ(3px);
+    filter: brightness(0.75);
+}
+.exhibition-back .vinyl-record { left: 0; right: auto; }
+.exhibition-back-jacket {
+    position: absolute;
+    right: 0;
+    bottom: 12%;
+    z-index: 3;
+    width: 75%;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border: 1px solid #9c8665;
+    background: #30271e;
+    box-shadow: inset 0 0 12px #0006;
+}
+.exhibition-back-jacket::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: url('../assets/images/record-material.svg') center / cover;
+    opacity: 0.22;
+    mix-blend-mode: soft-light;
+    box-shadow: inset 1px 1px 0 #decaa06b, inset -1px -1px 2px #0008;
+}
+.exhibition-back-art { position: absolute; inset: 0; }
+.exhibition-back-art img { width: 100%; height: 100%; object-fit: cover; filter: saturate(0.55) brightness(0.48); }
+.exhibition-back-copy {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 12%;
+    color: #f0dec0;
+    background: linear-gradient(transparent, #18110bd9);
+}
+.exhibition-back-copy small { font-size: 6px; letter-spacing: 0.12em; }
+.exhibition-back-copy strong { font-size: clamp(10px, 1.4vw, 18px); font-weight: 500; }
+.exhibition-back-copy span { font-size: 7px; letter-spacing: 0.15em; border-top: 1px solid #ccb68c66; padding-top: 8px; width: 100%; }
+.exhibition-edge {
+    position: absolute;
+    background: repeating-linear-gradient(90deg, #baaa8c 0 1px, #726048 1px 2px, #cbbb9a 2px 3px);
+    backface-visibility: visible;
+}
+.exhibition-edge-left, .exhibition-edge-right {
+    bottom: 12%;
+    width: 6px;
+    height: 75%;
+    transform-origin: left center;
+    transform: translateZ(3px) rotateY(90deg);
+}
+.exhibition-edge-left { left: 0; }
+.exhibition-edge-right { left: 75%; }
+.exhibition-edge-top, .exhibition-edge-bottom {
+    left: 0;
+    width: 75%;
+    height: 6px;
+    transform-origin: center top;
+    transform: translateZ(-3px) rotateX(90deg);
+}
+.exhibition-edge-top { top: 13%; }
+.exhibition-edge-bottom { top: 88%; }
+.exhibition-card .sleeve-pack { bottom: 12%; }
+.exhibition-card .vinyl-record { bottom: 12%; }
+.exhibition-footer {
+    position: absolute;
+    z-index: 5;
+    inset: auto 0 0;
+    padding: 28px 20px 25px;
+    text-align: center;
+    background: linear-gradient(transparent, #100d0a66 45%, #100d0ac9);
+}
+.exhibition-counter { margin: 0 0 9px; font-size: 10px; color: #bc9764; letter-spacing: 0.2em; }
+.exhibition-song { margin: 0 0 17px; font-size: clamp(19px, 2vw, 28px); letter-spacing: 0.06em; }
+.exhibition-credit { margin: 8px auto 0; max-width: 600px; font-size: 9px; color: #ac9d8a; line-height: 1.6; }
+.exhibition-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.exhibition-hint { margin: 14px 0 0; font-size: 11px; color: #a29686; }
+@keyframes exhibition-enter { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+@media (max-width: 1050px) {
+    .exhibition-launch { position: static; margin-top: 18px; }
+}
+@media (max-width: 600px) {
+    .exhibition-header { padding: 24px 20px; }
+    .exhibition-header h2 { font-size: 20px; }
+    .exhibition-eyebrow { font-size: 8px; letter-spacing: 0.13em; }
+    .exhibition-scene { inset: 100px 0 160px; }
+}
+@media (max-height: 550px) {
+    .exhibition-header { padding: 12px 20px; }
+    .exhibition-scene { inset: 60px 0 120px; }
+    .exhibition-footer { padding: 12px; }
+    .exhibition-song { margin-bottom: 7px; font-size: 18px; }
+    .exhibition-hint { margin-top: 5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .record-exhibition[open] { animation: none; }
+}
+
+/* V15: a photographed vitrine, live records and a rotating horizontal platter.
+   Keep every layer in the same image coordinate system; the case never rotates. */
+.record-exhibition { background: #100c08; }
+.record-exhibition::before { display: none; }
+.exhibition-cabinet-stage {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    /* Cover the viewport with the entire aligned scene, without stretching it. */
+    width: max(100vw, calc(100dvh * 1.89));
+    aspect-ratio: 1.89;
+    transform: translate(-50%, -50%);
+    container-type: inline-size;
+}
+.exhibition-cabinet-stage .exhibition-room {
+    inset: 0;
+    background: url('../assets/images/record-gallery-vitrine.png') center / 100% 100% no-repeat;
+    filter: none;
+}
+.exhibition-cabinet-stage .exhibition-scene {
+    inset: 0;
+    perspective-origin: 50% 37%;
+    pointer-events: none;
+}
+.exhibition-cabinet-stage .exhibition-ring { top: 56%; }
+.exhibition-cabinet-stage .exhibition-card {
+    margin: 0;
+    top: calc(-1 * var(--exhibit-width));
+    left: calc(var(--exhibit-width) / -2);
+}
+.exhibition-cabinet-stage .sleeve-pack,
+.exhibition-cabinet-stage .vinyl-record,
+.exhibition-cabinet-stage .exhibition-back-jacket { bottom: 3px; }
+.exhibition-cabinet-stage .exhibition-edge-left,
+.exhibition-cabinet-stage .exhibition-edge-right { bottom: 3px; }
+.exhibition-cabinet-stage .exhibition-edge-top { top: calc(25% - 3px); }
+.exhibition-cabinet-stage .exhibition-edge-bottom { top: calc(100% - 3px); }
+.exhibition-cabinet-stage .sleeve-stop {
+    bottom: 0;
+    height: 16%;
+    width: max(4px, 0.32cqw);
+    border: 1px solid #e5c08d9c;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #65431f, #eed4a0 40%, #9e7139 70%, #422b15);
+    box-shadow: 1px 1px 2px #0009;
+}
+.exhibition-cabinet-stage .sleeve-stop-right { left: calc(75% - max(4px, 0.32cqw)); }
+.exhibition-cabinet-stage .sleeve-stop::before {
+    position: absolute;
+    content: "";
+    left: -60%;
+    right: -60%;
+    bottom: -2px;
+    height: 5px;
+    border-radius: 50%;
+    border: 1px solid #a77f47;
+    background: linear-gradient(#f4d393, #6b4823);
+}
+.exhibition-cabinet-stage .slot-media::after {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 75%;
+    height: 4px;
+    content: "";
+    background: linear-gradient(#eed2a0, #aa7a3b 40%, #392916);
+    box-shadow: 0 2px 3px #0009;
+}
+.exhibition-platter {
+    position: absolute;
+    width: calc(var(--platter-radius) * 2);
+    height: calc(var(--platter-radius) * 2);
+    left: calc(var(--platter-radius) * -1);
+    top: calc(var(--platter-radius) * -1);
+    transform: rotateX(90deg);
+    border-radius: 50%;
+    border: 1px solid #d3ad7673;
+    background: conic-gradient(#6a47150a, #f6d69b2b 18%, #5c3f1b22 32%, #f4cf8c14 56%, #76562711 81%, #6a47150a);
+    backface-visibility: hidden;
+}
+.exhibition-platter::after {
+    position: absolute;
+    inset: 5%;
+    content: "";
+    border: 1px dashed #ffda974a;
+    border-radius: 50%;
+}
+.exhibition-bearing { position: absolute; top: var(--bearing-drop); left: 0; transform-style: preserve-3d; }
+.exhibition-bearing-face {
+    position: absolute;
+    top: 0;
+    left: calc(var(--bearing-face-width) / -2);
+    width: var(--bearing-face-width);
+    height: var(--bearing-height);
+    transform: rotateY(var(--segment-angle)) translateZ(var(--bearing-radius));
+    backface-visibility: hidden;
+    background: linear-gradient(#f2d49a 0%, #b68a49 8%, #47321b 24%, #8d682e 65%, #eac48c 90%, #4a3015 100%);
+    border-right: 1px solid #271a0d20;
+    box-shadow: inset 0 1px #ffe6b67a, inset 0 -1px #26190b;
+}
+.bearing-shine { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, #fff2c993 45%, transparent); }
+.bearing-lamp {
+    position: absolute;
+    left: 50%;
+    top: 42%;
+    width: max(3px, 0.22cqw);
+    height: max(2px, 0.12cqw);
+    border-radius: 50%;
+    background: #ffedc2;
+    box-shadow: 0 0 5px #ffc678, 0 0 12px #e9ae6970;
+}
+.exhibition-specular { position: absolute; inset: 0; z-index: 6; overflow: hidden; pointer-events: none; }
+.exhibition-specular > span {
+    position: absolute;
+    inset: 0 -15%;
+    background: linear-gradient(108deg, transparent 15%, #ffefcd18 35%, #fff9e6b3 49%, #fff0cb21 61%, transparent 82%);
+    will-change: transform, opacity;
+}
+.exhibition-glass {
+    position: absolute;
+    z-index: 3;
+    inset: 24% 8.6% 27.4%;
+    pointer-events: none;
+    border: 1px solid #c9ebe523;
+    background:
+        linear-gradient(104deg, transparent 2%, #effffb0b 8%, transparent 10% 72%, #eff7ec08 85%, transparent 90%),
+        linear-gradient(90deg, #cbe6df0c, transparent 4% 96%, #d3ede419);
+    box-shadow: inset 1px 0 #a8dfd624, inset -1px 0 #f5dfaf26;
+}
+.exhibition-plaque {
+    position: absolute;
+    left: 38.5%;
+    top: 77%;
+    width: 24%;
+    height: 12.3%;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0.5% 1%;
+    color: #f1d4a1;
+    text-shadow: 0 1px 1px #39220eb3;
+}
+.exhibition-plaque .exhibition-counter { font-size: 0.65cqw; margin: 0 0 0.55cqw; letter-spacing: 0.12em; color: #dac59f; }
+.exhibition-plaque .exhibition-song { font-size: 1.6cqw; line-height: 1.25; margin: 0; overflow-wrap: anywhere; }
+.exhibition-plaque-note { font-size: 0.6cqw; margin: 0.5cqw 0 0; letter-spacing: 0.16em; }
+.exhibition-footer { padding: 12px 20px 10px; background: linear-gradient(transparent, #100b07b8); }
+.exhibition-header { padding: 20px 28px; background: linear-gradient(#100b078a, transparent); }
+.exhibition-header h2 { font-size: 18px; }
+.exhibition-eyebrow { font-size: 8px; }
+@media (max-width: 600px) {
+    .exhibition-header { padding: 20px; }
+    .exhibition-plaque .exhibition-song { font-size: 2cqw; }
 }

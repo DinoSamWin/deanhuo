@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="music-document">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0c0d0d">
+    <meta name="color-scheme" content="dark">
     <link rel="shortcut icon" href="/favicon.ico?v=20260912-4">
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/brand/dean-logo-32.png?v=20260912-4">
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/brand/dean-logo-16.png?v=20260912-4">
@@ -18,7 +20,7 @@
     <meta name="twitter:card" content="summary">
     <link rel="stylesheet" href="css/variables.css">
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/music.css?v=20260912-shelf-6">
+    <link rel="stylesheet" href="css/music.css?v=20260913-overscroll-1">
     <script defer src="js/wechat-share.js?v=20260912-song-summary-2"></script>
     <script src="assets/vendor/lucide-1.45.0.min.js"></script>
 </head>
@@ -49,6 +51,9 @@
         <header class="music-header">
             <h1 class="font-heading">Music Works</h1>
             <p>Original compositions and covers.</p>
+            <button class="exhibition-launch" id="exhibition-launch" type="button" disabled aria-haspopup="dialog">
+                <i data-lucide="orbit" aria-hidden="true"></i><span>3D 展馆</span><span aria-hidden="true">↗</span>
+            </button>
         </header>
 
         <section id="music-shelves" class="music-shelves" aria-label="音乐作品">
@@ -56,8 +61,32 @@
         </section>
     </main>
 
+    <dialog class="record-exhibition" id="record-exhibition" aria-labelledby="exhibition-title">
+        <header class="exhibition-header">
+            <div><p class="exhibition-eyebrow">DEAN HUO · THE LISTENING ROOM</p><h2 id="exhibition-title">唱片环游馆</h2></div>
+            <button type="button" class="exhibition-close" aria-label="关闭展馆">✕</button>
+        </header>
+        <div class="exhibition-cabinet-stage">
+            <div class="exhibition-room" aria-hidden="true"></div>
+            <div class="exhibition-scene" aria-hidden="true">
+                <div class="exhibition-ring"></div>
+            </div>
+            <div class="exhibition-glass" aria-hidden="true"></div>
+            <div class="exhibition-plaque">
+                <p class="exhibition-counter"></p>
+                <p class="exhibition-song"></p>
+                <p class="exhibition-plaque-note">MUSIC CONNECTS US</p>
+            </div>
+        </div>
+        <footer class="exhibition-footer">
+            <p class="exhibition-hint" role="status">古典钢琴伴奏 · Esc 退出</p>
+            <p class="exhibition-credit">配乐：Satie · Gymnopédie No. 1 — <a href="https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100787" target="_blank" rel="noopener noreferrer">Kevin MacLeod</a> · <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener noreferrer">CC BY 3.0</a></p>
+        </footer>
+        <audio id="exhibition-audio" src="assets/audio/gallery-gymnopedie-no1.mp3" preload="none" loop></audio>
+    </dialog>
+
     <script src="js/recommendations.js?v=trash-progress"></script>
-    <script src="js/music-shelf.js?v=20260912-shelf-6"></script>
+    <script src="js/music-shelf.js?v=20260912-shelf-16"></script>
 </body>
 
 </html>

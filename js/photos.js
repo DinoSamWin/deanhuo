@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             console.log('Loaded photos:', data.length);
             renderPhotos(data);
+            window.DeanPhotoExhibition?.setPhotos(data);
         })
         .catch(error => console.error('Error loading photos:', error));
 
