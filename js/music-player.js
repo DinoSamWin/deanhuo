@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let lyricsRequestId = 0;
     const LYRIC_SCROLL_LEAD_SECONDS = 0.28;
     const LYRIC_SCROLL_DURATION_MS = 240;
+    const desktopRoomQuery = window.matchMedia
+        ? window.matchMedia('(min-width: 901px) and (hover: hover) and (pointer: fine)')
+        : null;
     const reduceMotionQuery = window.matchMedia
         ? window.matchMedia('(prefers-reduced-motion: reduce)')
         : null;
@@ -93,6 +96,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function createStars() {
         if (!elements.starsContainer) return;
         elements.starsContainer.innerHTML = '';
+        // The desktop player uses the sunlit room instead of the H5 star field.
+        if (desktopRoomQuery && desktopRoomQuery.matches) return;
         const isCompact = window.matchMedia('(max-width: 600px)').matches;
         const hasLowMemory = navigator.deviceMemory && navigator.deviceMemory <= 4;
         const count = isCompact ? (hasLowMemory ? 6 : 10) : (hasLowMemory ? 80 : 140);
@@ -172,12 +177,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const versions = getSongVersions(song);
         if (versions.length <= 1) {
             elements.versionStrip.classList.add('is-hidden');
-            elements.versionStrip.classList.remove('is-overflowing');
+            elements.versionStrip.classList.remove('is-overflowing', 'has-many-versions');
+            elements.versionStrip.removeAttribute('data-version-count');
             elements.versionStrip.innerHTML = '';
             return;
         }
 
         elements.versionStrip.classList.remove('is-hidden');
+        elements.versionStrip.classList.toggle('has-many-versions', versions.length > 2);
+        elements.versionStrip.dataset.versionCount = String(versions.length);
         elements.versionStrip.innerHTML = '';
         versions.forEach((version, index) => {
             const button = document.createElement('button');
@@ -206,6 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.audio.src = version.url;
         elements.audio.currentTime = 0;
         elements.slider.value = 0;
+        elements.slider.style.setProperty('--progress', '0%');
         elements.timeCurr.textContent = '0:00';
         elements.timeTotal.textContent = '0:00';
         updateVersionStripState();
@@ -233,10 +242,56 @@ document.addEventListener('DOMContentLoaded', () => {
     function bindVersionStripScroll() {
         if (!elements.versionStrip) return;
         const strip = elements.versionStrip;
+        let dragPointerId = null;
+        let dragStartX = 0;
+        let dragStartScrollLeft = 0;
+        let suppressVersionClick = false;
 
         strip.addEventListener('pointerdown', event => {
             event.stopPropagation();
+            if (event.pointerType !== 'mouse' || event.button !== 0 || strip.scrollWidth <= strip.clientWidth) return;
+
+            dragPointerId = event.pointerId;
+            dragStartX = event.clientX;
+            dragStartScrollLeft = strip.scrollLeft;
+            suppressVersionClick = false;
+            strip.classList.add('is-dragging');
+            strip.setPointerCapture?.(event.pointerId);
         });
+
+        strip.addEventListener('pointermove', event => {
+            if (event.pointerId !== dragPointerId) return;
+
+            const dragDistance = event.clientX - dragStartX;
+            if (Math.abs(dragDistance) > 3) suppressVersionClick = true;
+            if (!suppressVersionClick) return;
+
+            event.preventDefault();
+            strip.scrollLeft = dragStartScrollLeft - dragDistance;
+        });
+
+        const finishVersionDrag = event => {
+            if (event.pointerId !== dragPointerId) return;
+            if (strip.hasPointerCapture?.(event.pointerId)) {
+                strip.releasePointerCapture(event.pointerId);
+            }
+            strip.classList.remove('is-dragging');
+            dragPointerId = null;
+            setTimeout(() => {
+                suppressVersionClick = false;
+            }, 0);
+        };
+
+        strip.addEventListener('pointerup', finishVersionDrag);
+        strip.addEventListener('pointercancel', finishVersionDrag);
+
+        strip.addEventListener('click', event => {
+            if (!suppressVersionClick) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            suppressVersionClick = false;
+        }, true);
+
         strip.addEventListener('click', event => {
             event.stopPropagation();
         });
@@ -270,6 +325,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const card = document.createElement('div');
             card.className = 'cover-card';
             card.dataset.cover = song.cover || '';
+            const recordLabel = document.createElement('span');
+            recordLabel.className = 'desktop-record-label';
+            recordLabel.style.backgroundImage = song.cover ? `url("${song.cover}")` : 'none';
+            card.appendChild(recordLabel);
             card.dataset.index = i;
             card.onclick = () => {
                 if (i !== currentIndex) {
@@ -370,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Ignore a slow response from a track the user has already left.
         if (requestId !== lyricsRequestId) return;
-        if (nextLyrics.length === 0) nextLyrics.push({ text: 'No lyrics available', time: null });
+        if (nextLyrics.length === 0) nextLyrics.push({ text: '暂无歌词', time: null });
         lyrics = nextLyrics;
         lyricsHaveTimestamps = hasUsableLyricTiming(lyrics);
 
@@ -723,6 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.orbitDot.setAttribute('cy', point.y);
 
         elements.slider.value = percent;
+        elements.slider.style.setProperty('--progress', `${percent}%`);
         elements.timeCurr.textContent = formatTime(audio.currentTime);
         elements.timeTotal.textContent = formatTime(audio.duration);
 

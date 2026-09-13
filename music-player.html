@@ -824,23 +824,38 @@
             }
         }
     </style>
+    <link rel="stylesheet" href="css/music-player-desktop.css?v=20260913-room-16">
 </head>
 
 <body id="player-body" data-share-dynamic="true">
     <div class="dynamic-bg-container" id="bg-container">
         <div class="cover-blur-bg" id="cover-blur"></div>
         <div class="stars-container" id="stars-container"></div>
+        <div class="desktop-room-effects" aria-hidden="true">
+            <div class="desktop-scene-space">
+                <img class="physical-tonearm" src="assets/images/music-tonearm-cutout-trimmed-v3.png" alt="">
+                <img class="physical-cat" src="assets/images/music-cat-sleep-cutout-trimmed-v3.png" alt="">
+            </div>
+            <div class="curtain-breeze"></div>
+            <div class="sunlight-bloom"></div>
+            <div class="dust-motes">
+                <i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+        </div>
     </div>
 
     <main class="player-content">
-        <!-- Top Metadata -->
-        <div class="track-header">
-            <h1 id="track-title">--</h1>
-            <p id="track-artist">--</p>
-        </div>
+        <div class="scene-overlay-space">
+            <div class="desktop-lyric-frost" aria-hidden="true"></div>
 
-        <!-- Carousel & Progress Region -->
-        <div class="center-stage">
+            <!-- Top Metadata -->
+            <div class="track-header">
+                <h1 id="track-title">--</h1>
+                <p id="track-artist">--</p>
+            </div>
+
+            <!-- Carousel & Progress Region -->
+            <div class="center-stage">
             <div class="carousel-view">
                 <div class="carousel-inner" id="carousel-deck">
                     <!-- Cards injected by JS -->
@@ -870,15 +885,15 @@
             </div>
 
             <input type="range" id="progress-slider" class="progress-hitbox" min="0" max="100" value="0">
-        </div>
+            </div>
 
-        <!-- Lyrics Region -->
-        <div class="lyrics-section" id="lyrics-display">
-            <!-- Lyrics lines injected by JS -->
-        </div>
+            <!-- Lyrics Region -->
+            <div class="lyrics-section" id="lyrics-display">
+                <!-- Lyrics lines injected by JS -->
+            </div>
 
-        <!-- Controls Region (Removed Point 4 & 5) -->
-        <div class="player-controls">
+            <!-- Physical controls and their labels -->
+            <div class="player-controls">
             <button class="control-btn" id="btn-prev" type="button" aria-label="上一首">
                 <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                     <path d="M19 20 7 12l12-8v16Z"></path>
@@ -901,13 +916,14 @@
                     <path d="M19 5v14" fill="none" stroke-linecap="round"></path>
                 </svg>
             </button>
+            </div>
         </div>
     </main>
 
     <audio id="audio-element" preload="metadata" playsinline></audio>
 
     <script src="js/wechat-share.js?v=20260912-song-route-3"></script>
-    <script src="js/music-player.js?v=20260912-optional-music-cover"></script>
+    <script src="js/music-player.js?v=20260913-immersive-room-7"></script>
 </body>
 
 </html>
