@@ -17,7 +17,51 @@
     display: none;
 }
 
+.desktop-close-btn {
+    display: none;
+}
+
 @media (min-width: 901px) and (hover: hover) and (pointer: fine) {
+    .desktop-close-btn {
+        position: fixed;
+        top: max(20px, env(safe-area-inset-top));
+        right: max(22px, env(safe-area-inset-right));
+        z-index: 100;
+        display: grid;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        place-items: center;
+        border: 1px solid rgba(255, 231, 201, 0.3);
+        border-radius: 50%;
+        background: rgba(50, 28, 15, 0.38);
+        color: rgba(255, 239, 217, 0.86);
+        box-shadow:
+            0 7px 18px rgba(35, 17, 7, 0.22),
+            inset 0 1px rgba(255, 242, 222, 0.1);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+        cursor: pointer;
+        transition: color 180ms ease, border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+    }
+
+    .desktop-close-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .desktop-close-btn:hover {
+        border-color: rgba(255, 235, 209, 0.56);
+        background: rgba(58, 32, 16, 0.55);
+        color: #fff8ee;
+        transform: scale(1.045);
+    }
+
+    .desktop-close-btn:focus-visible {
+        outline: 2px solid rgba(255, 221, 176, 0.88);
+        outline-offset: 3px;
+    }
+
     body {
         --device-top: clamp(138px, 19vh, 205px);
         --device-height: clamp(370px, 51vh, 505px);
@@ -989,7 +1033,7 @@
     }
 
     .carousel-view {
-        top: 19.2%;
+        top: 19.62%;
         left: 47.9%;
         width: 17.6%;
         height: 27%;
@@ -1006,8 +1050,10 @@
         border: 0;
         background: transparent !important;
         box-shadow: none;
+        transform-origin: 50% 50%;
         animation: vinyl-spin 12s linear infinite;
         animation-play-state: paused;
+        will-change: transform;
     }
 
     .cover-card.active::before {
@@ -1030,7 +1076,7 @@
     }
 
     .cover-card.active .desktop-record-label {
-        top: 51.6%;
+        top: 50%;
         left: 50%;
         width: 40.5%;
         height: 40.5%;

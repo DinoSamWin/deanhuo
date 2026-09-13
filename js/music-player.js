@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
         playBtn: document.getElementById('btn-toggle'),
         prevBtn: document.getElementById('btn-prev'),
         nextBtn: document.getElementById('btn-next'),
+        closeBtn: document.getElementById('btn-close'),
         title: document.getElementById('track-title'),
         artist: document.getElementById('track-artist'),
         blurBg: document.getElementById('cover-blur'),
@@ -44,6 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
         playerBody: document.body,
         versionStrip: document.getElementById('version-strip')
     };
+
+    elements.closeBtn?.addEventListener('click', closePlayer);
 
     // Keep the catalogue cacheable so repeat H5 visits do not refetch it.
     fetch('assets/data/music.json')
@@ -91,6 +94,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         loadTrack(currentIndex, true);
+    }
+
+    function closePlayer() {
+        let canReturnToReferrer = false;
+
+        if (document.referrer) {
+            try {
+                const referrerUrl = new URL(document.referrer);
+                const currentUrl = new URL(window.location.href);
+                canReturnToReferrer = referrerUrl.origin === currentUrl.origin
+                    && referrerUrl.href !== currentUrl.href
+                    && window.history.length > 1;
+            } catch (error) {
+                canReturnToReferrer = false;
+            }
+        }
+
+        if (canReturnToReferrer) {
+            window.history.back();
+            return;
+        }
+
+        window.location.assign('/music.html');
     }
 
     function createStars() {
