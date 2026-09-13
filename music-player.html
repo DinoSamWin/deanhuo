@@ -406,11 +406,14 @@
             margin-bottom: 2vh;
             mask-image: linear-gradient(to bottom, transparent, white 20%, white 80%, transparent);
             overflow-x: hidden;
-            overflow-y: auto;
-            overscroll-behavior-y: contain;
-            -webkit-overflow-scrolling: touch;
-            touch-action: pan-y;
+            overflow-y: hidden;
+            overscroll-behavior: none;
+            touch-action: none;
             scrollbar-width: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            pointer-events: none;
             padding-block: calc((clamp(80px, 15vh, 120px) - 42px) / 2);
             /* Smooth following is timed in JavaScript; native smoothing stays
                off so seeking and reduced-motion positioning remain exact. */
@@ -730,7 +733,7 @@
                 margin: 0 0 8px;
                 padding-block: calc((clamp(100px, 15dvh, 132px) - 42px) / 2);
                 flex: 0 0 auto;
-                touch-action: pan-y !important;
+                touch-action: none !important;
             }
 
             .lyric-line {
@@ -824,7 +827,7 @@
             }
         }
     </style>
-    <link rel="stylesheet" href="css/music-player-desktop.css?v=20260913-room-17">
+    <link rel="stylesheet" href="css/music-player-desktop.css?v=20260913-room-18">
 </head>
 
 <body id="player-body" data-share-dynamic="true">
@@ -929,7 +932,7 @@
     <audio id="audio-element" preload="metadata" playsinline></audio>
 
     <script src="js/wechat-share.js?v=20260912-song-route-3"></script>
-    <script src="js/music-player.js?v=20260913-immersive-room-8"></script>
+    <script src="js/music-player.js?v=20260913-immersive-room-9"></script>
 </body>
 
 </html>

@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let lyricsHaveTimestamps = false;
     let activeLyricIndex = -1;
     let lyricScrollIndex = -1;
-    let lyricFollowSuspendedUntil = 0;
     let lyricAnimationFrameId = null;
     let lyricScrollAnimationFrameId = null;
     let lyricsRequestId = 0;
@@ -75,8 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.nextBtn.addEventListener('click', () => nextTrack());
         elements.prevBtn.addEventListener('click', () => prevTrack());
         bindVersionStripScroll();
-        bindLyricsInteraction();
-
         elements.audio.addEventListener('timeupdate', () => updateProgress());
         elements.audio.addEventListener('seeking', () => updateProgress(true));
         elements.audio.addEventListener('seeked', () => updateProgress(true));
@@ -401,7 +398,6 @@ document.addEventListener('DOMContentLoaded', () => {
         lyricsHaveTimestamps = false;
         activeLyricIndex = -1;
         lyricScrollIndex = -1;
-        lyricFollowSuspendedUntil = 0;
         cancelLyricScrollAnimation();
 
         if (catalogTiming.lines.length > 0) {
@@ -472,38 +468,6 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(() => updateLyricsDisplay(elements.audio.currentTime || 0, true));
     }
 
-    function bindLyricsInteraction() {
-        if (!elements.lyricsBox) return;
-
-        let pointerActive = false;
-        const suspendFollow = () => {
-            lyricFollowSuspendedUntil = Date.now() + 8000;
-            lyricScrollIndex = -1;
-            cancelLyricScrollAnimation();
-        };
-
-        if ('PointerEvent' in window) {
-            elements.lyricsBox.addEventListener('pointerdown', () => {
-                pointerActive = true;
-                suspendFollow();
-            }, { passive: true });
-            elements.lyricsBox.addEventListener('pointermove', () => {
-                if (pointerActive) suspendFollow();
-            }, { passive: true });
-            ['pointerup', 'pointercancel'].forEach(eventName => {
-                elements.lyricsBox.addEventListener(eventName, () => {
-                    pointerActive = false;
-                    suspendFollow();
-                }, { passive: true });
-            });
-        } else {
-            elements.lyricsBox.addEventListener('touchstart', suspendFollow, { passive: true });
-            elements.lyricsBox.addEventListener('touchmove', suspendFollow, { passive: true });
-        }
-
-        elements.lyricsBox.addEventListener('wheel', suspendFollow, { passive: true });
-    }
-
     function updateLyricsDisplay(currentTime, force = false) {
         const lines = elements.lyricsBox.children;
         if (!lines.length) return;
@@ -550,10 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // A touch/wheel gesture temporarily owns the lyric position; playback
-        // resumes auto-following after the user has finished reading.
-        if ((force || Date.now() >= lyricFollowSuspendedUntil)
-            && (force || scrollIdx !== lyricScrollIndex)) {
+        if (force || scrollIdx !== lyricScrollIndex) {
             lyricScrollIndex = scrollIdx;
             const targetLine = lines[scrollIdx];
             const targetTop = targetLine.offsetTop - ((elements.lyricsBox.clientHeight - targetLine.offsetHeight) / 2);
@@ -669,9 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             stopLyricSync();
             cancelLyricScrollAnimation();
-            if (Date.now() >= lyricFollowSuspendedUntil) {
-                updateLyricsDisplay(elements.audio.currentTime || 0, true);
-            }
+            updateLyricsDisplay(elements.audio.currentTime || 0, true);
         }
         updatePlayState();
     }
