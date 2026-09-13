@@ -97,6 +97,7 @@
     transform: translate(-50%, -50%) translateZ(2px);
     transform-style: preserve-3d;
 }
+.photo-exhibition-frame:not(.is-ready) { opacity: 0; }
 .photo-exhibition-mat {
     position: relative;
     width: 100%;
@@ -122,7 +123,7 @@
 .photo-exhibition-progress { width: 160px; height: 2px; background: #56604330; margin: 14px auto 0; }
 .photo-exhibition-progress span { display: block; height: 100%; background: #566043; transform-origin: left; }
 .photo-exhibition-autoplay { pointer-events: auto; margin-top: 12px; padding: 5px 12px; border: 0; border-bottom: 1px solid #56604340; background: #f9f7eea6; border-radius: 20px; font: 10px/1.5 Arial, sans-serif; color: #444d39; cursor: pointer; }
-@media (max-width: 600px) {
+@media (max-width: 800px) {
     .photo-exhibition-heading { top: 11%; }
     .photo-exhibition-heading h2 { font-size: 38px; }
     .photo-exhibition-heading p { font-size: 8px; }
