@@ -41,56 +41,74 @@
         }
         vec3 speakerWaves(vec2 q, float side) {
             float angle = atan(q.y, q.x);
+            // Visible inward-facing half only: unlike atan's +/-PI seam on the
+            // right, this coordinate stays continuous through the middle.
+            float inwardAngle = atan(q.y, abs(q.x) + .0001);
             float radius = length(q * vec2(1., .97));
-            float t = u_time * .25;
+            float t = u_time * .32;
             float light = 0., shade = 0., thin = 0.;
-            // The source video advances ~.12 screen-heights/second, with .19H
-            // spacing. Four overlapping lifetimes make the flow continuous;
-            // both ends are invisible before a slot is recycled at the source.
+            // Left: a quicker, feathered wash. Right: smaller/slower ripples.
+            // Offsets and per-emission values break the equally spaced tunnel
+            // pattern, without introducing per-frame randomness or phase jumps.
+            float travel = u_travel * mix(1.50, .78, side);
+            float extent = mix(.65, .57, side);
             for (int index = 0; index < 4; index++) {
                 float layer = float(index);
-                float distance = u_travel + layer * .19 + side * .037;
+                float distance = travel + layer * .19 + sin(layer * 2.3 + side) * .032 + side * .037;
                 float age = mod(distance, .76) / .76;
                 float seed = hash(vec2(floor(distance / .76), layer + side * 7.));
+                float character = hash(vec2(layer + 9.3, floor(distance / .76) + side * 4.7));
                 float centre = .045 + age * .76;
-                float fade = smoothstep(.065, .18, centre) * (1. - smoothstep(.48, .69, centre));
-                float width = .019 + age * .034;
-                float shape = sin(angle * 2. + seed * 6.28 + t * .15) * .003;
-                float strength = (.84 + seed * .24) * (.72 + u_response.x * .38);
-                light += band(radius + shape, centre, width) * fade * strength * .085;
-                shade += band(radius + shape, centre + .038, width * 1.35) * fade * strength * .22;
+                float fade = smoothstep(.05, .21, centre) * (1. - smoothstep(.37, extent, centre));
+                float width = .024 + character * .026 + age * .028;
+                float shape = sin(angle * 2. + seed * 6.28) * .002;
+                float shoulder = square(.5 + .5 * cos(angle + character * 6.28));
+                float exposure = .55 + shoulder * .45;
+                // Most waves stay faint; occasional ones carry a broad light
+                // shoulder. Width, brightness and shadow depth are independent.
+                float strength = (.35 + pow(seed, 1.8) * .95) * (.36 + u_response.x * .64) * mix(1.8, 1.25, side);
+                light += band(radius + shape, centre, width) * fade * strength * exposure * (.10 + character * .10);
+                shade += band(radius + shape, centre + width * 1.15, width * 1.65)
+                    * fade * strength * exposure * (.17 + (1. - character) * .15);
             }
-            float thinWidth = max(.0014, .8 / min(u_resolution.x, u_resolution.y));
-            // Translucent secondary ripples travel between the broad shoulders.
-            // Broken arcs create glancing highlights, not a persistent circle.
+            float thinWidth = max(.0032, 1.5 / min(u_resolution.x, u_resolution.y));
+            // No full-circle baseline: translucent details only catch light in
+            // a soft local patch, then disappear. Never a hard traced contour.
             for (int index = 0; index < 3; index++) {
                 float layer = float(index);
-                float distance = u_travel * 1.18 + layer * .24 + side * .08;
+                float distance = travel * 1.12 + layer * .24 + side * .08;
                 float age = mod(distance, .72) / .72;
                 float seed = hash(vec2(floor(distance / .72) + 11., layer + side * 5.));
-                float centre = .09 + age * .64;
-                float fade = smoothstep(.02, .18, age) * (1. - smoothstep(.42, .90, age));
-                float arc = pow(.5 + .5 * cos(angle * 2. + seed * 6.28 + t * .16), 5.);
-                float shape = sin(angle * 3. + seed * 5.) * .006;
-                float strength = fade * (.42 + arc * .58) * (.050 + u_response.x * .030);
-                thin += band(radius + shape, centre, thinWidth) * strength;
-                thin += band(radius + shape, centre + .011, thinWidth * 1.7) * strength * arc * .38;
-                shade += band(radius + shape, centre + thinWidth * 2.5, thinWidth * 2.) * strength * .50;
+                float centre = .09 + age * .58;
+                float fade = smoothstep(.03, .21, age) * (1. - smoothstep(.32, .72, age));
+                float pinch = .5 + .5 * sin(t * .75 + seed * 6.28);
+                float patch = (seed * 2. - 1.) * .94 + sin(t * .22 + seed * 5.) * .10;
+                float arc = exp(-square((inwardAngle - patch) / (.20 + pinch * .18)));
+                float shape = sin(inwardAngle * 3. + seed * 5.) * .008
+                    + sin(inwardAngle * 5. - t * .65 + seed * 4.) * .012 * pinch;
+                float strength = fade * arc * (.10 + seed * .12) * (.48 + u_response.x * .70) * mix(.6, 1., side);
+                float width = thinWidth * (.9 + pinch * 1.1);
+                thin += band(radius + shape, centre, width) * strength;
+                // A soft second shoulder pinches away from the first, making a
+                // little refracted-water glint rather than an unbroken neon arc.
+                thin += band(radius + shape, centre + .012 + pinch * .009, width * 1.3) * strength * pinch * .32;
+                light += band(radius + shape, centre, width * 5.) * strength * .38;
             }
             // Real onsets add lighter, partially transparent water rings. Their
             // age always increases, so a release can never pull a wave backwards.
             for (int index = 0; index < 4; index++) {
                 vec4 impulse = u_impulses[index];
                 float age = impulse.z;
-                float centre = .12 + age * (.30 + impulse.w * .045);
-                float fade = (1. - exp(-age * 18.)) * (1. - smoothstep(.8, 1.6, age));
+                float centre = .12 + age * (.22 + impulse.w * .025) * mix(1., .72, side);
+                // Finish before a fifth 170ms onset can recycle this pool slot.
+                float fade = smoothstep(0., .07, age) * (1. - smoothstep(.25, .64, age));
                 float sideWeight = mix(.55, 1., side < .5 ? 1. - impulse.x : impulse.x);
-                float arc = pow(.5 + .5 * cos(angle * 2. + impulse.y * 8.), 4.);
+                float arc = exp(-square((inwardAngle - (impulse.y - .5) * 2.) / .32));
                 float strength = fade * impulse.w * sideWeight;
-                light += band(radius, centre, .024 + age * .018) * strength * .035;
-                thin += band(radius, centre, thinWidth * 1.4) * arc * strength * .10;
+                light += band(radius, centre, .044 + age * .020) * arc * strength * .065;
+                thin += band(radius, centre, thinWidth * 1.8) * arc * strength * .055;
             }
-            float envelope = 1. - smoothstep(.56, .70, length(q));
+            float envelope = 1. - smoothstep(extent - .12, extent, length(q));
             return vec3(light, shade, thin) * envelope;
         }
         void main() {
@@ -109,7 +127,8 @@
             // dark / right light is deliberate and also shapes the optical waves.
             vec3 colour = mix(u_dark, u_light, pow(v_uv.x, 1.12));
             colour *= 1. - waves.y;
-            colour += u_light * (waves.x + waves.z) * mix(.60, 1., v_uv.x);
+            colour += u_light * waves.x * mix(.60, 1., v_uv.x);
+            colour += mix(u_light, vec3(1.), .20) * waves.z * mix(.60, 1., v_uv.x);
             float edgeY = abs(v_uv.y - .5) * 2.;
             colour *= 1. - .56 * smoothstep(.65, 1., edgeY) - .12 * smoothstep(.91, 1., edgeY);
             colour += (hash(gl_FragCoord.xy) - .5) / 255.;
