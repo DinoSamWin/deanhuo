@@ -828,6 +828,7 @@
         }
     </style>
     <link rel="stylesheet" href="css/music-player-desktop.css?v=20260913-room-18">
+    <link rel="stylesheet" href="css/music-player-skins.css?v=20260918-pulse-1">
 </head>
 
 <body id="player-body" data-share-dynamic="true">
@@ -847,12 +848,20 @@
         </div>
     </div>
 
+    <div class="pulse-scene" aria-hidden="true">
+        <div class="pulse-wash" id="pulse-glow"></div>
+        <div class="pulse-rings pulse-rings-left"></div>
+        <div class="pulse-rings pulse-rings-right"></div>
+        <div class="pulse-grain"></div>
+    </div>
+
     <main class="player-content">
         <div class="scene-overlay-space">
             <div class="desktop-lyric-frost" aria-hidden="true"></div>
 
             <!-- Top Metadata -->
-            <div class="track-header">
+            <div class="track-header player-chrome">
+                <img class="pulse-cover" id="pulse-cover" alt="" hidden>
                 <h1 id="track-title">--</h1>
                 <p id="track-artist">--</p>
             </div>
@@ -864,7 +873,7 @@
                     <!-- Cards injected by JS -->
                 </div>
             </div>
-            <div class="version-strip is-hidden" id="version-strip" aria-label="音频版本"></div>
+            <div class="version-strip is-hidden player-chrome" id="version-strip" aria-label="音频版本"></div>
 
             <div class="orbit-track">
                 <svg class="orbit-svg" viewBox="0 0 1000 300">
@@ -882,12 +891,12 @@
                 </svg>
             </div>
 
-            <div class="time-display">
+            <div class="time-display player-chrome">
                 <span id="time-current">0:00</span>
                 <span id="time-total">0:00</span>
             </div>
 
-            <input type="range" id="progress-slider" class="progress-hitbox" min="0" max="100" value="0">
+            <input type="range" id="progress-slider" class="progress-hitbox player-chrome" min="0" max="100" value="0" aria-label="播放进度">
             </div>
 
             <!-- Lyrics Region -->
@@ -896,7 +905,7 @@
             </div>
 
             <!-- Physical controls and their labels -->
-            <div class="player-controls">
+            <div class="player-controls player-chrome">
             <button class="control-btn" id="btn-prev" type="button" aria-label="上一首">
                 <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                     <path d="M19 20 7 12l12-8v16Z"></path>
@@ -923,7 +932,30 @@
         </div>
     </main>
 
-    <button class="desktop-close-btn" id="btn-close" type="button" aria-label="返回音乐列表" title="返回音乐列表">
+    <div class="skin-tools player-chrome">
+        <button class="skin-tool fullscreen-tool" id="btn-fullscreen" type="button" aria-label="进入全屏" title="进入全屏" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4" /></svg>
+        </button>
+        <button class="skin-tool" id="skin-toggle" type="button" aria-controls="skin-menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.2a2 2 0 0 0 1.4-3.4 1.4 1.4 0 0 1 1-2.4h1.2A4.2 4.2 0 0 0 21 11 8 8 0 0 0 12 3Z"/><path d="M7.5 10h.01M10 6.5h.01M14 6.5h.01M17 10h.01" stroke-width="2.6"/></svg>
+            <span>换肤</span>
+        </button>
+        <div class="skin-menu" id="skin-menu" role="group" aria-label="播放器皮肤" hidden>
+            <p>播放器皮肤</p>
+            <button type="button" data-skin-option="original" aria-pressed="true">
+                <span class="skin-swatch skin-swatch-original" aria-hidden="true"></span>
+                <span><strong class="skin-original-desktop">房间黑胶</strong><strong class="skin-original-mobile">经典唱片</strong><small>原有播放器</small></span>
+                <span class="skin-selected-mark" aria-hidden="true">✓</span>
+            </button>
+            <button type="button" data-skin-option="pulse" aria-pressed="false">
+                <span class="skin-swatch skin-swatch-pulse" aria-hidden="true"></span>
+                <span><strong>律动光场</strong><small>随音乐呼吸的沉浸歌词</small></span>
+                <span class="skin-selected-mark" aria-hidden="true">✓</span>
+            </button>
+        </div>
+    </div>
+
+    <button class="desktop-close-btn player-chrome" id="btn-close" type="button" aria-label="返回音乐列表" title="返回音乐列表">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
         </svg>
@@ -932,7 +964,8 @@
     <audio id="audio-element" preload="metadata" playsinline></audio>
 
     <script src="js/wechat-share.js?v=20260912-song-route-3"></script>
-    <script src="js/music-player.js?v=20260913-immersive-room-9"></script>
+    <script src="js/music-player-skins.js?v=20260918-pulse-1"></script>
+    <script src="js/music-player.js?v=20260918-immersive-room-10"></script>
 </body>
 
 </html>

@@ -46,6 +46,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     elements.closeBtn?.addEventListener('click', closePlayer);
+    window.DeanPlayerSkin?.init({
+        audio: elements.audio,
+        onChange: () => requestAnimationFrame(() => {
+            cancelLyricScrollAnimation();
+            updateLyricsDisplay(elements.audio.currentTime || 0, true);
+            updateVersionStripOverflow();
+        })
+    });
+    window.addEventListener('resize', () => {
+        cancelLyricScrollAnimation();
+        updateLyricsDisplay(elements.audio.currentTime || 0, true);
+    });
 
     // Keep the catalogue cacheable so repeat H5 visits do not refetch it.
     fetch('assets/data/music.json')
@@ -175,6 +187,13 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.title.textContent = song.title;
         elements.artist.textContent = song.artist || 'Unknown Artist';
         elements.blurBg.style.backgroundImage = song.cover ? `url(${song.cover})` : 'none';
+        window.DeanPlayerSkin?.setCover(song.cover || '');
+        const pulseCover = document.getElementById('pulse-cover');
+        if (pulseCover) {
+            pulseCover.hidden = !song.cover;
+            if (song.cover) pulseCover.src = song.cover;
+            else pulseCover.removeAttribute('src');
+        }
         elements.audio.src = getSongVersions(song)[currentVersionIndex]?.url || song.url || '';
 
         if (window.DeanShare) {
@@ -460,6 +479,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const item = document.createElement('div');
             item.className = 'lyric-line';
             item.textContent = line.text;
+            item.dataset.text = line.text;
             item.dataset.index = index;
             fragment.appendChild(item);
         });
@@ -503,6 +523,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     line.classList.add('far-next');
                 }
             }
+        }
+
+        // The light-field skin presents one centered line using the same
+        // timestamp/highlight above, without moving the original scroll panel.
+        if (window.DeanPlayerSkin?.isImmersive()) {
+            cancelLyricScrollAnimation();
+            elements.lyricsBox.scrollTop = 0;
+            lyricScrollIndex = -1;
+            return;
         }
 
         let scrollIdx = activeIdx;
@@ -612,6 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function playAudio() {
         try {
+            window.DeanPlayerSkin?.prepareAudio();
             await elements.audio.play();
         } catch (error) {
             setPlayingState(false);
