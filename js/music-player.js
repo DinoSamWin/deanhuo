@@ -503,6 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Longer lines converge as separate glyphs, never stretched letterforms.
         const textWidth = Array.from(text).reduce((width, character) => width
             + (cjkCharacter.test(character) ? 1 : /[\p{L}\p{N}]/u.test(character) ? .55 : .25), 0);
+        item.style.setProperty('--pulse-line-units', Math.max(1, textWidth));
         item.classList.toggle('is-long-lyric', textWidth >= 10);
         if (!tokens.length) {
             item.textContent = text;

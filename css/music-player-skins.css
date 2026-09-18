@@ -94,7 +94,10 @@ body[data-player-skin="pulse"] {
     --pulse-mid: hsl(var(--pulse-hue) var(--pulse-saturation) 26%);
     --pulse-light: hsl(var(--pulse-hue) var(--pulse-saturation) 49%);
     --pulse-text: hsl(var(--pulse-hue) var(--pulse-saturation) 88%);
-    --pulse-lyric-size: clamp(34px, 4.8vw, 76px);
+    /* The reference's visible letterforms occupy roughly 9–11% of landscape
+       height. Font em size is larger than that ink box, and width still limits
+       taller desktop windows. Do not pin large screens to a 76px ceiling. */
+    --pulse-lyric-size: max(28px, min(11.8vh, 7.2vw));
     background: var(--pulse-ink);
     color: var(--pulse-text);
 }
@@ -222,7 +225,7 @@ body[data-player-skin="pulse"] .lyric-line:is(.active, .is-exiting) {
     margin: 0;
     padding: .6em .2em;
     overflow: visible;
-    color: var(--pulse-text);
+    color: var(--pulse-text-color, var(--pulse-text));
     font-family: "Songti SC", "Noto Serif SC", STSong, "SimSun", Georgia, serif;
     font-size: var(--pulse-lyric-size);
     font-weight: 600;
@@ -241,6 +244,14 @@ body[data-player-skin="pulse"] .lyric-line:is(.active, .is-exiting) {
 }
 body[data-player-skin="pulse"] .lyric-line.is-exiting {
     animation: pulse-lyric-out 260ms ease-in both;
+}
+body[data-player-skin="pulse"] .lyric-line:is(.active, .is-exiting).is-long-lyric {
+    /* Budget up to two centered lines, preserving all lyric content. The
+       optional text-width estimate is in ems; 150vw leaves glyph/spacing room
+       inside the 84vw stage. Very long mobile sentences may wrap naturally
+       rather than becoming illegible or being clipped. */
+    font-size: min(var(--pulse-lyric-size), max(24px, calc(150vw / var(--pulse-line-units, 20))));
+    max-width: none;
 }
 
 body[data-player-skin="pulse"] .lyric-keyword { position: static; display: inline; }
@@ -270,7 +281,7 @@ body[data-player-skin="pulse"] .lyric-echo {
     letter-spacing: -.03em;
     white-space: nowrap;
     text-align: center;
-    color: var(--pulse-ink);
+    color: var(--pulse-echo-color, var(--pulse-ink));
     opacity: .42;
     filter: blur(3px);
     transform: translate(-50%, -50%);
@@ -510,6 +521,9 @@ body[data-player-skin="pulse"].is-idle .player-chrome { opacity: 0; visibility: 
     body[data-player-skin="pulse"] .desktop-close-btn { top: max(16px, env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); }
     body[data-player-skin="pulse"] .lyrics-section { inset: 18% 7%; width: 86%; }
     body[data-player-skin="pulse"] .lyric-line:is(.active, .is-exiting) { line-height: 1.65; letter-spacing: .04em; }
+    body[data-player-skin="pulse"] .lyric-line:is(.active, .is-exiting).is-long-lyric {
+        font-size: min(var(--pulse-lyric-size), max(22px, calc(154vw / var(--pulse-line-units, 20))));
+    }
     .pulse-rings { width: 125vw; }
     .pulse-rings-left { left: -28%; top: 40%; opacity: .28; }
     .pulse-rings-right { left: 123%; top: 57%; }
@@ -523,9 +537,13 @@ body[data-player-skin="pulse"].is-idle .player-chrome { opacity: 0; visibility: 
 }
 
 @media (max-height: 500px) and (orientation: landscape) {
-    body[data-player-skin="pulse"] { --pulse-lyric-size: clamp(26px, 4.8vw, 46px); }
     body[data-player-skin="pulse"] .lyrics-section { inset: 22% 10%; width: 80%; }
     body[data-player-skin="pulse"] .lyric-line:is(.active, .is-exiting) { line-height: 1.35; }
+    body[data-player-skin="pulse"] .lyric-line:is(.active, .is-exiting).is-long-lyric {
+        /* The compact stage is 80vw, not 84vw. Leave additional room for the
+           longer half of an odd-character sentence, padding, and tracking. */
+        font-size: min(var(--pulse-lyric-size), max(24px, calc(140vw / var(--pulse-line-units, 20))));
+    }
     body[data-player-skin="pulse"] .track-header { bottom: max(9.75%, env(safe-area-inset-bottom)); grid-template-columns: 57px minmax(0, 1fr); }
     body[data-player-skin="pulse"] .pulse-cover:not([hidden]) { width: 57px; height: 57px; }
     body[data-player-skin="pulse"] .player-controls { right: 10%; bottom: max(10.5%, env(safe-area-inset-bottom)); }

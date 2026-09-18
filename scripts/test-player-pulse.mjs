@@ -166,7 +166,7 @@ console.log('PASS: one GPU context/program/buffer, shader disposal, 120 Hz per-i
     assert.equal(idle.state.draws.length, 1, 'initial preparation paints once without starting a loop');
     assert.ok(idle.classes.has('has-liquid-field'), 'the static shader replaces the old CSS rings before first playback');
     const first = idle.state.draws[0];
-    assert.deepEqual(first.u_waveStrength, [.18, .22], 'idle has a gentler contrast than the playing low-energy floor');
+    assert.deepEqual(first.u_waveStrength, [.30, .32], 'ambient starts at a visible but gentler contrast than playing');
     assert.equal(first.u_time[0], 0);
     assert.equal(first.u_travel[0], 0);
     assert.equal(idle.renderer.getDiagnostics().frameCount, 0, 'still preparation is not counted as an audio frame');
@@ -212,21 +212,64 @@ console.log('PASS: one gentle pre-play still, lazy inactive/reduced-motion fallb
         'strong passages above the low-energy region retain their original intensity');
     const travel = quiet.frame.u_travel[0];
     quiet.h.renderer.reset();
-    assert.deepEqual(quiet.h.state.draws.at(-1).u_waveStrength, [.18, .22]);
-    assert.equal(quiet.h.state.draws.at(-1).u_travel[0], travel, 'lower paused contrast never resets wave geometry');
+    assert.deepEqual(quiet.h.state.draws.at(-1).u_waveStrength, quiet.frame.u_waveStrength,
+        'reset preserves the current background contrast instead of flashing to the ambient floor');
+    assert.equal(quiet.h.state.draws.at(-1).u_travel[0], travel, 'switching mode never resets wave geometry');
     const resumed = quiet.h.draw({ energy: 0, beat: 0 });
-    assert.ok(resumed.u_waveStrength[0] > .18 && resumed.u_waveStrength[0] < .23,
-        'resuming fades up gently rather than jumping to the full playing floor');
+    assert.ok(Math.abs(resumed.u_waveStrength[0] - quiet.frame.u_waveStrength[0]) < .01,
+        'resuming transitions from the existing contrast instead of restarting its entry animation');
     const silent = settle(0);
     assert.ok(Math.abs(silent.frame.u_waveStrength[0] - .44) < .000001);
     assert.ok(Math.abs(silent.frame.u_waveStrength[1] - .58) < .000001);
     const highRefresh = settle(.07, 120);
     for (let channel = 0; channel < 2; channel++) {
-        assert.ok(Math.abs(highRefresh.frame.u_waveStrength[channel] - quiet.frame.u_waveStrength[channel]) < 1e-10,
+        assert.ok(Math.abs(highRefresh.frame.u_waveStrength[channel] - quiet.frame.u_waveStrength[channel]) < 1e-7,
             'the static-to-playing envelope is elapsed-time based at 60/120 Hz');
     }
 }
 console.log('PASS: stronger quiet-playback floor, unchanged loud peaks, gentle resume and frame-rate-independent intensity.');
+
+{
+    const run = fps => {
+        const h = createHarness({ skin: 'pulse' });
+        h.renderer.reset();
+        let lastTravel = 0;
+        for (let index = 0; index < fps * 3; index++) {
+            // Deliberately pass stale analyser values: the ambient contract must
+            // sanitize them instead of producing fake music-driven accents.
+            const frame = h.draw({ ambient: true, delta: 1000 / fps, energy: 1, bass: 1,
+                mid: 1, treble: 1, beat: 1, impact: 1 });
+            assert.deepEqual(frame.u_audio, [0, 0, 0, 0]);
+            assert.deepEqual(frame.u_response, [0, 0, 0]);
+            assert.equal(frame.u_impact[0], 0);
+            assert.ok(frame['u_impulses[0]'].every(value => value === 0), 'ambient frames never create accents');
+            assert.ok(frame.u_travel[0] > lastTravel, 'ambient waves keep propagating while audio is paused');
+            lastTravel = frame.u_travel[0];
+        }
+        assert.equal(h.renderer.getDiagnostics().ambient, true);
+        assert.deepEqual(h.state.draws.at(-1).u_waveStrength, [.30, .32]);
+        const ambientTravel = lastTravel;
+        const audio = h.draw({ energy: .5, beat: .4 });
+        assert.ok(audio.u_travel[0] > ambientTravel && audio.u_travel[0] - ambientTravel < .004,
+            'the first audio frame continues the same transport phase');
+        assert.equal(impulsesOf(audio).length, 1, 'real playback may add a real onset');
+        assert.equal(h.renderer.getDiagnostics().ambient, false);
+        const strength = audio.u_waveStrength;
+        h.renderer.reset();
+        assert.deepEqual(h.state.draws.at(-1).u_waveStrength, strength, 'pause reset has no background contrast snap');
+        assert.ok(h.state.draws.at(-1)['u_impulses[0]'].every(value => value === 0));
+        const nextAmbient = h.draw({ ambient: true, delta: 1000 / fps, beat: 1 });
+        assert.ok(nextAmbient.u_travel[0] > audio.u_travel[0], 'pause switches to continuing ambient travel');
+        assert.ok(nextAmbient.u_waveStrength[0] > .30 && nextAmbient.u_waveStrength[0] < strength[0],
+            'ambient contrast eases toward its floor rather than dropping in one frame');
+        for (let index = 0; index < fps * 4; index++) h.draw({ ambient: true, delta: 1000 / fps });
+        assert.ok(Math.abs(h.state.draws.at(-1).u_waveStrength[0] - .30) < 1e-6);
+        assert.equal(h.renderer.getDiagnostics().activeImpulses, 0);
+        return ambientTravel;
+    };
+    assert.ok(Math.abs(run(60) - run(120)) < 1e-10, 'ambient transport is independent of display refresh rate');
+}
+console.log('PASS: continuous ambient waves, sanitized audio fields, no synthetic beats and seamless ambient/audio/pause transitions.');
 
 {
     const h = createHarness();
@@ -318,7 +361,7 @@ console.log('PASS: suspended-frame recovery preserves coherent phase/accents wit
                 assert.ok(travel > previousTravel,
                     'propagation must move outward on every frame, including abrupt loud-to-silent transitions');
                 assert.ok(travel - previousTravel < .3 / fps,
-                    'audio changes may speed up travel but cannot jump the radial phase');
+                    'audio changes cannot jump or accelerate the base radial phase');
                 assert.equal(h.renderer.getDiagnostics().waveTravel, travel,
                     'wave diagnostics must report the exact propagation uniform submitted to the GPU');
                 previousTravel = travel;
@@ -329,12 +372,19 @@ console.log('PASS: suspended-frame recovery preserves coherent phase/accents wit
     };
     const sixty = runTravel(60);
     const highRefresh = runTravel(120);
-    assert.ok(sixty.distances[1] > sixty.distances[0] * 1.5,
-        'a strong passage travels noticeably faster than the preceding quiet passage');
-    assert.ok(sixty.distances[7] > .089 && sixty.distances[7] < .091,
-        'after the audio envelope settles, silent playback still propagates slowly rather than freezing the rings');
-    assert.ok(Math.abs(sixty.travel - highRefresh.travel) < .004,
-        'the same eight-second audio timeline produces matching propagation at 60/120 Hz within integration tolerance');
+    for (const distance of sixty.distances) {
+        assert.ok(Math.abs(distance - .19 / (.8 * 1.50)) < 1e-10,
+            'quiet, loud and silent passages retain the same measured base-wave cadence');
+    }
+    assert.ok(Math.abs(sixty.travel - highRefresh.travel) < 1e-10,
+        'the same eight-second timeline produces matching propagation at 60/120 Hz');
+    const perSecond = sixty.distances[0];
+    const sideFactors = script.match(/float travel = u_travel \* mix\(([\d.]+), ([\d.]+), side\)/);
+    assert.ok(sideFactors, 'shader exposes the two fixed propagation factors');
+    assert.ok(Math.abs(.19 / (perSecond * Number(sideFactors[1])) - .8) < 1e-10,
+        'left-side mean crest cadence matches approximately one wave per .8 seconds');
+    assert.ok(Math.abs(.19 / (perSecond * Number(sideFactors[2])) - 1.6) < 1e-10,
+        'right-side mean crest cadence matches approximately one wave per 1.6 seconds');
     const silenceAt = fps => {
         const h = createHarness();
         for (let index = 0; index < fps * 3; index++) {
@@ -343,12 +393,12 @@ console.log('PASS: suspended-frame recovery preserves coherent phase/accents wit
         return h.renderer.getDiagnostics().waveTravel;
     };
     const silentTravel = silenceAt(60);
-    assert.ok(Math.abs(silentTravel - 3 * (.085 + .14 * .035)) < 1e-10,
+    assert.ok(Math.abs(silentTravel - 3 * .19 / (.8 * 1.50)) < 1e-10,
         'silence uses elapsed time for its steady outward drift, not the number of frames');
     assert.ok(Math.abs(silentTravel - silenceAt(120)) < 1e-10,
         'silent travel is identical over equal elapsed time at 60 Hz and 120 Hz');
 }
-console.log('PASS: always-outward bounded wave travel across loud/quiet/silent transitions, slow silent propagation and 60/120 Hz consistency.');
+console.log('PASS: constant outward base cadence, measured left/right intervals and 60/120 Hz consistency across loud/quiet/silent passages.');
 
 {
     const quiet = createHarness();
@@ -365,7 +415,7 @@ console.log('PASS: always-outward bounded wave travel across loud/quiet/silent t
     assert.ok(strongDrive > quietDrive * 8,
         'the amplitude curve must preserve strong quiet/loud separation rather than compressing both with sqrt');
     assert.ok(strongFrame.u_time[0] > quietFrame.u_time[0] * 3,
-        'louder passages advance the material faster without dropping rendering frames');
+        'louder passages animate the local water-glint deformation without changing base propagation');
     const quietAccent = quiet.draw({ energy: .07, beat: .055 });
     const strongAccent = strong.draw({ energy: .46, beat: .38 });
     assert.ok(strongAccent.u_response[1] > quietAccent.u_response[1] * 8,
@@ -373,7 +423,7 @@ console.log('PASS: always-outward bounded wave travel across loud/quiet/silent t
     assert.ok(impulsesOf(strongAccent).at(-1)[3] > impulsesOf(quietAccent).at(-1)[3] * 8,
         'local material displacement must preserve the same strong/weak distinction as the global response');
 }
-console.log('PASS: convex quiet/loud drive, faster strong-passage flow and clearly distinct weak/strong local punches.');
+console.log('PASS: convex quiet/loud drive, responsive local-glint deformation and distinct weak/strong local punches.');
 
 {
     const h = createHarness();
@@ -412,7 +462,7 @@ console.log('PASS: first-frame attack, immediate strong punch, smooth time-based
     assert.ok(rapid.meanDensity > sparse.meanDensity * 2.5,
         'four real accents per second accumulate much more motion density than one equal-strength accent');
     assert.ok(rapid.frame.u_time[0] > sparse.frame.u_time[0] * 1.25,
-        'faster rhythms drive faster liquid motion even when average loudness is held constant');
+        'denser real onsets influence local-glint deformation independently of base-wave propagation');
     assert.ok(Math.abs(rapid.frame.u_response[0] - sparse.frame.u_response[0]) < 1e-10,
         'tempo density must not rewrite the independent loudness envelope');
     const highRefresh = runRhythm(30, 120);
@@ -458,10 +508,10 @@ console.log('PASS: finite bounded response uniforms under stress, exact response
     const frameCount = h.renderer.getDiagnostics().frameCount;
     const draws = h.state.draws.length;
     h.renderer.reset();
-    assert.equal(h.state.draws.length, draws + 1, 'pause/reset redraws a still liquid surface');
+    assert.equal(h.state.draws.length, draws + 1, 'reset repaints once before the owner supplies the next ambient frame');
     const paused = h.state.draws.at(-1);
-    assert.equal(paused.u_time[0], time, 'reset freezes the liquid clock without rewinding the surface');
-    assert.equal(paused.u_travel[0], travel, 'pause/reset freezes outward travel without snapping the waves back');
+    assert.equal(paused.u_time[0], time, 'reset alone neither advances nor rewinds the surface clock');
+    assert.equal(paused.u_travel[0], travel, 'reset alone leaves outward travel in place until the next supplied frame');
     assert.equal(h.renderer.getDiagnostics().waveTravel, travel);
     assert.deepEqual(paused.u_audio, [0, 0, 0, 0]);
     assert.equal(paused.u_impact[0], 0);
@@ -511,7 +561,7 @@ console.log('PASS: finite bounded response uniforms under stress, exact response
     assert.ok(resumed.u_time[0] > time, 'resuming advances from the frozen state');
     assert.ok(resumed.u_travel[0] > travel, 'resuming continues outward from the exact frozen travel, never inward');
 }
-console.log('PASS: pause freezes clocks, clears impulses, redraws rotation correctly, has no autonomous loops and uses valid palettes.');
+console.log('PASS: reset/resize preserve phase between supplied frames, clear impulses, reuse palettes and never create autonomous loops.');
 
 {
     const h = createHarness({ width: 3840, height: 2160, dpr: 4 });

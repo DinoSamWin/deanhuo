@@ -4,6 +4,10 @@
     // Outward travelling water/light waves, measured against the rotated MP4.
     // Only the centres and outer fade are fixed: every crest is born inside,
     // travels out, widens and disappears. Nothing oscillates at a fixed radius.
+    // .19H crest spacing, with shader side factors 1.50/.75, gives the measured
+    // mean intervals of .8s left / 1.6s right, including ambient (paused) frames.
+    const BASE_WAVE_SPEED = .19 / (.8 * 1.50);
+    const AMBIENT_STRENGTH = [.30, .32];
     const VERTEX = `
         attribute vec2 a_position;
         varying vec2 v_uv;
@@ -51,28 +55,37 @@
             // Left: a quicker, feathered wash. Right: smaller/slower ripples.
             // Offsets and per-emission values break the equally spaced tunnel
             // pattern, without introducing per-frame randomness or phase jumps.
-            float travel = u_travel * mix(1.50, .78, side);
+            float travel = u_travel * mix(1.50, .75, side);
             float extent = mix(.65, .57, side);
             for (int index = 0; index < 4; index++) {
                 float layer = float(index);
-                float distance = travel + layer * .19 + sin(layer * 2.3 + side) * .032 + side * .037;
+                float distance = travel + layer * .19 + sin(layer * 2.3 + side) * .010 + side * .037;
                 float age = mod(distance, .76) / .76;
                 float seed = hash(vec2(floor(distance / .76), layer + side * 7.));
                 float character = hash(vec2(layer + 9.3, floor(distance / .76) + side * 4.7));
                 float centre = .045 + age * .76;
-                float fade = smoothstep(.05, .21, centre) * (1. - smoothstep(.37, extent, centre));
-                float width = .024 + character * .026 + age * .028;
+                // Broad shoulders are present even in the paused reference.
+                // Fade their lifetime beyond the spatial envelope, rather than
+                // multiplying two early fades that erase the outer two waves.
+                float fade = smoothstep(.055, .14, centre) * (1. - smoothstep(extent, extent + .12, centre));
+                float width = .036 + character * .018 + age * .012;
                 float shape = sin(angle * 2. + seed * 6.28) * .002;
                 float shoulder = square(.5 + .5 * cos(angle + character * 6.28));
-                float exposure = .55 + shoulder * .45;
-                // Most waves stay faint; occasional ones carry a broad light
-                // shoulder. Width, brightness and shadow depth are independent.
-                float strength = (.35 + pow(seed, 1.8) * .95) * u_waveStrength.x * mix(1.8, 1.25, side);
-                light += band(radius + shape, centre, width) * fade * strength * exposure * (.10 + character * .10);
-                shade += band(radius + shape, centre + width * 1.15, width * 1.65)
-                    * fade * strength * exposure * (.17 + (1. - character) * .15);
+                float exposure = .78 + shoulder * .22;
+                // The travelling texture has its own visible floor; music
+                // accents it instead of being required to reveal the texture.
+                float contrast = .65 + clamp(u_waveStrength.x, 0., 1.) * .35;
+                float strength = (.72 + pow(seed, 1.4) * .45) * contrast * mix(1.2, 1., side);
+                // The dark left field sheds a broad luminous shoulder; its
+                // shadow is secondary, rather than another dark outlined ring.
+                light += band(radius + shape, centre, width) * fade * strength * exposure
+                    * (.12 + character * .10) * mix(1.28, 1., side);
+                // Separate the broad bright and dark shoulders by roughly half
+                // a wavelength so they do not cancel into a flat colour field.
+                shade += band(radius + shape, centre + .085, width * 1.10)
+                    * fade * strength * exposure * (.14 + (1. - character) * .10);
             }
-            float thinWidth = max(.0032, 1.5 / min(u_resolution.x, u_resolution.y));
+            float thinWidth = max(.0040, 1.5 / min(u_resolution.x, u_resolution.y));
             // No full-circle baseline: translucent details only catch light in
             // a soft local patch, then disappear. Never a hard traced contour.
             for (int index = 0; index < 3; index++) {
@@ -87,7 +100,7 @@
                 float arc = exp(-square((inwardAngle - patch) / (.20 + pinch * .18)));
                 float shape = sin(inwardAngle * 3. + seed * 5.) * .008
                     + sin(inwardAngle * 5. - t * .65 + seed * 4.) * .012 * pinch;
-                float strength = fade * arc * (.10 + seed * .12) * u_waveStrength.y * mix(.6, 1., side);
+                float strength = fade * arc * (.075 + seed * .085) * u_waveStrength.y * mix(.6, 1., side);
                 float width = thinWidth * (.9 + pinch * 1.1);
                 thin += band(radius + shape, centre, width) * strength;
                 // A soft second shoulder pinches away from the first, making a
@@ -129,7 +142,7 @@
             vec3 colour = mix(u_dark, u_light, pow(v_uv.x, 1.12));
             colour *= 1. - waves.y;
             colour += u_light * waves.x * mix(.60, 1., v_uv.x);
-            colour += mix(u_light, vec3(1.), .20) * waves.z * mix(.60, 1., v_uv.x);
+            colour += mix(u_light, vec3(1.), .10) * waves.z * mix(.60, 1., v_uv.x);
             float edgeY = abs(v_uv.y - .5) * 2.;
             colour *= 1. - .56 * smoothstep(.65, 1., edgeY) - .12 * smoothstep(.91, 1., edgeY);
             colour += (hash(gl_FragCoord.xy) - .5) / 255.;
@@ -149,7 +162,8 @@
     let frameCount = 0, averageDelta = 16.67, slowFrames = 0;
     let drive = 0, punch = 0, density = 0;
     let playbackBlend = 0;
-    let lastFrame = { bass: 0, mid: 0, treble: 0, energy: 0, impact: 0 };
+    let strength = [...AMBIENT_STRENGTH];
+    let lastFrame = { ambient: true, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0, impact: 0 };
 
     function hsl(hue, saturation, lightness) {
         const s = saturation / 100, l = lightness / 100;
@@ -278,7 +292,8 @@
         return sequence / 4294967296;
     }
 
-    function waveStrength() {
+    function targetWaveStrength(ambient) {
+        if (ambient) return AMBIENT_STRENGTH;
         // Idle and quiet playback are different states. Raise only the playing
         // low-energy floor; the boost fades out before loud passages, preserving
         // their existing highlight/shadow peaks instead of globally brightening.
@@ -286,7 +301,7 @@
         const quietBoost = 1 - ramp * ramp * (3 - 2 * ramp);
         const broad = .36 + drive * .64 + quietBoost * .08;
         const glint = .48 + drive * .70 + quietBoost * .10;
-        return [.18 + (broad - .18) * playbackBlend, .22 + (glint - .22) * playbackBlend];
+        return [broad, glint];
     }
 
     function render(frame) {
@@ -294,13 +309,13 @@
         gl.useProgram(program);
         gl.uniform2f(uniforms.u_resolution, width, height);
         gl.uniform1f(uniforms.u_time, flowTime);
-        // Integrate positive speed, rather than multiply elapsed time by the
-        // current loudness (which would reverse/teleport waves on every release).
-        gl.uniform1f(uniforms.u_travel, clockTime * .085 + flowTime * .035);
+        // The reference's broad-wave cadence persists during silent/paused
+        // passages. Audio changes local light/shape, not this transport clock.
+        gl.uniform1f(uniforms.u_travel, clockTime * BASE_WAVE_SPEED);
         gl.uniform4f(uniforms.u_audio, frame.bass, frame.mid, frame.treble, frame.energy);
         gl.uniform1f(uniforms.u_impact, frame.impact);
         gl.uniform3fv(uniforms.u_response, [drive, punch, density]);
-        gl.uniform2f(uniforms.u_waveStrength, ...waveStrength());
+        gl.uniform2f(uniforms.u_waveStrength, ...strength);
         ['u_dark', 'u_mid', 'u_light'].forEach((name, index) => gl.uniform3fv(uniforms[name], colours[index]));
         impulseData.fill(0);
         impulses.forEach((impulse, index) => {
@@ -311,10 +326,15 @@
     }
 
     function draw(frame) {
+        // The sole RAF owner supplies ambient frames before play and on pause.
+        // Never interpret stale/nonzero analyser fields as beats in that mode.
+        const ambient = frame.ambient === true;
+        if (ambient) frame = { ...frame, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0, impact: 0 };
         lastFrame = frame;
         if (!initialize()) return;
         const delta = Math.min(Math.max(frame.delta || 16.67, 0), 50);
-        playbackBlend += (1 - playbackBlend) * (1 - Math.exp(-delta / 180));
+        const transition = 1 - Math.exp(-delta / (ambient ? 280 : 180));
+        playbackBlend += ((ambient ? 0 : 1) - playbackBlend) * transition;
         clockTime += delta / 1000;
         // A convex loudness curve preserves quiet/loud contrast; a fast attack
         // and slower release avoid delayed response without discontinuous jumps.
@@ -323,6 +343,12 @@
         const strike = Math.pow(Math.min(1, Math.max(0, (frame.beat - .015) / .42)), 1.25);
         punch = Math.max(strike, punch * Math.exp(-delta / 160));
         density = Math.min(1, density * Math.exp(-delta / 800) + (frame.beat > 0 ? strike * .28 : 0));
+        if (ambient) {
+            impulses = [];
+            punch = density = 0;
+        }
+        const targetStrength = targetWaveStrength(ambient);
+        strength = strength.map((value, index) => value + (targetStrength[index] - value) * transition);
         flowTime += delta / 1000 * (.14 + drive * 2.3 + punch * 2.1 + density * 1.25);
         if (frame.beat > 0) {
             const side = random();
@@ -346,15 +372,15 @@
     function reset() {
         impulses = [];
         drive = punch = density = 0;
-        playbackBlend = 0;
-        lastFrame = { bass: 0, mid: 0, treble: 0, energy: 0, impact: 0 };
+        lastFrame = { ambient: true, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0, impact: 0 };
         // The selected skin needs its quiet initial still before audio starts;
         // otherwise the older CSS rings remain visible until the first play.
         // Allocate nothing for the original skin, hidden pages or reduced motion.
         if (!program && document.body.dataset?.playerSkin === 'pulse' && !document.hidden
             && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) initialize();
-        // Freeze the same outward phase. This is one still redraw, not a second
-        // animation loop; resuming gently restores the playing intensity.
+        // Preserve phase and current broad-wave contrast at this boundary.
+        // Subsequent ambient frames ease toward the softer floor; reset itself
+        // cannot flash/reseed the background or schedule a second animation loop.
         if (program && !lost) { resize(); render(lastFrame); }
     }
 
@@ -362,7 +388,7 @@
         draw, reset, setPalette,
         getDiagnostics: () => ({ renderer: program && !lost ? 'webgl-liquid' : 'static',
             width, height, renderScale, frameCount, averageDelta, activeImpulses: impulses.length,
-            drive, punch, density, playbackBlend, waveStrength: waveStrength(),
-            waveTravel: clockTime * .085 + flowTime * .035 })
+            drive, punch, density, playbackBlend, ambient: lastFrame.ambient === true,
+            waveStrength: [...strength], waveTravel: clockTime * BASE_WAVE_SPEED })
     };
 })();

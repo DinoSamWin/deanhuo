@@ -27,6 +27,10 @@
     let graphUnavailable = false;
     let resumePending = false;
     let visualFrame = null;
+    let visualRestoreTimer = null;
+    let visualContextLost = false;
+    let analysingAudio = false;
+    let awaitingAudioData = false;
     let lastFrameTime = 0;
     let lastAnalysisTime = 0;
     let nextAnalysisTime = 0;
@@ -48,9 +52,45 @@
     let lastBeatTime = -Infinity;
     let paletteRequest = 0;
 
+    function themeRgb(hue, saturation, lightness) {
+        const s = saturation / 100, l = lightness / 100;
+        const a = s * Math.min(l, 1 - l);
+        return [0, 8, 4].map(offset => {
+            const k = (offset + hue / 30) % 12;
+            return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+        });
+    }
+
+    function luminance(rgb) {
+        const linear = rgb.map(channel => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4);
+        return linear[0] * .2126 + linear[1] * .7152 + linear[2] * .0722;
+    }
+
+    function lyricColour(hue, saturation) {
+        // Match the stable middle of the GPU gradient, not the bright rim.
+        // Derive once per cover: wave highlights must never flicker the text.
+        const dark = themeRgb(hue, saturation * .62, 10.5);
+        const light = themeRgb(hue, saturation, 56);
+        const blend = .5 ** 1.12;
+        const background = luminance(dark.map((channel, index) => channel + (light[index] - channel) * blend));
+        const hueBrightness = luminance(themeRgb(hue, 100, 50));
+        const ramp = Math.min(1, Math.max(0, (hueBrightness - .21) / .27));
+        // Light pinks and golds keep substantially more colour than fixed 88% L.
+        let lightness = 80 - 12 * ramp * ramp * (3 - 2 * ramp);
+        const chroma = saturation <= 10 ? saturation : Math.min(96, Math.max(70, saturation * 1.5 + 16));
+        let colour = themeRgb(hue, chroma, lightness);
+        while ((luminance(colour) + .05) / (background + .05) < 4 && lightness < 94) {
+            lightness += .5;
+            colour = themeRgb(hue, chroma, lightness);
+        }
+        return `rgb(${colour.map(channel => Math.round(channel * 255)).join(' ')})`;
+    }
+
     function setPalette(hue = 218, saturation = 64) {
         document.body.style.setProperty('--pulse-hue', String(Math.round(hue)));
         document.body.style.setProperty('--pulse-saturation', `${Math.round(saturation)}%`);
+        document.body.style.setProperty('--pulse-text-color', lyricColour(hue, saturation));
+        document.body.style.setProperty('--pulse-echo-color', `hsl(${hue} ${saturation * .8}% 12%)`);
         window.DeanPulseVisuals?.setPalette?.(hue, saturation);
     }
 
@@ -196,8 +236,11 @@
         }
         setMenuOpen(false);
         wakeControls();
-        if (isImmersive() && isPlaying()) prepareAudio();
-        else stopVisuals();
+        stopVisuals();
+        if (isImmersive()) {
+            startVisuals();
+            if (isPlaying()) prepareAudio();
+        }
         onChange?.(skin);
     }
 
@@ -248,6 +291,10 @@
 
     function prepareAudio() {
         if (!initialized) return;
+        startVisuals();
+        // A selected skin can animate its quiet field before playback, but it
+        // must never open/resume an audio context merely to draw that field.
+        if (!isPlaying()) return;
         // An existing graph must also be resumable after returning to the original skin.
         if (!mediaSource && (!isImmersive() || graphUnavailable || reducedMotion?.matches || !hasSameOriginAudio())) return;
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -261,6 +308,7 @@
                         startVisuals();
                     } else {
                         stopVisuals();
+                        startVisuals();
                     }
                 });
             }
@@ -279,15 +327,23 @@
             }).catch(() => {
                 resumePending = false;
                 stopVisuals();
+                startVisuals();
             });
         } catch (error) {
             resumePending = false;
             stopVisuals();
+            startVisuals();
         }
     }
 
     function canAnimate() {
-        return isImmersive() && isPlaying() && !audio.seeking && !document.hidden && !reducedMotion?.matches
+        return isImmersive() && !document.hidden && !reducedMotion?.matches && !visualContextLost
+            && typeof window.DeanPulseVisuals?.draw === 'function'
+            && window.DeanPulseVisuals.getDiagnostics?.().renderer !== 'static';
+    }
+
+    function canAnalyse() {
+        return isPlaying() && !audio.seeking && !awaitingAudioData
             && analyser && audioContext?.state === 'running' && hasSameOriginAudio();
     }
 
@@ -381,9 +437,12 @@
     }
 
     function stopVisuals() {
+        if (visualRestoreTimer !== null) clearTimeout(visualRestoreTimer);
+        visualRestoreTimer = null;
         if (visualFrame !== null) cancelAnimationFrame(visualFrame);
         visualFrame = null;
         lastFrameTime = 0;
+        analysingAudio = false;
         resetDetector();
         document.body.classList.remove('is-audio-reactive');
         setPulseLevel(0);
@@ -393,12 +452,17 @@
     }
 
     function startVisuals() {
+        if (isImmersive() && !document.hidden && !reducedMotion?.matches && !visualContextLost
+            && window.DeanPulseVisuals?.getDiagnostics?.().renderer === 'static') {
+            // A hidden/reduced-motion initial load may not have allocated a
+            // renderer yet. Try once here, never in a self-sustaining RAF loop.
+            window.DeanPulseVisuals?.reset?.();
+        }
         if (!canAnimate()) {
             stopVisuals();
             return;
         }
         if (visualFrame !== null) return;
-        document.body.classList.add('is-audio-reactive');
         const renderFrame = now => {
             visualFrame = null;
             if (!canAnimate()) {
@@ -407,6 +471,27 @@
             }
             const elapsed = lastFrameTime ? now - lastFrameTime : ANALYSIS_INTERVAL;
             lastFrameTime = now;
+            if (!canAnalyse()) {
+                // The same display loop draws a non-musical, zero-energy base
+                // flow while paused, buffering, seeking, or awaiting the graph.
+                if (analysingAudio) {
+                    resetDetector();
+                    window.DeanPulseVisuals?.reset?.();
+                }
+                analysingAudio = false;
+                document.body.classList.remove('is-audio-reactive');
+                setPulseLevel(0);
+                document.body.style.setProperty('--pulse-impact', '0');
+                window.DeanPulseVisuals.draw({
+                    ambient: true, now, delta: elapsed,
+                    bass: 0, mid: 0, treble: 0, energy: 0, beat: 0, impact: 0
+                });
+                if (canAnimate()) visualFrame = requestAnimationFrame(renderFrame);
+                else stopVisuals();
+                return;
+            }
+            analysingAudio = true;
+            document.body.classList.add('is-audio-reactive');
             let beat = 0;
             // Analyze at a stable ~60 Hz cadence, independently of a 60/90/120 Hz
             // display. Each onset is delivered once; intermediate display frames
@@ -422,7 +507,8 @@
             }
             // Never cap visual motion to the FFT cadence: draw on every rAF.
             drawFrame(now, elapsed, beat);
-            visualFrame = requestAnimationFrame(renderFrame);
+            if (canAnimate()) visualFrame = requestAnimationFrame(renderFrame);
+            else stopVisuals();
         };
         visualFrame = requestAnimationFrame(renderFrame);
     }
@@ -586,29 +672,62 @@
         document.addEventListener('webkitfullscreenerror', fullscreenChanged);
 
         ['play', 'playing'].forEach(name => audio.addEventListener(name, () => {
+            if (name === 'playing') awaitingAudioData = false;
             if (isImmersive() || mediaSource) prepareAudio();
             wakeControls();
         }));
         ['pause', 'ended', 'emptied', 'error'].forEach(name => audio.addEventListener(name, () => {
+            awaitingAudioData = true;
             stopVisuals();
+            startVisuals();
             wakeControls();
         }));
-        audio.addEventListener('loadstart', () => {
+        ['loadstart', 'waiting'].forEach(name => audio.addEventListener(name, () => {
+            awaitingAudioData = true;
             stopVisuals();
+            startVisuals();
             wakeControls();
+        }));
+        audio.addEventListener('seeking', () => {
+            stopVisuals();
+            startVisuals();
         });
-        audio.addEventListener('seeking', stopVisuals);
         audio.addEventListener('seeked', () => {
+            awaitingAudioData = false;
             if ((isImmersive() || mediaSource) && isPlaying()) prepareAudio();
+            else startVisuals();
         });
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) stopVisuals();
             else if ((isImmersive() || mediaSource) && isPlaying()) prepareAudio();
+            else startVisuals();
             wakeControls();
         });
         reducedMotion?.addEventListener('change', () => {
             if (reducedMotion.matches) stopVisuals();
             else if (isImmersive() && isPlaying()) prepareAudio();
+            else {
+                // Reduced motion may have prevented the first GPU allocation.
+                window.DeanPulseVisuals?.reset?.();
+                startVisuals();
+            }
+        });
+        const visualCanvas = document.getElementById('pulse-canvas');
+        visualCanvas?.addEventListener('webglcontextlost', event => {
+            event.preventDefault();
+            visualContextLost = true;
+            stopVisuals();
+        });
+        visualCanvas?.addEventListener('webglcontextrestored', () => {
+            visualContextLost = false;
+            if (visualRestoreTimer !== null) clearTimeout(visualRestoreTimer);
+            // Native events can run a microtask checkpoint between listeners.
+            // Wait one task (not a microtask) for the renderer's later listener
+            // to rebuild its program; lifecycle teardown can cancel this retry.
+            visualRestoreTimer = setTimeout(() => {
+                visualRestoreTimer = null;
+                startVisuals();
+            }, 0);
         });
         bindActivity();
         updateFullscreenButton();

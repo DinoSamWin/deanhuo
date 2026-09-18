@@ -44,6 +44,16 @@ class Element {
         return event;
     }
 
+    async emitNative(name) {
+        const event = { target: this, preventDefault() {} };
+        for (const callback of this.events.get(name) || []) {
+            callback(event);
+            // Browsers can perform a microtask checkpoint between listeners of
+            // a native event, unlike dispatchEvent inside one JavaScript task.
+            await Promise.resolve();
+        }
+    }
+
     setAttribute(name, value) { this.attributes.set(name, value); }
     getAttribute(name) { return this.attributes.get(name) ?? null; }
     contains(element) { return element === this; }
@@ -51,7 +61,8 @@ class Element {
 }
 
 function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced = false, refreshRate = 60,
-    fullscreenApi = 'none', fullscreenFailure = false } = {}) {
+    fullscreenApi = 'none', fullscreenFailure = false, rendererAvailable = true,
+    audioContextAvailable = true, audioContextState = 'running', resumeMode = 'resolve' } = {}) {
     let now = 0;
     let sequence = 0;
     const scheduled = new Map();
@@ -83,6 +94,7 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
     const pulse = new Element();
     const audio = new Element();
     const motion = new Element();
+    const visualCanvas = new Element();
     const chrome = [toggle, fullscreen];
     chrome.forEach(element => {
         element.chrome = true;
@@ -134,7 +146,8 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
     document.getElementById = id => ({
         'skin-toggle': toggle,
         'skin-menu': menu,
-        'btn-fullscreen': fullscreen
+        'btn-fullscreen': fullscreen,
+        'pulse-canvas': visualCanvas
     })[id];
     document.querySelectorAll = selector => selector === '[data-skin-option]'
         ? [original, pulse] : selector === '.player-chrome' ? chrome : [];
@@ -156,7 +169,8 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
     motion.matches = reduced;
 
     const state = { contexts: [], sources: [], energy: 0, spectrum: null, images: [], pixels: [],
-        canvasFails: false, frames: [], resetCount: 0, palettes: [], animationFrames: 0, analysisFrames: 0 };
+        canvasFails: false, frames: [], resetCount: 0, palettes: [], animationFrames: 0, analysisFrames: 0,
+        renderer: rendererAvailable ? 'webgl-liquid' : 'static' };
     class AudioNode {
         constructor() { this.destinations = []; }
         connect(destination) { this.destinations.push(destination); }
@@ -166,11 +180,16 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
         constructor() {
             super();
             state.contexts.push(this);
-            this.state = 'running';
+            this.state = audioContextState;
             this.sampleRate = 44100;
             this.destination = new AudioNode();
         }
-        resume() { this.state = 'running'; return Promise.resolve(); }
+        resume() {
+            if (resumeMode === 'pending') return new Promise(() => {});
+            if (resumeMode === 'reject') return Promise.reject(new Error('Audio resume denied'));
+            this.state = 'running';
+            return Promise.resolve();
+        }
         createAnalyser() {
             const node = new AudioNode();
             node.frequencyBinCount = 512;
@@ -206,11 +225,12 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
         location: { origin: 'http://localhost' },
         matchMedia: () => motion,
         localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
-        AudioContext,
+        AudioContext: audioContextAvailable ? AudioContext : undefined,
         DeanPulseVisuals: {
-            draw: frame => state.frames.push({ ...frame, spectrum: Array.from(frame.spectrum) }),
+            draw: frame => state.frames.push({ ...frame, spectrum: Array.from(frame.spectrum || []) }),
             reset: () => { state.resetCount++; },
-            setPalette: (hue, saturation) => state.palettes.push({ hue, saturation })
+            setPalette: (hue, saturation) => state.palettes.push({ hue, saturation }),
+            getDiagnostics: () => ({ renderer: state.renderer })
         }
     };
     const context = vm.createContext({
@@ -229,6 +249,12 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
     const skin = window.DeanPlayerSkin;
     let changes = 0;
     skin.init({ audio, onChange: () => changes++ });
+    // The real renderer binds these lazily on its first reset/draw, after the
+    // skin controller has already attached its lifecycle listeners.
+    visualCanvas.addEventListener('webglcontextlost', () => { state.renderer = 'static'; });
+    visualCanvas.addEventListener('webglcontextrestored', () => {
+        state.renderer = rendererAvailable ? 'webgl-liquid' : 'static';
+    });
     const level = () => Number(body.properties.get('--pulse-level') || 0);
     const palette = () => ({
         hue: Number(body.properties.get('--pulse-hue')),
@@ -248,7 +274,7 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
         });
     };
     return { skin, document, body, toggle, menu, original, pulse, audio, motion, state, storage, fullscreen, fullscreenCalls,
-        advance, level, palette, solidPixels, spectrum, changes: () => changes };
+        visualCanvas, advance, level, palette, solidPixels, spectrum, changes: () => changes };
 }
 
 {
@@ -257,6 +283,7 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
     assert.equal(h.audio.playCount, 0, 'restoring a skin never autoplays');
     assert.equal(h.state.contexts.length, 0, 'paused restoration does not create an audio context');
     h.skin.prepareAudio();
+    assert.equal(h.state.contexts.length, 0, 'a pre-play preparation call never creates an audio context');
     h.audio.play();
     h.skin.prepareAudio();
     assert.equal(h.state.sources.length, 1);
@@ -303,6 +330,108 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
     assert.equal(crossOrigin.audio.paused, false);
 }
 console.log('PASS: one audible graph, preserved playback, real energy only, smooth release, visibility and reduced motion.');
+
+{
+    const h = createHarness({ storedSkin: 'pulse', refreshRate: 120 });
+    h.advance(1000);
+    assert.ok(h.state.frames.length >= 119, 'paused restoration animates the base field at display refresh rate');
+    assert.equal(h.state.contexts.length, 0);
+    assert.equal(h.state.analysisFrames, 0, 'ambient motion never reads FFT data');
+    const isAmbient = frame => frame.ambient === true && ['bass', 'mid', 'treble', 'energy', 'beat', 'impact']
+        .every(name => frame[name] === 0);
+    assert.ok(h.state.frames.every(isAmbient), 'the idle field receives zero musical input, not synthetic beats');
+    assert.equal(h.body.classes.has('is-audio-reactive'), false);
+    assert.equal(h.body.classes.has('is-idle'), false, 'ambient animation never hides paused controls');
+    h.audio.play();
+    h.advance(500);
+    h.spectrum({ bass: 240, mid: 180, treble: 120 });
+    h.advance(70);
+    assert.ok(h.state.frames.some(frame => frame.beat > 0));
+    const analysesBeforePause = h.state.analysisFrames;
+    const pauseStart = h.state.frames.length;
+    const resetsBeforePause = h.state.resetCount;
+    h.audio.pause();
+    h.advance(500);
+    assert.ok(h.state.resetCount > resetsBeforePause, 'pause clears renderer impulses');
+    assert.ok(h.state.frames.length > pauseStart, 'pause keeps only the ambient field moving');
+    assert.ok(h.state.frames.slice(pauseStart).every(isAmbient));
+    assert.equal(h.state.analysisFrames, analysesBeforePause);
+    assert.equal(h.level(), 0);
+    assert.equal(h.state.sources.length, 1);
+
+    const assertStopped = (stop, restart, label) => {
+        stop();
+        const frames = h.state.animationFrames;
+        h.advance(1000);
+        assert.equal(h.state.animationFrames, frames, `${label} cancels the RAF instead of running an empty loop`);
+        restart();
+        const draws = h.state.frames.length;
+        h.advance(100);
+        assert.ok(h.state.frames.length > draws, `${label} recovery restarts paused ambient motion`);
+    };
+    assertStopped(() => {
+        h.document.hidden = true;
+        h.document.emit('visibilitychange');
+    }, () => {
+        h.document.hidden = false;
+        h.document.emit('visibilitychange');
+    }, 'hidden document');
+    assertStopped(() => h.original.emit('click'), () => h.pulse.emit('click'), 'original skin');
+    assertStopped(() => {
+        h.motion.matches = true;
+        h.motion.emit('change');
+    }, () => {
+        h.motion.matches = false;
+        h.motion.emit('change');
+    }, 'reduced motion');
+    h.visualCanvas.emit('webglcontextlost');
+    const lostFrames = h.state.animationFrames;
+    h.advance(1000);
+    assert.equal(h.state.animationFrames, lostFrames, 'context loss immediately cancels RAF');
+    await h.visualCanvas.emitNative('webglcontextrestored');
+    h.advance(100);
+    assert.ok(h.state.animationFrames > lostFrames, 'restored GPU resumes ambient motion');
+    h.visualCanvas.emit('webglcontextlost');
+    const framesBeforeCancelledRestore = h.state.animationFrames;
+    await h.visualCanvas.emitNative('webglcontextrestored');
+    h.original.emit('click');
+    h.advance(100);
+    assert.equal(h.state.animationFrames, framesBeforeCancelledRestore,
+        'a pending GPU restore must not restart RAF after changing skins');
+    h.pulse.emit('click');
+    const lastCount = h.state.frames.length;
+    h.skin.prepareAudio();
+    h.document.emit('visibilitychange');
+    h.motion.emit('change');
+    h.advance(1000);
+    assert.ok(h.state.frames.length - lastCount <= 121, 'repeated lifecycle events never multiply RAF loops');
+
+    for (const options of [
+        { rendererAvailable: false },
+        { reduced: true }
+    ]) {
+        const unavailable = createHarness({ storedSkin: 'pulse', ...options });
+        unavailable.advance(1000);
+        assert.equal(unavailable.state.animationFrames, 0, 'unsupported GPU/reduced motion never starts a RAF');
+        assert.equal(unavailable.state.contexts.length, 0);
+    }
+    for (const options of [
+        { audioContextAvailable: false },
+        { audioContextState: 'suspended', resumeMode: 'pending' },
+        { audioContextState: 'suspended', resumeMode: 'reject' },
+        { audioUrl: 'https://external.example/track.mp3' }
+    ]) {
+        const unavailable = createHarness({ storedSkin: 'pulse', ...options });
+        unavailable.audio.play();
+        await new Promise(resolve => setImmediate(resolve));
+        unavailable.advance(500);
+        assert.ok(unavailable.state.frames.length > 20, 'an unavailable/pending analyser preserves base motion');
+        assert.ok(unavailable.state.frames.every(isAmbient));
+        assert.equal(unavailable.state.analysisFrames, 0);
+        assert.equal(unavailable.audio.paused, false, 'visual fallback never pauses the media element');
+    }
+}
+console.log('PASS: idle/paused base motion, zero-energy frames, lazy audio graph, single RAF, GPU loss/recovery and no-animation states.');
 
 {
     const onset = strength => {
@@ -447,7 +576,9 @@ console.log('PASS: every-rAF rendering at 60/90/120 Hz, independent FFT cadence,
     assert.equal(Number(h.body.properties.get('--pulse-impact')), 0);
     const framesBeforeSeek = h.state.frames.length;
     h.advance(500);
-    assert.equal(h.state.frames.length, framesBeforeSeek, 'no frames are drawn while seeking');
+    assert.ok(h.state.frames.length > framesBeforeSeek, 'seeking retains the ambient field');
+    assert.ok(h.state.frames.slice(framesBeforeSeek).every(frame => frame.ambient && frame.energy === 0 && frame.beat === 0),
+        'seeking cannot read or replay the previous position\'s spectrum');
     h.spectrum({ bass: 255, mid: 255, treble: 255 });
     h.audio.seeking = false;
     h.audio.emit('seeked');
@@ -481,6 +612,29 @@ console.log('PASS: every-rAF rendering at 60/90/120 Hz, independent FFT cadence,
         h.audio.emit('playing');
     });
     checkFreshStart(() => { h.original.emit('click'); h.pulse.emit('click'); });
+
+    for (const interrupt of [
+        { stop: () => h.audio.emit('waiting'), resume: () => h.audio.emit('playing') },
+        { stop: () => h.audio.emit('loadstart'), resume: () => h.audio.emit('playing') },
+        {
+            stop: () => { h.state.contexts[0].state = 'suspended'; h.state.contexts[0].emit('statechange'); },
+            resume: () => { h.state.contexts[0].state = 'running'; h.state.contexts[0].emit('statechange'); }
+        }
+    ]) {
+        h.spectrum();
+        h.advance(400);
+        interrupt.stop();
+        const start = h.state.frames.length;
+        const analyses = h.state.analysisFrames;
+        h.spectrum({ bass: 255, mid: 255, treble: 255 });
+        h.advance(500);
+        assert.equal(h.state.analysisFrames, analyses, 'buffering/loading/suspended graphs cannot sample stale FFT data');
+        assert.ok(h.state.frames.slice(start).every(frame => frame.ambient && frame.beat === 0 && frame.impact === 0));
+        interrupt.resume();
+        h.advance(500);
+        assert.ok(h.state.frames.slice(start).every(frame => frame.beat === 0),
+            'resumed data primes a new spectrum without an onset from the previous audio state');
+    }
 }
 console.log('PASS: seek, pause, visibility, track and skin changes reset detection and renderer state.');
 
@@ -645,3 +799,47 @@ console.log('PASS: unresolved native fullscreen promises cannot trap retry, skin
     assert.deepEqual(h.palette(), fallback, 'canvas failures never interrupt playback or leak the old palette');
 }
 console.log('PASS: cover-derived palette, grayscale handling, request ordering, image failure and canvas failure.');
+
+{
+    const h = createHarness();
+    const textColour = () => h.body.properties.get('--pulse-text-color').match(/[\d.]+/g).map(Number);
+    const apply = (rgb, name) => {
+        h.solidPixels(...rgb);
+        h.skin.setCover(`assets/images/${name}.jpg`);
+        h.state.images.at(-1).onload();
+        return textColour();
+    };
+    const pink = apply([230, 35, 35], 'red');
+    assert.ok(pink[0] > 245 && pink[1] < 190 && pink[2] < 190,
+        'a red theme uses visibly pink type instead of nearly white fixed-lightness text');
+    const gold = apply([240, 150, 20], 'gold');
+    assert.ok(gold[0] > 245 && gold[1] > 160 && gold[1] < 220 && gold[2] < 145,
+        'a gold theme keeps a distinct gold tint');
+    assert.ok(h.body.properties.get('--pulse-echo-color').endsWith('12%)'),
+        'the enlarged echo uses a dark version of the same theme, not pure black');
+    const before = h.body.properties.get('--pulse-text-color');
+    h.pulse.emit('click');
+    h.advance(1000);
+    assert.equal(h.body.properties.get('--pulse-text-color'), before, 'ambient motion cannot modulate the lyric colour');
+    const gray = apply([120, 120, 120], 'neutral');
+    assert.ok(Math.max(...gray) - Math.min(...gray) < 12, 'neutral covers never receive artificially saturated type');
+    const rgb = (hue, saturation, lightness) => {
+        const a = saturation / 100 * Math.min(lightness / 100, 1 - lightness / 100);
+        return [0, 8, 4].map(n => {
+            const k = (n + hue / 30) % 12;
+            return lightness / 100 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+        });
+    };
+    const luma = value => value.map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4)
+        .reduce((sum, c, i) => sum + c * [.2126, .7152, .0722][i], 0);
+    for (let hue = 0; hue < 360; hue += 15) {
+        const foreground = apply(rgb(hue, 80, 48).map(c => Math.round(c * 255)), `hue-${hue}`);
+        const theme = h.palette();
+        const dark = rgb(theme.hue, theme.saturation * .62, 10.5);
+        const light = rgb(theme.hue, theme.saturation, 56);
+        const background = dark.map((c, i) => c + (light[i] - c) * .5 ** 1.12);
+        const contrast = (luma(foreground.map(c => c / 255)) + .05) / (luma(background) + .05);
+        assert.ok(contrast >= 3.95, `theme ${hue} preserves central large-text contrast (${contrast})`);
+    }
+}
+console.log('PASS: tinted pink/gold lyrics, dark theme echo, stable cover-only colour and central contrast across hues.');
