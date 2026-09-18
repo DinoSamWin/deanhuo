@@ -141,16 +141,16 @@ body.has-liquid-field .pulse-scene::after { background: none; }
     width: min(100vh, 82vw);
     aspect-ratio: 1;
     border-radius: 50%;
+    /* Quiet fallback before GPU initialization, or when motion/GPU is unavailable.
+       Broad feathered shoulders only: no old high-contrast concentric outlines. */
     background: radial-gradient(circle,
-        transparent 0 22%, rgb(255 214 224 / 13%) 22.2% 22.35%, transparent 22.7% 29%,
-        rgb(0 0 0 / 17%) 31%, rgb(0 0 0 / 3%) 35%, rgb(255 235 235 / 5%) 36%,
-        rgb(0 0 0 / 22%) 39%, transparent 43%, rgb(255 225 230 / 5%) 46%,
-        rgb(0 0 0 / 24%) 49%, transparent 54%, rgb(255 217 217 / 5%) 57%,
-        rgb(0 0 0 / 14%) 59%, transparent 66%);
+        transparent 0 20%, rgb(255 235 235 / 5%) 29%,
+        rgb(0 0 0 / 10%) 38%, transparent 48%,
+        rgb(255 235 235 / 4%) 55%, transparent 68%);
     transform: translate(-50%, -50%);
 }
-.pulse-rings-left { left: -5%; opacity: .68; transform: translate(-50%, -50%) scale(calc(1 + var(--pulse-impact, 0) * .095)); }
-.pulse-rings-right { left: 103%; opacity: .46; transform: translate(-50%, -50%) scale(calc(1.14 + var(--pulse-impact, 0) * .12)); }
+.pulse-rings-left { left: -5%; opacity: .32; transform: translate(-50%, -50%) scale(calc(1 + var(--pulse-impact, 0) * .095)); }
+.pulse-rings-right { left: 103%; opacity: .26; transform: translate(-50%, -50%) scale(calc(1.14 + var(--pulse-impact, 0) * .12)); }
 body[data-player-skin="pulse"].has-liquid-field .pulse-rings { display: none; }
 .pulse-floor-light {
     position: absolute;
@@ -511,7 +511,7 @@ body[data-player-skin="pulse"].is-idle .player-chrome { opacity: 0; visibility: 
     body[data-player-skin="pulse"] .lyrics-section { inset: 18% 7%; width: 86%; }
     body[data-player-skin="pulse"] .lyric-line:is(.active, .is-exiting) { line-height: 1.65; letter-spacing: .04em; }
     .pulse-rings { width: 125vw; }
-    .pulse-rings-left { left: -28%; top: 40%; opacity: .55; }
+    .pulse-rings-left { left: -28%; top: 40%; opacity: .28; }
     .pulse-rings-right { left: 123%; top: 57%; }
     body[data-player-skin="pulse"] .track-header { left: 5%; bottom: max(45px, calc(env(safe-area-inset-bottom) + 28px)); width: calc(90% - 146px); grid-template-columns: 38px minmax(0, 1fr); gap: 0 9px; }
     body[data-player-skin="pulse"] .pulse-cover:not([hidden]) { width: 38px; height: 38px; }

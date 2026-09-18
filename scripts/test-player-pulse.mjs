@@ -6,7 +6,8 @@ const script = readFileSync(new URL('../js/music-player-pulse.js', import.meta.u
 
 function createHarness({ width = 1440, height = 900, dpr = 2, available = true,
     compileFailure = null, linkFailure = false, derivatives = true, contextThrows = false,
-    programFailure = false, bufferFailure = false } = {}) {
+    programFailure = false, bufferFailure = false, skin = 'original',
+    reducedMotion = false, hidden = false } = {}) {
     let nextId = 0;
     const classes = new Set();
     const events = new Map();
@@ -94,6 +95,7 @@ function createHarness({ width = 1440, height = 900, dpr = 2, available = true,
     };
     const window = {
         innerWidth: width, innerHeight: height, devicePixelRatio: dpr,
+        matchMedia: () => ({ matches: reducedMotion }),
         addEventListener(name, callback) {
             if (!windowEvents.has(name)) windowEvents.set(name, []);
             windowEvents.get(name).push(callback);
@@ -104,8 +106,10 @@ function createHarness({ width = 1440, height = 900, dpr = 2, available = true,
         }
     };
     const document = {
+        hidden,
         getElementById: id => id === 'pulse-canvas' ? canvas : null,
-        body: { classList: { add: name => classes.add(name), remove: name => classes.delete(name) } }
+        body: { dataset: { playerSkin: skin },
+            classList: { add: name => classes.add(name), remove: name => classes.delete(name) } }
     };
     const forbiddenLoop = () => assert.fail('the renderer must not schedule independent animation or timers');
     vm.runInContext(script, vm.createContext({ window, document, Math, Float32Array,
@@ -154,6 +158,75 @@ const impulsesOf = frame => Array.from({ length: 4 }, (_, index) =>
     assert.match(h.state.shaders.find(shader => shader.type === 35632).source, /#define HAS_DERIVATIVES/);
 }
 console.log('PASS: one GPU context/program/buffer, shader disposal, 120 Hz per-input rendering and continuously advancing uniforms.');
+
+{
+    const idle = createHarness({ skin: 'pulse' });
+    idle.renderer.reset();
+    assert.equal(idle.state.contextRequests.length, 1, 'selecting an idle pulse skin prepares its own initial still');
+    assert.equal(idle.state.draws.length, 1, 'initial preparation paints once without starting a loop');
+    assert.ok(idle.classes.has('has-liquid-field'), 'the static shader replaces the old CSS rings before first playback');
+    const first = idle.state.draws[0];
+    assert.deepEqual(first.u_waveStrength, [.18, .22], 'idle has a gentler contrast than the playing low-energy floor');
+    assert.equal(first.u_time[0], 0);
+    assert.equal(first.u_travel[0], 0);
+    assert.equal(idle.renderer.getDiagnostics().frameCount, 0, 'still preparation is not counted as an audio frame');
+    idle.renderer.setPalette(40, 62);
+    idle.renderer.reset();
+    assert.equal(idle.state.contextRequests.length, 1, 'static palette/reset calls reuse the same resources');
+    assert.deepEqual(idle.state.draws.at(-1).u_waveStrength, first.u_waveStrength);
+    assert.equal(idle.state.draws.at(-1).u_travel[0], 0);
+    for (const options of [{ skin: 'original' }, { skin: 'pulse', reducedMotion: true }, { skin: 'pulse', hidden: true }]) {
+        const h = createHarness(options);
+        h.renderer.reset();
+        assert.equal(h.state.contextRequests.length, 0, 'unselected/hidden/reduced-motion players retain their lazy static fallback');
+    }
+    const unavailable = createHarness({ skin: 'pulse', available: false });
+    unavailable.renderer.reset();
+    unavailable.renderer.reset();
+    assert.equal(unavailable.classes.has('has-liquid-field'), false, 'failed initial setup never hides the CSS fallback');
+    assert.equal(unavailable.state.contextRequests.length, 1, 'failed initial setup is not retried on every reset');
+}
+console.log('PASS: one gentle pre-play still, lazy inactive/reduced-motion fallback and no autonomous rendering.');
+
+{
+    const settle = (energy, fps = 60) => {
+        const h = createHarness({ skin: 'pulse' });
+        h.renderer.reset();
+        let frame;
+        for (let index = 0; index < fps * 3; index++) frame = h.draw({ energy, beat: 0, delta: 1000 / fps });
+        return { h, frame };
+    };
+    const quiet = settle(.07);
+    const drive = quiet.frame.u_response[0];
+    assert.ok(quiet.frame.u_waveStrength[0] > (.36 + drive * .64) * 1.15,
+        'quiet playback gets a modestly stronger broad-wave floor than before');
+    assert.ok(quiet.frame.u_waveStrength[1] > (.48 + drive * .70) * 1.15,
+        'quiet playback also strengthens local glints without fabricating a beat');
+    const loud = settle(.525);
+    assert.ok(Math.abs(loud.frame.u_waveStrength[0] - 1) < .000001,
+        'maximal broad-wave strength stays at the existing ceiling');
+    assert.ok(Math.abs(loud.frame.u_waveStrength[1] - 1.18) < .000001,
+        'maximal local-highlight strength stays at the existing ceiling');
+    const strong = settle(.46);
+    assert.ok(Math.abs(strong.frame.u_waveStrength[0] - (.36 + strong.frame.u_response[0] * .64)) < .000001,
+        'strong passages above the low-energy region retain their original intensity');
+    const travel = quiet.frame.u_travel[0];
+    quiet.h.renderer.reset();
+    assert.deepEqual(quiet.h.state.draws.at(-1).u_waveStrength, [.18, .22]);
+    assert.equal(quiet.h.state.draws.at(-1).u_travel[0], travel, 'lower paused contrast never resets wave geometry');
+    const resumed = quiet.h.draw({ energy: 0, beat: 0 });
+    assert.ok(resumed.u_waveStrength[0] > .18 && resumed.u_waveStrength[0] < .23,
+        'resuming fades up gently rather than jumping to the full playing floor');
+    const silent = settle(0);
+    assert.ok(Math.abs(silent.frame.u_waveStrength[0] - .44) < .000001);
+    assert.ok(Math.abs(silent.frame.u_waveStrength[1] - .58) < .000001);
+    const highRefresh = settle(.07, 120);
+    for (let channel = 0; channel < 2; channel++) {
+        assert.ok(Math.abs(highRefresh.frame.u_waveStrength[channel] - quiet.frame.u_waveStrength[channel]) < 1e-10,
+            'the static-to-playing envelope is elapsed-time based at 60/120 Hz');
+    }
+}
+console.log('PASS: stronger quiet-playback floor, unchanged loud peaks, gentle resume and frame-rate-independent intensity.');
 
 {
     const h = createHarness();

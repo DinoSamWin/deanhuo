@@ -25,6 +25,7 @@
         uniform vec4 u_audio;
         uniform float u_impact;
         uniform vec3 u_response;
+        uniform vec2 u_waveStrength;
         uniform vec3 u_dark;
         uniform vec3 u_mid;
         uniform vec3 u_light;
@@ -66,7 +67,7 @@
                 float exposure = .55 + shoulder * .45;
                 // Most waves stay faint; occasional ones carry a broad light
                 // shoulder. Width, brightness and shadow depth are independent.
-                float strength = (.35 + pow(seed, 1.8) * .95) * (.36 + u_response.x * .64) * mix(1.8, 1.25, side);
+                float strength = (.35 + pow(seed, 1.8) * .95) * u_waveStrength.x * mix(1.8, 1.25, side);
                 light += band(radius + shape, centre, width) * fade * strength * exposure * (.10 + character * .10);
                 shade += band(radius + shape, centre + width * 1.15, width * 1.65)
                     * fade * strength * exposure * (.17 + (1. - character) * .15);
@@ -86,7 +87,7 @@
                 float arc = exp(-square((inwardAngle - patch) / (.20 + pinch * .18)));
                 float shape = sin(inwardAngle * 3. + seed * 5.) * .008
                     + sin(inwardAngle * 5. - t * .65 + seed * 4.) * .012 * pinch;
-                float strength = fade * arc * (.10 + seed * .12) * (.48 + u_response.x * .70) * mix(.6, 1., side);
+                float strength = fade * arc * (.10 + seed * .12) * u_waveStrength.y * mix(.6, 1., side);
                 float width = thinWidth * (.9 + pinch * 1.1);
                 thin += band(radius + shape, centre, width) * strength;
                 // A soft second shoulder pinches away from the first, making a
@@ -147,6 +148,7 @@
     let colours = [];
     let frameCount = 0, averageDelta = 16.67, slowFrames = 0;
     let drive = 0, punch = 0, density = 0;
+    let playbackBlend = 0;
     let lastFrame = { bass: 0, mid: 0, treble: 0, energy: 0, impact: 0 };
 
     function hsl(hue, saturation, lightness) {
@@ -231,7 +233,7 @@
         const attribute = gl.getAttribLocation(program, 'a_position');
         gl.enableVertexAttribArray(attribute);
         gl.vertexAttribPointer(attribute, 2, gl.FLOAT, false, 0, 0);
-        for (const name of ['u_resolution', 'u_time', 'u_travel', 'u_audio', 'u_impact', 'u_response', 'u_dark', 'u_mid', 'u_light', 'u_impulses[0]']) {
+        for (const name of ['u_resolution', 'u_time', 'u_travel', 'u_audio', 'u_impact', 'u_response', 'u_waveStrength', 'u_dark', 'u_mid', 'u_light', 'u_impulses[0]']) {
             uniforms[name] = gl.getUniformLocation(program, name);
         }
         if (!eventsBound) {
@@ -276,6 +278,17 @@
         return sequence / 4294967296;
     }
 
+    function waveStrength() {
+        // Idle and quiet playback are different states. Raise only the playing
+        // low-energy floor; the boost fades out before loud passages, preserving
+        // their existing highlight/shadow peaks instead of globally brightening.
+        const ramp = Math.min(1, Math.max(0, (drive - .12) / .38));
+        const quietBoost = 1 - ramp * ramp * (3 - 2 * ramp);
+        const broad = .36 + drive * .64 + quietBoost * .08;
+        const glint = .48 + drive * .70 + quietBoost * .10;
+        return [.18 + (broad - .18) * playbackBlend, .22 + (glint - .22) * playbackBlend];
+    }
+
     function render(frame) {
         if (!width || !height || !program || lost) return;
         gl.useProgram(program);
@@ -287,6 +300,7 @@
         gl.uniform4f(uniforms.u_audio, frame.bass, frame.mid, frame.treble, frame.energy);
         gl.uniform1f(uniforms.u_impact, frame.impact);
         gl.uniform3fv(uniforms.u_response, [drive, punch, density]);
+        gl.uniform2f(uniforms.u_waveStrength, ...waveStrength());
         ['u_dark', 'u_mid', 'u_light'].forEach((name, index) => gl.uniform3fv(uniforms[name], colours[index]));
         impulseData.fill(0);
         impulses.forEach((impulse, index) => {
@@ -300,6 +314,7 @@
         lastFrame = frame;
         if (!initialize()) return;
         const delta = Math.min(Math.max(frame.delta || 16.67, 0), 50);
+        playbackBlend += (1 - playbackBlend) * (1 - Math.exp(-delta / 180));
         clockTime += delta / 1000;
         // A convex loudness curve preserves quiet/loud contrast; a fast attack
         // and slower release avoid delayed response without discontinuous jumps.
@@ -331,8 +346,15 @@
     function reset() {
         impulses = [];
         drive = punch = density = 0;
+        playbackBlend = 0;
         lastFrame = { bass: 0, mid: 0, treble: 0, energy: 0, impact: 0 };
-        // Keep a still liquid surface when paused, not a flash back to old circles.
+        // The selected skin needs its quiet initial still before audio starts;
+        // otherwise the older CSS rings remain visible until the first play.
+        // Allocate nothing for the original skin, hidden pages or reduced motion.
+        if (!program && document.body.dataset?.playerSkin === 'pulse' && !document.hidden
+            && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) initialize();
+        // Freeze the same outward phase. This is one still redraw, not a second
+        // animation loop; resuming gently restores the playing intensity.
         if (program && !lost) { resize(); render(lastFrame); }
     }
 
@@ -340,6 +362,7 @@
         draw, reset, setPalette,
         getDiagnostics: () => ({ renderer: program && !lost ? 'webgl-liquid' : 'static',
             width, height, renderScale, frameCount, averageDelta, activeImpulses: impulses.length,
-            drive, punch, density, waveTravel: clockTime * .085 + flowTime * .035 })
+            drive, punch, density, playbackBlend, waveStrength: waveStrength(),
+            waveTravel: clockTime * .085 + flowTime * .035 })
     };
 })();
