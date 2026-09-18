@@ -3,8 +3,10 @@
 
     const STORAGE_KEY = 'dean-player-skin';
     const IDLE_DELAY = 5000;
+    const FULLSCREEN_WAIT_LIMIT = 1500;
     const ANALYSIS_INTERVAL = 1000 / 60;
-    const BEAT_COOLDOWN = 320;
+    // Preserve quick subdivisions instead of dropping every other drum hit.
+    const BEAT_COOLDOWN = 170;
     const DETECTOR_WARMUP = 180;
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     let audio = null;
@@ -13,6 +15,8 @@
     let toggle = null;
     let menu = null;
     let fullscreenButton = null;
+    let fullscreenPending = false;
+    let fullscreenOperation = 0;
     let idleTimer = null;
     let keyboardNavigation = false;
     let swallowTouchClickUntil = 0;
@@ -340,7 +344,7 @@
             if (now >= detectorReadyAt && now - lastBeatTime >= BEAT_COOLDOWN
                 && energy > 0.035 && flux > threshold && (bassRise > 0.012 || flux > 0.025)) {
                 // Absolute attack energy retains the difference between a quiet accent and a kick.
-                beat = Math.min(1, Math.max(0.12,
+                beat = Math.min(1, Math.max(0.025,
                     flux * 1.35 + Math.max(0, energy - energyBaseline) * 0.45 + bassRise * 0.24));
                 lastBeatTime = now;
             }
@@ -423,13 +427,86 @@
         visualFrame = requestAnimationFrame(renderFrame);
     }
 
+    function fullscreenElement() {
+        return document.fullscreenElement || document.webkitFullscreenElement || null;
+    }
+
+    function fullscreenRequest() {
+        // Keep the actual player and all its controls in one native fullscreen
+        // surface, including hosts that expose only the prefixed WebKit API.
+        const target = document.body;
+        if (typeof target.requestFullscreen === 'function' && document.fullscreenEnabled !== false) {
+            return { target, method: target.requestFullscreen };
+        }
+        if (typeof target.webkitRequestFullscreen === 'function' && document.webkitFullscreenEnabled !== false) {
+            return { target, method: target.webkitRequestFullscreen };
+        }
+        return null;
+    }
+
     function updateFullscreenButton() {
         if (!fullscreenButton) return;
-        const supported = typeof document.documentElement.requestFullscreen === 'function'
-            && document.fullscreenEnabled !== false;
-        fullscreenButton.hidden = !supported;
-        fullscreenButton.setAttribute('aria-pressed', String(Boolean(document.fullscreenElement)));
-        fullscreenButton.setAttribute('aria-label', document.fullscreenElement ? '退出全屏' : '进入全屏');
+        const active = Boolean(fullscreenElement());
+        const label = active ? '退出全屏' : '进入全屏';
+        fullscreenButton.hidden = !active && !fullscreenRequest();
+        fullscreenButton.setAttribute('aria-pressed', String(active));
+        fullscreenButton.setAttribute('aria-label', label);
+        fullscreenButton.setAttribute('title', label);
+    }
+
+    async function waitForFullscreen(operation) {
+        // Some embedded hosts leave native transition promises unresolved.
+        // Never let one trap the exit control or delay X navigation indefinitely.
+        let timeout;
+        try {
+            await Promise.race([
+                Promise.resolve(operation).catch(() => {}),
+                new Promise(resolve => { timeout = setTimeout(resolve, FULLSCREEN_WAIT_LIMIT); })
+            ]);
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
+    async function exitFullscreen() {
+        if (!fullscreenElement()) return;
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        try {
+            await waitForFullscreen(exit?.call(document));
+        } catch (error) {
+            // A host may already be leaving native fullscreen. Navigation and
+            // skin changes must still remain usable when its promise rejects.
+        }
+        updateFullscreenButton();
+        wakeControls();
+    }
+
+    function fullscreenChanged() {
+        fullscreenPending = false;
+        swallowTouchClickUntil = 0;
+        updateFullscreenButton();
+        wakeControls();
+        onChange?.(document.body.dataset.playerSkin);
+    }
+
+    async function toggleFullscreen() {
+        if (fullscreenPending) return;
+        const operation = ++fullscreenOperation;
+        wakeControls();
+        fullscreenPending = true;
+        try {
+            if (fullscreenElement()) await exitFullscreen();
+            else {
+                const request = fullscreenRequest();
+                await waitForFullscreen(request?.method.call(request.target));
+            }
+        } catch (error) {
+            // Fullscreen is optional (for example, an embedded preview may disallow it).
+        } finally {
+            if (operation === fullscreenOperation) fullscreenPending = false;
+            updateFullscreenButton();
+            wakeControls();
+        }
     }
 
     function bindActivity() {
@@ -502,20 +579,11 @@
                 if (keyboardNavigation) toggle?.focus();
             });
         });
-        fullscreenButton?.addEventListener('click', () => {
-            wakeControls();
-            const request = document.fullscreenElement
-                ? document.exitFullscreen?.()
-                : document.documentElement.requestFullscreen?.();
-            Promise.resolve(request).catch(() => {
-                // Fullscreen is optional (for example, an embedded preview may disallow it).
-            });
-        });
-        document.addEventListener('fullscreenchange', () => {
-            updateFullscreenButton();
-            wakeControls();
-            onChange?.(document.body.dataset.playerSkin);
-        });
+        fullscreenButton?.addEventListener('click', toggleFullscreen);
+        document.addEventListener('fullscreenchange', fullscreenChanged);
+        document.addEventListener('webkitfullscreenchange', fullscreenChanged);
+        document.addEventListener('fullscreenerror', fullscreenChanged);
+        document.addEventListener('webkitfullscreenerror', fullscreenChanged);
 
         ['play', 'playing'].forEach(name => audio.addEventListener(name, () => {
             if (isImmersive() || mediaSource) prepareAudio();
@@ -554,5 +622,5 @@
         applySkin(savedSkin);
     }
 
-    window.DeanPlayerSkin = { init, isImmersive, prepareAudio, setCover };
+    window.DeanPlayerSkin = { init, isImmersive, prepareAudio, setCover, exitFullscreen };
 })();

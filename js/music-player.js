@@ -14,6 +14,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let lyricAnimationFrameId = null;
     let lyricScrollAnimationFrameId = null;
     let lyricsRequestId = 0;
+    let lyricExitTimer = null;
+    let exitingLyric = null;
+    let exitingLyricEcho = null;
     const LYRIC_SCROLL_LEAD_SECONDS = 0.28;
     const LYRIC_SCROLL_DURATION_MS = 240;
     const desktopRoomQuery = window.matchMedia
@@ -106,7 +109,8 @@ document.addEventListener('DOMContentLoaded', () => {
         loadTrack(currentIndex, true);
     }
 
-    function closePlayer() {
+    async function closePlayer() {
+        await window.DeanPlayerSkin?.exitFullscreen?.();
         let canReturnToReferrer = false;
 
         if (document.referrer) {
@@ -414,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let lrcText = null;
         const catalogTiming = getCatalogLyricTiming(song);
 
+        clearLyricExit();
         elements.lyricsBox.innerHTML = '';
         if (elements.lyricEcho) elements.lyricEcho.textContent = '';
         lyricsHaveTimestamps = false;
@@ -480,7 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
         lyrics.forEach((line, index) => {
             const item = document.createElement('div');
             item.className = 'lyric-line';
-            renderLyricText(item, line.text, index);
+            renderLyricText(item, line.text);
             item.dataset.index = index;
             fragment.appendChild(item);
         });
@@ -489,15 +494,23 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(() => updateLyricsDisplay(elements.audio.currentTime || 0, true));
     }
 
-    function renderLyricText(item, text, index) {
-        // One Chinese character or one whole Latin word becomes the visual echo.
-        // Choosing per line keeps the word stable during playback and seeking.
-        const tokens = [...text.matchAll(/[\p{Script=Han}]|[\p{L}\p{N}]+(?:['’][\p{L}]+)*/gu)];
+    function renderLyricText(item, text) {
+        // CJK/kana characters stay individual (including combining marks),
+        // while Latin words and contractions stay intact. Never echo punctuation.
+        const cjkCharacter = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+        const tokens = [...text.matchAll(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]\p{M}*|\p{Script=Latin}[\p{Script=Latin}\p{M}\p{N}]*(?:['’]\p{Script=Latin}[\p{Script=Latin}\p{M}\p{N}]*)*/gu)];
+        // Estimate line length in ems without changing its layout as it enters.
+        // Longer lines converge as separate glyphs, never stretched letterforms.
+        const textWidth = Array.from(text).reduce((width, character) => width
+            + (cjkCharacter.test(character) ? 1 : /[\p{L}\p{N}]/u.test(character) ? .55 : .25), 0);
+        item.classList.toggle('is-long-lyric', textWidth >= 10);
         if (!tokens.length) {
             item.textContent = text;
             return;
         }
-        const token = tokens[index % Math.min(4, tokens.length)];
+        // Sample only when the line is created. Seeking or resizing must not
+        // reroll it, and adjacent lines are free to choose the same position.
+        const token = tokens[Math.floor(Math.random() * tokens.length)];
         const keyword = document.createElement('span');
         keyword.className = 'lyric-keyword';
         const ink = document.createElement('span');
@@ -509,9 +522,75 @@ document.addEventListener('DOMContentLoaded', () => {
         // wrap as a sentence instead of three separate text columns.
         const sentence = document.createElement('span');
         sentence.className = 'lyric-text';
-        sentence.append(document.createTextNode(text.slice(0, token.index)), keyword,
-            document.createTextNode(text.slice(token.index + token[0].length)));
+        const glyphs = typeof Intl.Segmenter === 'function'
+            ? [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map(part => ({ text: part.segment, index: part.index }))
+            : [...text.matchAll(/\P{M}\p{M}*|\p{M}+/gu)].map(part => ({ text: part[0], index: part.index }));
+        // Individual inline glyphs keep the original layout untouched; only the
+        // pulse skin makes them transformable. Spaces remain ordinary text so
+        // Latin phrases retain their normal word-wrap opportunities.
+        ink.textContent = '';
+        let keywordAdded = false;
+        glyphs.forEach(part => {
+            let glyph;
+            if (/^\s+$/u.test(part.text)) {
+                glyph = document.createTextNode(part.text);
+            } else {
+                glyph = document.createElement('span');
+                glyph.className = 'lyric-glyph';
+                glyph.textContent = part.text;
+            }
+            if (part.index >= token.index && part.index < token.index + token[0].length) {
+                if (!keywordAdded) { sentence.appendChild(keyword); keywordAdded = true; }
+                ink.appendChild(glyph);
+            } else {
+                sentence.appendChild(glyph);
+            }
+        });
         item.appendChild(sentence);
+    }
+
+    function clearLyricExit() {
+        if (lyricExitTimer !== null) clearTimeout(lyricExitTimer);
+        lyricExitTimer = null;
+        if (exitingLyric) {
+            exitingLyric.classList.remove('is-exiting');
+            exitingLyric.removeAttribute('aria-hidden');
+        }
+        exitingLyricEcho?.remove();
+        exitingLyric = null;
+        exitingLyricEcho = null;
+    }
+
+    function beginLyricExit(line) {
+        clearLyricExit();
+        exitingLyric = line;
+        line.classList.add('is-exiting');
+        line.setAttribute('aria-hidden', 'true');
+        if (elements.lyricEcho?.textContent) {
+            exitingLyricEcho = elements.lyricEcho.cloneNode(true);
+            exitingLyricEcho.removeAttribute('id');
+            exitingLyricEcho.className = 'lyric-echo lyric-echo-out';
+            elements.lyricEcho.after(exitingLyricEcho);
+        }
+        lyricExitTimer = setTimeout(clearLyricExit, 280);
+    }
+
+    function preparePulseGlyphs(line) {
+        if (!line.classList.contains('is-long-lyric')) return;
+        const rows = new Map();
+        // offset geometry ignores CSS transforms. Measure the final line layout
+        // once, then move each glyph away from its own row center without reflow.
+        for (const glyph of line.querySelectorAll('.lyric-glyph')) {
+            const row = Math.round(glyph.offsetTop / 4);
+            if (!rows.has(row)) rows.set(row, []);
+            rows.get(row).push({ glyph, center: glyph.offsetLeft + glyph.offsetWidth / 2 });
+        }
+        for (const glyphs of rows.values()) {
+            const center = (glyphs[0].center + glyphs[glyphs.length - 1].center) / 2;
+            for (const { glyph, center: glyphCenter } of glyphs) {
+                glyph.style.setProperty('--lyric-drift', `${(glyphCenter - center) * .65}px`);
+            }
+        }
     }
 
     function updateLyricsDisplay(currentTime, force = false) {
@@ -528,7 +607,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         activeIdx = Math.max(0, Math.min(activeIdx, lines.length - 1));
         if (force || activeIdx !== activeLyricIndex) {
+            const isPulse = window.DeanPlayerSkin?.isImmersive();
+            const canExit = !force && isPulse && !reduceMotionQuery?.matches
+                && activeLyricIndex >= 0 && activeLyricIndex !== activeIdx;
+            if (canExit) beginLyricExit(lines[activeLyricIndex]);
+            else clearLyricExit();
             activeLyricIndex = activeIdx;
+            lines[activeIdx].style.setProperty('--pulse-entry-delay', canExit ? '180ms' : '0ms');
 
             // The enlarged token belongs to the scene, not the word's inline
             // box: its center stays at the viewport center even on wrapped lines.
@@ -536,6 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const token = lines[activeIdx].dataset.echo || '';
                 elements.lyricEcho.textContent = token;
                 elements.lyricEcho.style.setProperty('--echo-length', Math.max(1, Array.from(token).length * .62));
+                elements.lyricEcho.style.setProperty('--pulse-entry-delay', canExit ? '180ms' : '0ms');
                 elements.lyricEcho.classList.toggle('echo-alternate', activeIdx % 2 === 1);
             }
 
@@ -558,6 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     line.classList.add('far-next');
                 }
             }
+            if (isPulse) preparePulseGlyphs(lines[activeIdx]);
         }
 
         // The light-field skin presents one centered line using the same

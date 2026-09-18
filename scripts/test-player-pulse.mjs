@@ -183,16 +183,216 @@ console.log('PASS: variable local beat positions, normalized strength, four-impu
 
 {
     const h = createHarness();
+    const first = h.draw({ beat: .35, impact: .8 });
+    const [origin] = impulsesOf(first);
+    let previousTime = first.u_time[0];
+    let previousAge = origin[2];
+    for (let index = 0; index < 90; index++) {
+        const frame = h.draw({ delta: 1000 / 120, beat: 0, impact: 0 });
+        const live = impulsesOf(frame);
+        assert.equal(live.length, 1, 'frames without a new onset retain only the existing local impulse');
+        const [x, y, age, strength] = live[0];
+        assert.deepEqual([x, y, strength], [origin[0], origin[1], origin[3]],
+            'local randomness is sampled at onset, never re-randomized as the field moves between frames');
+        assert.ok(age > previousAge && Math.abs(age - previousAge - 1 / 120) < 1e-6,
+            'an existing impulse evolves continuously with elapsed time at high refresh rates');
+        assert.ok(frame.u_time[0] > previousTime && frame.u_time[0] - previousTime < .05,
+            'the shared flow phase advances continuously, without per-frame reseeding or phase jumps');
+        previousAge = age;
+        previousTime = frame.u_time[0];
+    }
+    const next = h.draw({ delta: 1000 / 120, beat: .35, impact: .8 });
+    const live = impulsesOf(next);
+    assert.equal(live.length, 2, 'a new onset adds a local accent without replacing a still-live prior accent');
+    assert.deepEqual([live[0][0], live[0][1], live[0][3]], [origin[0], origin[1], origin[3]],
+        'a new random accent must not teleport the preceding accent');
+    assert.notDeepEqual(live[1].slice(0, 2), origin.slice(0, 2), 'successive accents vary their local origin');
+}
+console.log('PASS: stable random origins across 120 Hz frames, continuous impulse age/flow phase and independent new onsets.');
+
+{
+    const delayed = createHarness();
+    const bounded = createHarness();
+    delayed.draw({ beat: .3 });
+    bounded.draw({ beat: .3 });
+    const resumed = delayed.draw({ delta: 10000, beat: 0 });
+    const normal = bounded.draw({ delta: 50, beat: 0 });
+    for (const name of ['u_time', 'u_travel', 'u_response', 'u_impulses[0]']) {
+        assert.deepEqual(resumed[name], normal[name],
+            'returning after a long suspended frame must advance at most 50 ms, not jump the flow or its accents');
+    }
+    const travelStep = resumed.u_travel[0] - delayed.state.draws[0].u_travel[0];
+    assert.ok(travelStep > 0 && travelStep < .015,
+        'suspended recovery continues outward by a bounded distance instead of leaping or reversing');
+    assert.equal(delayed.state.draws.length, 2, 'long stalls recover with one bounded draw, not a burst of catch-up frames');
+}
+console.log('PASS: suspended-frame recovery preserves coherent phase/accents with bounded time and no catch-up burst.');
+
+{
+    const runTravel = fps => {
+        const h = createHarness();
+        const energies = [.06, .50, 0, .10, .55, 0, 0, 0];
+        let previousTravel = 0;
+        const distances = [];
+        for (let second = 0; second < energies.length; second++) {
+            const start = previousTravel;
+            for (let index = 0; index < fps; index++) {
+                const energy = energies[second];
+                const frame = h.draw({ delta: 1000 / fps, now: (second + index / fps) * 1000,
+                    energy, bass: energy, mid: energy, treble: energy,
+                    beat: energy > .4 && index === 0 ? .4 : 0, impact: 0 });
+                const travel = frame.u_travel[0];
+                assert.ok(travel > previousTravel,
+                    'propagation must move outward on every frame, including abrupt loud-to-silent transitions');
+                assert.ok(travel - previousTravel < .3 / fps,
+                    'audio changes may speed up travel but cannot jump the radial phase');
+                assert.equal(h.renderer.getDiagnostics().waveTravel, travel,
+                    'wave diagnostics must report the exact propagation uniform submitted to the GPU');
+                previousTravel = travel;
+            }
+            distances.push(previousTravel - start);
+        }
+        return { travel: previousTravel, distances };
+    };
+    const sixty = runTravel(60);
+    const highRefresh = runTravel(120);
+    assert.ok(sixty.distances[1] > sixty.distances[0] * 1.5,
+        'a strong passage travels noticeably faster than the preceding quiet passage');
+    assert.ok(sixty.distances[7] > .089 && sixty.distances[7] < .091,
+        'after the audio envelope settles, silent playback still propagates slowly rather than freezing the rings');
+    assert.ok(Math.abs(sixty.travel - highRefresh.travel) < .004,
+        'the same eight-second audio timeline produces matching propagation at 60/120 Hz within integration tolerance');
+    const silenceAt = fps => {
+        const h = createHarness();
+        for (let index = 0; index < fps * 3; index++) {
+            h.draw({ delta: 1000 / fps, energy: 0, bass: 0, mid: 0, treble: 0, beat: 0, impact: 0 });
+        }
+        return h.renderer.getDiagnostics().waveTravel;
+    };
+    const silentTravel = silenceAt(60);
+    assert.ok(Math.abs(silentTravel - 3 * (.085 + .14 * .035)) < 1e-10,
+        'silence uses elapsed time for its steady outward drift, not the number of frames');
+    assert.ok(Math.abs(silentTravel - silenceAt(120)) < 1e-10,
+        'silent travel is identical over equal elapsed time at 60 Hz and 120 Hz');
+}
+console.log('PASS: always-outward bounded wave travel across loud/quiet/silent transitions, slow silent propagation and 60/120 Hz consistency.');
+
+{
+    const quiet = createHarness();
+    const strong = createHarness();
+    let quietFrame, strongFrame;
+    for (let index = 0; index < 120; index++) {
+        quietFrame = quiet.draw({ energy: .07, bass: .09, mid: .06, treble: .025 });
+        strongFrame = strong.draw({ energy: .46, bass: .7, mid: .4, treble: .25 });
+    }
+    const quietDrive = quietFrame.u_response[0];
+    const strongDrive = strongFrame.u_response[0];
+    assert.ok(quietDrive > 0 && quietDrive < .12, 'quiet passages retain a small, visible liquid response');
+    assert.ok(strongDrive > .7 && strongDrive <= 1, 'loud passages use a substantially larger bounded response');
+    assert.ok(strongDrive > quietDrive * 8,
+        'the amplitude curve must preserve strong quiet/loud separation rather than compressing both with sqrt');
+    assert.ok(strongFrame.u_time[0] > quietFrame.u_time[0] * 3,
+        'louder passages advance the material faster without dropping rendering frames');
+    const quietAccent = quiet.draw({ energy: .07, beat: .055 });
+    const strongAccent = strong.draw({ energy: .46, beat: .38 });
+    assert.ok(strongAccent.u_response[1] > quietAccent.u_response[1] * 8,
+        'strong accents must visibly exceed small accents rather than sharing a minimum-strength plateau');
+    assert.ok(impulsesOf(strongAccent).at(-1)[3] > impulsesOf(quietAccent).at(-1)[3] * 8,
+        'local material displacement must preserve the same strong/weak distinction as the global response');
+}
+console.log('PASS: convex quiet/loud drive, faster strong-passage flow and clearly distinct weak/strong local punches.');
+
+{
+    const h = createHarness();
+    const first = h.draw({ energy: .525, beat: .435, impact: .9 });
+    assert.ok(first.u_response[0] > .25, 'loudness starts responding in the first display frame');
+    assert.ok(first.u_response[1] > .9, 'a strong onset reaches its punch immediately, without startup latency');
+    assert.ok(first.u_response[2] > 0, 'the first real onset contributes to tempo density');
+    const second = h.draw({ energy: 0, bass: 0, mid: 0, treble: 0, beat: 0, impact: 0 });
+    for (let channel = 0; channel < 3; channel++) {
+        assert.ok(second.u_response[channel] > 0 && second.u_response[channel] < first.u_response[channel],
+            'after the onset, drive/punch/density release smoothly rather than rising late or snapping off');
+    }
+    let silent;
+    for (let index = 0; index < 300; index++) {
+        silent = h.draw({ energy: 0, bass: 0, mid: 0, treble: 0, beat: 0, impact: 0 });
+    }
+    assert.ok(silent.u_response.every(value => value < .001), 'all three responses settle back toward zero in silence');
+    assert.equal(h.renderer.getDiagnostics().activeImpulses, 0, 'a decaying response must not generate new beat impulses');
+}
+console.log('PASS: first-frame attack, immediate strong punch, smooth time-based release and silent settling without synthetic beats.');
+
+{
+    const runRhythm = (intervalFrames, fps = 60) => {
+        const h = createHarness();
+        let totalDensity = 0, samples = 0;
+        for (let index = 0; index < fps * 5; index++) {
+            const frame = h.draw({ now: index * 1000 / fps, delta: 1000 / fps,
+                energy: .25, bass: .3, mid: .2, treble: .12,
+                beat: index % intervalFrames === 0 ? .35 : 0 });
+            if (index >= fps * 2) { totalDensity += frame.u_response[2]; samples++; }
+        }
+        return { h, meanDensity: totalDensity / samples, frame: h.state.draws.at(-1) };
+    };
+    const sparse = runRhythm(60);
+    const rapid = runRhythm(15);
+    assert.ok(rapid.meanDensity > sparse.meanDensity * 2.5,
+        'four real accents per second accumulate much more motion density than one equal-strength accent');
+    assert.ok(rapid.frame.u_time[0] > sparse.frame.u_time[0] * 1.25,
+        'faster rhythms drive faster liquid motion even when average loudness is held constant');
+    assert.ok(Math.abs(rapid.frame.u_response[0] - sparse.frame.u_response[0]) < 1e-10,
+        'tempo density must not rewrite the independent loudness envelope');
+    const highRefresh = runRhythm(30, 120);
+    assert.ok(Math.abs(highRefresh.meanDensity - rapid.meanDensity) < .015,
+        'density is elapsed-time based and stays consistent at 60 Hz and 120 Hz');
+    assert.ok(Math.abs(highRefresh.frame.u_response[0] - rapid.frame.u_response[0]) < 1e-10,
+        'the drive envelope is refresh-rate independent');
+    assert.equal(highRefresh.h.state.draws.length, 600, 'higher-refresh response still draws on every supplied frame');
+}
+console.log('PASS: rapid versus sparse beat-density separation, independent loudness and consistent 60/120 Hz response.');
+
+{
+    const h = createHarness();
+    const deltas = [1000 / 120, 1000 / 60, 1000 / 30, 180];
+    for (let index = 0; index < 480; index++) {
+        const maximum = index % 7 < 4;
+        const frame = h.draw({ delta: deltas[index % deltas.length], energy: maximum ? 1 : 0,
+            bass: maximum ? 1 : 0, mid: maximum ? 1 : 0, treble: maximum ? 1 : 0,
+            beat: maximum ? 1 : .001, impact: maximum ? 1 : 0 });
+        assert.equal(frame.u_response.length, 3);
+        assert.ok(frame.u_response.every(value => Number.isFinite(value) && value >= 0 && value <= 1),
+            'drive, punch and density remain normalized under repeated maximal onsets and stalled frames');
+        for (const numbers of Object.values(frame)) {
+            assert.ok(numbers.every(Number.isFinite), 'all submitted GPU uniforms remain finite');
+        }
+        const { drive, punch, density } = h.renderer.getDiagnostics();
+        assert.deepEqual(frame.u_response, [drive, punch, density], 'diagnostics describe the actual GPU response');
+    }
+    h.renderer.reset();
+    assert.deepEqual(h.state.draws.at(-1).u_response, [0, 0, 0], 'reset immediately clears every response channel');
+    const { drive, punch, density } = h.renderer.getDiagnostics();
+    assert.deepEqual([drive, punch, density], [0, 0, 0], 'reset also clears diagnostic response state');
+    const resumed = h.draw({ energy: 0, bass: 0, mid: 0, treble: 0, beat: 0, impact: 0 });
+    assert.deepEqual(resumed.u_response, [0, 0, 0], 'resuming in silence cannot resurrect a pre-reset punch or tempo density');
+}
+console.log('PASS: finite bounded response uniforms under stress, exact response reset and no stale response on silent resume.');
+
+{
+    const h = createHarness();
     h.draw({ beat: .9, impact: .8 });
     const time = h.state.draws.at(-1).u_time[0];
+    const travel = h.state.draws.at(-1).u_travel[0];
     const frameCount = h.renderer.getDiagnostics().frameCount;
     const draws = h.state.draws.length;
     h.renderer.reset();
     assert.equal(h.state.draws.length, draws + 1, 'pause/reset redraws a still liquid surface');
     const paused = h.state.draws.at(-1);
     assert.equal(paused.u_time[0], time, 'reset freezes the liquid clock without rewinding the surface');
+    assert.equal(paused.u_travel[0], travel, 'pause/reset freezes outward travel without snapping the waves back');
+    assert.equal(h.renderer.getDiagnostics().waveTravel, travel);
     assert.deepEqual(paused.u_audio, [0, 0, 0, 0]);
     assert.equal(paused.u_impact[0], 0);
+    assert.deepEqual(paused.u_response, [0, 0, 0]);
     assert.ok(paused['u_impulses[0]'].every(number => number === 0));
     assert.equal(h.renderer.getDiagnostics().activeImpulses, 0);
     const beforeRotation = h.state.draws.length;
@@ -209,12 +409,15 @@ console.log('PASS: variable local beat positions, normalized strength, four-impu
     assert.ok(Math.abs(h.canvas.width / h.canvas.height - 390 / 844) < .003,
         'paused portrait rotation updates the surface aspect instead of stretching the old buffer');
     assert.equal(rotated.u_time[0], time, 'paused orientation redraw preserves the frozen liquid clock');
+    assert.equal(rotated.u_travel[0], travel, 'paused rotation redraw preserves the frozen outward wave position');
     assert.equal(h.renderer.getDiagnostics().frameCount, frameCount);
     assert.deepEqual(rotated.u_audio, [0, 0, 0, 0]);
+    assert.deepEqual(rotated.u_response, [0, 0, 0], 'paused rotation must not restart the liquid response');
     assert.ok(rotated['u_impulses[0]'].every(number => number === 0));
     h.renderer.reset();
     h.renderer.setPalette(325, 65);
     assert.equal(h.state.draws.at(-1).u_time[0], time, 'repainting/resetting a paused surface must not advance time');
+    assert.equal(h.state.draws.at(-1).u_travel[0], travel, 'palette changes and repeated resets cannot move paused waves');
     assert.equal(h.renderer.getDiagnostics().frameCount, frameCount);
     const pink = h.state.draws.at(-1);
     h.renderer.setPalette(128, 48);
@@ -231,7 +434,9 @@ console.log('PASS: variable local beat positions, normalized strength, four-impu
         assert.equal(red, greenChannel);
         assert.equal(greenChannel, blue, 'zero-saturation covers produce a neutral material');
     }
-    assert.ok(h.draw().u_time[0] > time, 'resuming advances from the frozen state');
+    const resumed = h.draw();
+    assert.ok(resumed.u_time[0] > time, 'resuming advances from the frozen state');
+    assert.ok(resumed.u_travel[0] > travel, 'resuming continues outward from the exact frozen travel, never inward');
 }
 console.log('PASS: pause freezes clocks, clears impulses, redraws rotation correctly, has no autonomous loops and uses valid palettes.');
 

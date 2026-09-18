@@ -50,7 +50,8 @@ class Element {
     closest(selector) { return selector === '.player-chrome' && this.chrome ? this : null; }
 }
 
-function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced = false, refreshRate = 60 } = {}) {
+function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced = false, refreshRate = 60,
+    fullscreenApi = 'none', fullscreenFailure = false } = {}) {
     let now = 0;
     let sequence = 0;
     const scheduled = new Map();
@@ -108,6 +109,28 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
     document.activeElement = body;
     document.documentElement = new Element();
     document.fullscreenEnabled = false;
+    const fullscreenCalls = { requests: 0, exits: 0, target: null };
+    if (fullscreenApi !== 'none') {
+        const webkit = fullscreenApi === 'webkit';
+        const elementKey = webkit ? 'webkitFullscreenElement' : 'fullscreenElement';
+        const changeEvent = webkit ? 'webkitfullscreenchange' : 'fullscreenchange';
+        document[webkit ? 'webkitFullscreenEnabled' : 'fullscreenEnabled'] = true;
+        body[webkit ? 'webkitRequestFullscreen' : 'requestFullscreen'] = function () {
+            fullscreenCalls.requests++;
+            fullscreenCalls.target = this;
+            if (fullscreenFailure) return Promise.reject(new Error('Host disallows fullscreen'));
+            document[elementKey] = this;
+            document.emit(changeEvent);
+            return Promise.resolve();
+        };
+        document[webkit ? 'webkitExitFullscreen' : 'exitFullscreen'] = function () {
+            assert.equal(this, document, 'native exit method retains its document receiver');
+            fullscreenCalls.exits++;
+            document[elementKey] = null;
+            document.emit(changeEvent);
+            return Promise.resolve();
+        };
+    }
     document.getElementById = id => ({
         'skin-toggle': toggle,
         'skin-menu': menu,
@@ -224,7 +247,7 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
             return 0;
         });
     };
-    return { skin, document, body, toggle, menu, original, pulse, audio, motion, state, storage,
+    return { skin, document, body, toggle, menu, original, pulse, audio, motion, state, storage, fullscreen, fullscreenCalls,
         advance, level, palette, solidPixels, spectrum, changes: () => changes };
 }
 
@@ -323,8 +346,8 @@ console.log('PASS: one audible graph, preserved playback, real energy only, smoo
     const beats = h.state.frames.filter(frame => frame.beat > 0);
     assert.ok(beats.length >= 2, 'separated attacks continue to trigger after the cooldown');
     for (let index = 1; index < beats.length; index++) {
-        assert.ok(beats[index].now - beats[index - 1].now >= 320,
-            'dense transients cannot trigger strobing more often than the onset cooldown');
+        assert.ok(beats[index].now - beats[index - 1].now >= 170,
+            'dense transients must still respect the onset cooldown');
     }
     for (const frame of h.state.frames) {
         for (const name of ['bass', 'mid', 'treble', 'energy', 'beat', 'impact']) {
@@ -334,6 +357,35 @@ console.log('PASS: one audible graph, preserved playback, real energy only, smoo
     }
 }
 console.log('PASS: frequency bands, stronger transients, sustained notes, silence, onset cooldown and normalized renderer frames.');
+
+{
+    const h = createHarness({ storedSkin: 'pulse' });
+    h.audio.play();
+    h.advance(500);
+    for (let index = 0; index < 10; index++) {
+        h.spectrum({ bass: 235, mid: 170, treble: 95 });
+        h.advance(55);
+        h.spectrum();
+        h.advance(165);
+    }
+    assert.equal(h.state.frames.filter(frame => frame.beat > 0).length, 10,
+        'fast 220 ms musical subdivisions are not reduced to every other hit');
+    h.spectrum();
+    h.advance(1800);
+    assert.equal(h.state.frames.filter(frame => frame.beat > 0).length, 10,
+        'a shorter cooldown still does not generate beats during silence');
+
+    const gentle = createHarness({ storedSkin: 'pulse' });
+    gentle.spectrum({ bass: 110, mid: 70, treble: 45 });
+    gentle.audio.play();
+    gentle.advance(1400);
+    gentle.spectrum({ bass: 122, mid: 77, treble: 50 });
+    gentle.advance(60);
+    const quietBeat = gentle.state.frames.find(frame => frame.beat > 0)?.beat;
+    assert.ok(quietBeat >= 0.025 && quietBeat < 0.12,
+        'small real accents keep their natural strength instead of all hitting the old fixed floor');
+}
+console.log('PASS: fast musical subdivisions and subtle accents retain their timing and dynamic range.');
 
 {
     const runAtRefreshRate = refreshRate => {
@@ -476,6 +528,87 @@ console.log('PASS: seek, pause, visibility, track and skin changes reset detecti
     assert.equal(h.body.classes.has('is-idle'), false, 'paused controls never time out');
 }
 console.log('PASS: exact five-second idle, inert controls, touch/mouse wake, menu, keyboard focus and paused controls.');
+
+for (const fullscreenApi of ['standard', 'webkit']) {
+    const h = createHarness({ storedSkin: 'pulse', fullscreenApi });
+    assert.equal(h.fullscreen.hidden, false);
+    h.fullscreen.emit('click');
+    await Promise.resolve();
+    assert.equal(h.fullscreenCalls.target, h.body, 'the fullscreen boundary contains the canvas and every control');
+    assert.equal(h.fullscreen.getAttribute('aria-pressed'), 'true');
+    assert.equal(h.fullscreen.getAttribute('title'), '退出全屏');
+    h.toggle.emit('click');
+    assert.equal(h.menu.hidden, false, 'skin menu opens while natively fullscreen');
+    h.original.emit('click');
+    assert.equal(h.body.dataset.playerSkin, 'original');
+    assert.equal(h.fullscreen.getAttribute('aria-pressed'), 'true', 'skin selection does not lose fullscreen state');
+    h.pulse.emit('click');
+    h.audio.play();
+    h.advance(5000);
+    assert.equal(h.toggle.inert, true);
+    h.document.emit('pointermove');
+    assert.equal(h.toggle.inert, false, 'native fullscreen controls wake after idle');
+    h.advance(5000);
+    h.document.emit('pointerdown', { pointerType: 'touch' });
+    // Native transition can interrupt an old touch gesture. Do not let that
+    // gesture's click guard swallow a fresh fullscreen toolbar click.
+    h.document.emit(fullscreenApi === 'webkit' ? 'webkitfullscreenchange' : 'fullscreenchange');
+    assert.equal(h.document.emit('click').immediateStopped, false);
+    await h.skin.exitFullscreen();
+    assert.equal(h.fullscreenCalls.exits, 1);
+    assert.equal(h.fullscreen.getAttribute('aria-pressed'), 'false');
+    assert.equal(h.fullscreen.getAttribute('title'), '进入全屏');
+    assert.equal(h.toggle.inert, false);
+    await h.skin.exitFullscreen();
+    assert.equal(h.fullscreenCalls.exits, 1, 'closing outside fullscreen is a harmless no-op');
+}
+{
+    const h = createHarness({ storedSkin: 'pulse', fullscreenApi: 'standard', fullscreenFailure: true });
+    h.fullscreen.emit('click');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.fullscreen.getAttribute('aria-pressed'), 'false');
+    assert.equal(h.toggle.inert, false);
+    h.toggle.emit('click');
+    assert.equal(h.menu.hidden, false, 'a rejected native request never disables the toolbar');
+    h.fullscreen.emit('click');
+    await Promise.resolve();
+    assert.equal(h.fullscreenCalls.requests, 2, 'the user can retry after a denied request');
+    assert.equal(createHarness().fullscreen.hidden, true, 'unsupported hosts do not expose an unusable action');
+}
+console.log('PASS: standard/WebKit fullscreen boundary, skin switching, idle recovery, exit, labels and rejected requests.');
+
+{
+    const h = createHarness({ storedSkin: 'pulse', fullscreenApi: 'standard' });
+    let requests = 0;
+    h.body.requestFullscreen = () => { requests++; return new Promise(() => {}); };
+    h.fullscreen.emit('click');
+    h.fullscreen.emit('click');
+    assert.equal(requests, 1, 'rapid duplicate fullscreen requests are ignored during transition');
+    h.toggle.emit('click');
+    assert.equal(h.menu.hidden, false, 'a pending native request cannot disable skin selection');
+    h.advance(1500);
+    await new Promise(resolve => setImmediate(resolve));
+    h.fullscreen.emit('click');
+    assert.equal(requests, 2, 'an unresolved host promise cannot permanently lock fullscreen retry');
+}
+{
+    const h = createHarness({ storedSkin: 'pulse', fullscreenApi: 'standard' });
+    h.fullscreen.emit('click');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.fullscreen.getAttribute('aria-pressed'), 'true');
+    h.document.exitFullscreen = () => new Promise(() => {});
+    let finished = false;
+    const exit = h.skin.exitFullscreen().then(() => { finished = true; });
+    h.advance(1499);
+    await Promise.resolve();
+    assert.equal(finished, false, 'normal native transitions get time to finish');
+    h.advance(1);
+    await exit;
+    assert.equal(finished, true, 'X can continue navigating within 1500 ms even if the host exit hangs');
+    assert.equal(h.fullscreen.getAttribute('aria-pressed'), 'true', 'timeout never fabricates a native exit state');
+    assert.equal(h.toggle.inert, false);
+}
+console.log('PASS: unresolved native fullscreen promises cannot trap retry, skin controls or close navigation.');
 
 {
     const h = createHarness();

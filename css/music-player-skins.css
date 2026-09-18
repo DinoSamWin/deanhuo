@@ -42,7 +42,7 @@
 .skin-tool:focus-visible,
 .skin-menu button:focus-visible { outline: 2px solid #fff2e4; outline-offset: 4px; }
 .skin-tool[hidden], .skin-menu[hidden] { display: none; }
-body:not([data-player-skin="pulse"]) .fullscreen-tool { display: none; }
+body:not([data-player-skin="pulse"]) .fullscreen-tool:not([aria-pressed="true"]) { display: none; }
 .fullscreen-tool { width: 40px; padding: 0; }
 
 .skin-menu {
@@ -94,6 +94,7 @@ body[data-player-skin="pulse"] {
     --pulse-mid: hsl(var(--pulse-hue) var(--pulse-saturation) 26%);
     --pulse-light: hsl(var(--pulse-hue) var(--pulse-saturation) 49%);
     --pulse-text: hsl(var(--pulse-hue) var(--pulse-saturation) 88%);
+    --pulse-lyric-size: clamp(34px, 4.8vw, 76px);
     background: var(--pulse-ink);
     color: var(--pulse-text);
 }
@@ -121,6 +122,7 @@ body[data-player-skin="pulse"] .pulse-scene {
     content: "";
     background: linear-gradient(180deg, rgb(0 0 0 / 12%), transparent 25% 65%, rgb(0 0 0 / 26%));
 }
+body.has-liquid-field .pulse-scene::after { background: none; }
 .pulse-wash {
     position: absolute;
     inset: -10%;
@@ -209,8 +211,9 @@ body[data-player-skin="pulse"] .lyrics-section {
 }
 
 body[data-player-skin="pulse"] .lyric-line { display: none; }
-body[data-player-skin="pulse"] .lyric-line.active {
+body[data-player-skin="pulse"] .lyric-line:is(.active, .is-exiting) {
     position: relative;
+    grid-area: 1 / 1;
     display: block;
     width: 100%;
     max-width: 20em;
@@ -221,7 +224,7 @@ body[data-player-skin="pulse"] .lyric-line.active {
     overflow: visible;
     color: var(--pulse-text);
     font-family: "Songti SC", "Noto Serif SC", STSong, "SimSun", Georgia, serif;
-    font-size: clamp(34px, 4.3vw, 76px);
+    font-size: var(--pulse-lyric-size);
     font-weight: 600;
     line-height: 1.52;
     letter-spacing: .035em;
@@ -234,14 +237,23 @@ body[data-player-skin="pulse"] .lyric-line.active {
     transform: none;
     opacity: 1;
     transition: none;
-    animation: pulse-lyric-in 650ms cubic-bezier(.2,.7,.2,1) both;
+    animation: pulse-lyric-in 600ms cubic-bezier(.2,.7,.2,1) var(--pulse-entry-delay, 0ms) both;
+}
+body[data-player-skin="pulse"] .lyric-line.is-exiting {
+    animation: pulse-lyric-out 260ms ease-in both;
 }
 
-body[data-player-skin="pulse"] .lyric-keyword { position: relative; display: inline-block; }
+body[data-player-skin="pulse"] .lyric-keyword { position: static; display: inline; }
 body[data-player-skin="pulse"] .lyric-keyword-ink {
+    display: inline;
+    transform: none;
+}
+body[data-player-skin="pulse"] .lyric-glyph {
     display: inline-block;
-    transform: scale(calc(1 + var(--pulse-impact, 0) * .07));
-    transform-origin: center 70%;
+    transform: none;
+}
+body[data-player-skin="pulse"] .lyric-line.active.is-long-lyric .lyric-glyph {
+    animation: pulse-glyph-converge 600ms cubic-bezier(.2,.7,.2,1) var(--pulse-entry-delay, 0ms) both;
 }
 body[data-player-skin="pulse"] .lyric-echo {
     position: absolute;
@@ -252,43 +264,56 @@ body[data-player-skin="pulse"] .lyric-echo {
     width: max-content;
     max-width: 92%;
     font-family: "Songti SC", "Noto Serif SC", STSong, "SimSun", Georgia, serif;
-    font-size: min(clamp(92px, 11vw, 194px), calc(84vw / var(--echo-length, 1)));
+    font-size: min(calc(var(--pulse-lyric-size) * 2.1), calc(84vw / var(--echo-length, 1)));
     font-weight: 600;
     line-height: 1;
     letter-spacing: -.03em;
     white-space: nowrap;
     text-align: center;
     color: var(--pulse-ink);
-    opacity: .38;
-    filter: blur(2px);
-    transform: translate(-50%, -50%) scale(calc(1 + var(--pulse-impact, 0) * .1));
+    opacity: .42;
+    filter: blur(3px);
+    transform: translate(-50%, -50%);
     transform-origin: center;
     pointer-events: none;
-    animation: pulse-echo-in 1000ms cubic-bezier(.18,.8,.22,1) both;
+    animation: pulse-echo-in 700ms cubic-bezier(.18,.8,.22,1) var(--pulse-entry-delay, 0ms) both;
 }
 body[data-player-skin="pulse"] .lyric-echo:empty { display: none; }
 body[data-player-skin="pulse"] .lyric-echo.echo-alternate { animation-name: pulse-echo-in-alternate; }
+body[data-player-skin="pulse"] .lyric-echo.lyric-echo-out { animation: pulse-echo-out 260ms ease-in both; }
 @keyframes pulse-echo-in {
-    from { opacity: 0; filter: blur(12px); }
-    to { opacity: .38; filter: blur(2px); }
+    from { opacity: 0; filter: blur(9px); }
+    to { opacity: .42; filter: blur(3px); }
 }
 @keyframes pulse-echo-in-alternate {
-    from { opacity: 0; filter: blur(12px); }
-    to { opacity: .38; filter: blur(2px); }
+    from { opacity: 0; filter: blur(9px); }
+    to { opacity: .42; filter: blur(3px); }
+}
+@keyframes pulse-echo-out {
+    from { opacity: .42; filter: blur(3px); }
+    to { opacity: 0; filter: blur(9px); }
 }
 @keyframes pulse-lyric-in {
-    from { opacity: 0; filter: blur(6px); transform: translateY(9px); }
-    to { opacity: 1; filter: blur(0); transform: translateY(0); }
+    from { opacity: 0; filter: blur(7px); }
+    to { opacity: 1; filter: blur(0); }
+}
+@keyframes pulse-lyric-out {
+    from { opacity: 1; filter: blur(0); }
+    to { opacity: 0; filter: blur(7px); }
+}
+@keyframes pulse-glyph-converge {
+    from { transform: translateX(var(--lyric-drift, 0px)); }
+    to { transform: translateX(0); }
 }
 
 body[data-player-skin="pulse"] .track-header {
     position: absolute;
-    inset: auto auto max(42px, calc(env(safe-area-inset-bottom) + 24px)) 5%;
+    inset: auto auto max(42px, calc(env(safe-area-inset-bottom) + 24px)) 7%;
     display: grid;
-    grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-columns: 57px minmax(0, 1fr);
     grid-template-rows: auto auto;
     align-items: center;
-    column-gap: 14px;
+    column-gap: 16px;
     width: min(31%, 400px);
     margin: 0;
     padding: 0;
@@ -307,8 +332,8 @@ body[data-player-skin="pulse"] .track-header::before {
 body[data-player-skin="pulse"] .pulse-cover:not([hidden]) {
     display: block;
     grid-row: 1 / 3;
-    width: 52px;
-    height: 52px;
+    width: 57px;
+    height: 57px;
     object-fit: cover;
     border-radius: 7px;
     box-shadow: 0 4px 14px rgb(0 0 0 / 20%);
@@ -375,7 +400,7 @@ body[data-player-skin="pulse"] .player-controls {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 22px;
+    gap: 16px;
     width: auto;
     height: 52px;
     margin: 0;
@@ -403,8 +428,8 @@ body[data-player-skin="pulse"] .play-btn { flex-basis: 52px; width: 52px; height
 body[data-player-skin="pulse"] .control-btn .original-icon { display: none !important; }
 body[data-player-skin="pulse"] .control-btn .pulse-icon {
     display: block;
-    width: 28px;
-    height: 28px;
+    width: 27px;
+    height: 27px;
     color: inherit;
     fill: currentColor;
     stroke: none;
@@ -428,22 +453,40 @@ body[data-player-skin="pulse"] .time-display {
 body[data-player-skin="pulse"] .desktop-close-btn {
     position: fixed;
     top: max(20px, env(safe-area-inset-top));
-    right: calc(22px + env(safe-area-inset-right));
+    right: max(5%, calc(22px + env(safe-area-inset-right)));
     display: grid;
     place-items: center;
     width: 40px;
     height: 40px;
     padding: 0;
-    border: 1px solid rgb(255 239 219 / 25%);
-    border-radius: 50%;
-    background: rgb(24 20 20 / 22%);
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
     color: var(--pulse-text);
     box-shadow: none;
     z-index: 100;
     cursor: pointer;
 }
 body[data-player-skin="pulse"] .desktop-close-btn svg { width: 20px; height: 20px; }
-body[data-player-skin="pulse"] .skin-tool { color: var(--pulse-text); background: rgb(24 20 20 / 22%); }
+body[data-player-skin="pulse"] .skin-tools {
+    right: calc(max(5%, 22px + env(safe-area-inset-right)) + 60px);
+    gap: 20px;
+}
+body[data-player-skin="pulse"] .skin-tool {
+    min-width: 40px;
+    width: 40px;
+    padding: 0;
+    color: var(--pulse-text);
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+body[data-player-skin="pulse"] .skin-tool svg { width: 24px; height: 24px; }
+body[data-player-skin="pulse"] #skin-toggle > span { display: none; }
+body[data-player-skin="pulse"] :is(.skin-tool, .desktop-close-btn):hover { background: rgb(255 255 255 / 7%); }
+body[data-player-skin="pulse"] .desktop-close-btn:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 body[data-player-skin="pulse"] .player-chrome { transition: opacity 550ms ease, visibility 550ms ease; }
 body[data-player-skin="pulse"].is-idle { cursor: none; }
 body[data-player-skin="pulse"].is-idle .player-chrome { opacity: 0; visibility: hidden; pointer-events: none; }
@@ -461,11 +504,12 @@ body[data-player-skin="pulse"].is-idle .player-chrome { opacity: 0; visibility: 
 }
 
 @media (max-width: 600px) and (orientation: portrait) {
+    body[data-player-skin="pulse"] { --pulse-lyric-size: clamp(27px, 7.6vw, 44px); }
     body[data-player-skin="pulse"] .skin-tools { top: max(16px, env(safe-area-inset-top)); right: calc(66px + env(safe-area-inset-right)); gap: 6px; }
     body[data-player-skin="pulse"] .skin-menu { right: -50px; }
     body[data-player-skin="pulse"] .desktop-close-btn { top: max(16px, env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); }
     body[data-player-skin="pulse"] .lyrics-section { inset: 18% 7%; width: 86%; }
-    body[data-player-skin="pulse"] .lyric-line.active { font-size: clamp(27px, 7.6vw, 44px); line-height: 1.65; letter-spacing: .04em; }
+    body[data-player-skin="pulse"] .lyric-line:is(.active, .is-exiting) { line-height: 1.65; letter-spacing: .04em; }
     .pulse-rings { width: 125vw; }
     .pulse-rings-left { left: -28%; top: 40%; opacity: .55; }
     .pulse-rings-right { left: 123%; top: 57%; }
@@ -479,17 +523,21 @@ body[data-player-skin="pulse"].is-idle .player-chrome { opacity: 0; visibility: 
 }
 
 @media (max-height: 500px) and (orientation: landscape) {
+    body[data-player-skin="pulse"] { --pulse-lyric-size: clamp(26px, 4.8vw, 46px); }
     body[data-player-skin="pulse"] .lyrics-section { inset: 22% 10%; width: 80%; }
-    body[data-player-skin="pulse"] .lyric-line.active { font-size: clamp(26px, 4.2vw, 46px); line-height: 1.35; }
-    body[data-player-skin="pulse"] .track-header { bottom: max(27px, env(safe-area-inset-bottom)); grid-template-columns: 38px minmax(0, 1fr); }
-    body[data-player-skin="pulse"] .pulse-cover:not([hidden]) { width: 38px; height: 38px; }
-    body[data-player-skin="pulse"] .player-controls { bottom: max(20px, env(safe-area-inset-bottom)); }
-    body[data-player-skin="pulse"] .version-strip { bottom: max(27px, calc(env(safe-area-inset-bottom) + 7px)); }
-    .skin-tools, body[data-player-skin="pulse"] .desktop-close-btn { top: max(12px, env(safe-area-inset-top)); }
+    body[data-player-skin="pulse"] .lyric-line:is(.active, .is-exiting) { line-height: 1.35; }
+    body[data-player-skin="pulse"] .track-header { bottom: max(9.75%, env(safe-area-inset-bottom)); grid-template-columns: 57px minmax(0, 1fr); }
+    body[data-player-skin="pulse"] .pulse-cover:not([hidden]) { width: 57px; height: 57px; }
+    body[data-player-skin="pulse"] .player-controls { right: 10%; bottom: max(10.5%, env(safe-area-inset-bottom)); }
+    body[data-player-skin="pulse"] .version-strip { bottom: max(12%, calc(env(safe-area-inset-bottom) + 7px)); }
+    body[data-player-skin="pulse"] :is(.skin-tools, .desktop-close-btn) { top: max(5%, env(safe-area-inset-top)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    body[data-player-skin="pulse"] .lyric-line.active { animation: none; }
+    body[data-player-skin="pulse"] .lyric-line.active,
+    body[data-player-skin="pulse"] .lyric-line.active.is-long-lyric { animation: none; filter: none; transform: none; }
+    body[data-player-skin="pulse"] .lyric-line.active.is-long-lyric .lyric-glyph { animation: none; transform: none; }
+    body[data-player-skin="pulse"] .lyric-line.is-exiting { display: none; }
     body[data-player-skin="pulse"] .lyric-echo { display: none; }
     .pulse-floor-light, .pulse-field { display: none; }
     body[data-player-skin="pulse"] .player-chrome, .pulse-wash { transition: none; }
