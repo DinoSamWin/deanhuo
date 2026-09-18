@@ -402,5 +402,20 @@
         "showOnHome": false,
         "homeOrder": 4,
         "releaseYear": "2024"
+    },
+    {
+        "id": "lyric-mu7luzrc",
+        "title": "浅浅",
+        "author": "Dean Huo",
+        "date": "2026-09-19",
+        "cover": "assets/images/admin-uploads/music/1787323228077-1.jpg",
+        "summary": "你说你喜欢独自待在房间",
+        "contentPath": "assets/lyrics/admin-generated/lyric-mu7luzrc.md",
+        "audioPath": "assets/audio/admin-uploads/1787323235684-musicAudio.mp3",
+        "linkedMusicId": "music-mt323oas",
+        "order": 30,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2026"
     }
 ]

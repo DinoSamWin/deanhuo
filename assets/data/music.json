@@ -654,7 +654,156 @@
         "cover": "assets/images/admin-uploads/music/1787323228077-1.jpg",
         "url": "assets/audio/admin-uploads/1787323235684-musicAudio.mp3",
         "genre": "Original",
-        "description": ""
+        "description": "",
+        "lyricId": "lyric-mu7luzrc",
+        "lyricTimings": {
+            "assets/audio/admin-uploads/1787323235684-musicAudio.mp3": [
+                {
+                    "time": 0.88,
+                    "text": "你说你喜欢独自待在房间"
+                },
+                {
+                    "time": 14.14,
+                    "text": "弹奏着每一个安静的琴键"
+                },
+                {
+                    "time": 19.59,
+                    "text": "你编织的音符一串一串"
+                },
+                {
+                    "time": 22.76,
+                    "text": "叮呤呤呤  我是那么的喜欢"
+                },
+                {
+                    "time": 28.28,
+                    "text": "天平一开始就不懂孤单，它们都有另一半"
+                },
+                {
+                    "time": 33.34,
+                    "text": "我们是不是彼此的牵绊，我还没答案"
+                },
+                {
+                    "time": 38.24,
+                    "text": "我一直偷偷呆在你窗边，你却从未发现"
+                },
+                {
+                    "time": 44.21,
+                    "text": "Hey girl, how I wish you know I’ve been watching you."
+                },
+                {
+                    "time": 50.53,
+                    "text": "突然变得很爱打扮"
+                },
+                {
+                    "time": 52.78,
+                    "text": "朋友数落我因为你"
+                },
+                {
+                    "time": 54.03,
+                    "text": "像大改造了 一番"
+                },
+                {
+                    "time": 56.91,
+                    "text": "为何我会  心跳的凌乱"
+                },
+                {
+                    "time": 59.48,
+                    "text": "希望你能发现我浅浅掩埋的喜欢"
+                },
+                {
+                    "time": 66.56,
+                    "text": "想和你拥有两个人的浪漫"
+                },
+                {
+                    "time": 70.74,
+                    "text": "演绎着每一份幸福的绚烂"
+                },
+                {
+                    "time": 76.4,
+                    "text": "为你唱的这首歌一遍一遍"
+                },
+                {
+                    "time": 79.28,
+                    "text": "Dou rai mi fa 你会不会喜欢"
+                },
+                {
+                    "time": 81.96,
+                    "text": "Dou rai mi fa 你会不会喜欢"
+                },
+                {
+                    "time": 85.76,
+                    "text": "音符一开始就不懂孤单，它们都有旋律伴"
+                },
+                {
+                    "time": 90.04,
+                    "text": "我们是不是彼此的牵绊，我还没答案"
+                },
+                {
+                    "time": 98.53,
+                    "text": "我已经习惯呆在你窗边，你却从未发现"
+                },
+                {
+                    "time": 103.58,
+                    "text": "Hey boy，how I wish I can    I can take your hand"
+                },
+                {
+                    "time": 107.59,
+                    "text": "突然变得很爱打扮"
+                },
+                {
+                    "time": 109.59,
+                    "text": "朋友数落我因为你"
+                },
+                {
+                    "time": 112.16,
+                    "text": "像大改造了 一番"
+                },
+                {
+                    "time": 113.69,
+                    "text": "为何我会  心跳的凌乱"
+                },
+                {
+                    "time": 115.92,
+                    "text": "希望你能发现我浅浅掩埋的喜欢"
+                },
+                {
+                    "time": 124.55,
+                    "text": "你说你喜欢独自待在房间"
+                },
+                {
+                    "time": 127.69,
+                    "text": "弹奏着每一个安静的琴键"
+                },
+                {
+                    "time": 133.07,
+                    "text": "你编织的音符一串一串"
+                },
+                {
+                    "time": 136.47,
+                    "text": "叮呤呤呤  我是那么的喜欢"
+                },
+                {
+                    "time": 142.91,
+                    "text": "想和你拥有两个人的浪漫"
+                },
+                {
+                    "time": 147.21,
+                    "text": "演绎着每一份幸福的绚烂"
+                },
+                {
+                    "time": 152.29,
+                    "text": "为你唱的这首歌一遍一遍"
+                },
+                {
+                    "time": 155.57,
+                    "text": "Dou rai mi fa 你会不会喜欢"
+                },
+                {
+                    "time": 158.41,
+                    "text": "Dou rai mi fa 你会不会喜欢"
+                }
+            ]
+        }
     },
     {
         "id": "17",
