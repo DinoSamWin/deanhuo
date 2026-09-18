@@ -245,7 +245,168 @@
         "cover": "assets/images/lyrics/cui-xiao.jpg",
         "url": "assets/audio/cui-xiao.mp3",
         "genre": "Synthwave",
-        "description": "A high-octane synthwave track inspired by 80s aesthetics and late-night city drives."
+        "description": "A high-octane synthwave track inspired by 80s aesthetics and late-night city drives.",
+        "lyricId": "lyric-mu7lkumg",
+        "lyricTimings": {
+            "assets/audio/cui-xiao.mp3": [
+                {
+                    "time": 2.17,
+                    "text": "北国雪下"
+                },
+                {
+                    "time": 17.18,
+                    "text": "榜眼的他 被贬南下"
+                },
+                {
+                    "time": 19.05,
+                    "text": "朝野同僚吱吱呀呀"
+                },
+                {
+                    "time": 21.63,
+                    "text": "他掸掸衣袖 开怀大笑"
+                },
+                {
+                    "time": 23.97,
+                    "text": "终可留你们尔虞我诈"
+                },
+                {
+                    "time": 27.22,
+                    "text": "我逃禄为人家"
+                },
+                {
+                    "time": 29.05,
+                    "text": "酒馆花前坐 酌几钱雨烟"
+                },
+                {
+                    "time": 31.53,
+                    "text": "窗外寒风熄了蜡 他围炉煮茶"
+                },
+                {
+                    "time": 35.9,
+                    "text": "胜那闲敲棋子落灯花"
+                },
+                {
+                    "time": 38.42,
+                    "text": "案前未完成的诗篇残半"
+                },
+                {
+                    "time": 41.28,
+                    "text": "微醺执笔起纸 挥墨写下"
+                },
+                {
+                    "time": 43.6,
+                    "text": "不如快马 探探那天涯"
+                },
+                {
+                    "time": 46.95,
+                    "text": "交迭的秋冬春夏"
+                },
+                {
+                    "time": 49.1,
+                    "text": "走不出的兜兜转转"
+                },
+                {
+                    "time": 51.05,
+                    "text": "为何要把遗憾留在这汉瓦秦砖"
+                },
+                {
+                    "time": 55,
+                    "text": "与其殿堂众享惴惴不安"
+                },
+                {
+                    "time": 58.47,
+                    "text": "不如遁迹长林丰草之间"
+                },
+                {
+                    "time": 61.39,
+                    "text": "不求闻达 只管骈句长短"
+                },
+                {
+                    "time": 64.85,
+                    "text": "画一生四季 栽一株光灿"
+                },
+                {
+                    "time": 68.4,
+                    "text": "等春雨夏阳秋风冬雪悠然"
+                },
+                {
+                    "time": 71.97,
+                    "text": "携夕露而至 将门前翠筱梳了颜"
+                },
+                {
+                    "time": 91.48,
+                    "text": "我逃禄为人家"
+                },
+                {
+                    "time": 92.9,
+                    "text": "酒馆花前坐 酌几钱雨烟"
+                },
+                {
+                    "time": 95.05,
+                    "text": "我逃禄为人家"
+                },
+                {
+                    "time": 97.45,
+                    "text": "酒馆花前坐 酌几钱雨烟"
+                },
+                {
+                    "time": 101.3,
+                    "text": "窗外寒风熄了蜡 他围炉煮茶"
+                },
+                {
+                    "time": 104.79,
+                    "text": "胜那闲敲棋子落灯花"
+                },
+                {
+                    "time": 108.21,
+                    "text": "案前未完成的诗篇残半"
+                },
+                {
+                    "time": 110.86,
+                    "text": "微醺执笔起纸 挥墨写下"
+                },
+                {
+                    "time": 113.64,
+                    "text": "不如快马 探探那天涯"
+                },
+                {
+                    "time": 115.65,
+                    "text": "交迭的秋冬春夏"
+                },
+                {
+                    "time": 117.53,
+                    "text": "走不出的兜兜转转"
+                },
+                {
+                    "time": 119.51,
+                    "text": "为何要把遗憾留在这汉瓦秦砖"
+                },
+                {
+                    "time": 123.41,
+                    "text": "与其殿堂众享惴惴不安"
+                },
+                {
+                    "time": 126.93,
+                    "text": "不如遁迹长林丰草之间"
+                },
+                {
+                    "time": 130.05,
+                    "text": "不求闻达 只管骈句长短"
+                },
+                {
+                    "time": 133.3,
+                    "text": "画一生四季 栽一株光灿"
+                },
+                {
+                    "time": 136.81,
+                    "text": "等春雨夏阳秋风冬雪悠然"
+                },
+                {
+                    "time": 140.28,
+                    "text": "携夕露而至 将门前翠筱梳了颜"
+                }
+            ]
+        }
     },
     {
         "id": "ti-zui-yang-fu-er-mo-si",

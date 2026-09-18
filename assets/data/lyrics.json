@@ -387,5 +387,20 @@
         "showOnHome": false,
         "homeOrder": 4,
         "releaseYear": "2026"
+    },
+    {
+        "id": "lyric-mu7lkumg",
+        "title": "翠筱",
+        "author": "Dean Huo",
+        "date": "2026-09-19",
+        "cover": "assets/images/lyrics/cui-xiao.jpg",
+        "summary": "A high-octane synthwave track inspired by 80s aesthetics and late-night city drives.",
+        "contentPath": "assets/lyrics/admin-generated/lyric-mu7lkumg.md",
+        "audioPath": "assets/audio/cui-xiao.mp3",
+        "linkedMusicId": "cui-xiao",
+        "order": 29,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2024"
     }
 ]
