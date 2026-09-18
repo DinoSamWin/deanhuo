@@ -417,5 +417,20 @@
         "showOnHome": false,
         "homeOrder": 4,
         "releaseYear": "2026"
+    },
+    {
+        "id": "lyric-mu7m5e4g",
+        "title": "甜如初恋",
+        "author": "Dean Huo",
+        "date": "2026-09-19",
+        "cover": "assets/images/admin-uploads/music/1787365779805-huaban-6676923114-cover.jpg",
+        "summary": "红色帷幔拉开的礼堂",
+        "contentPath": "assets/lyrics/admin-generated/lyric-mu7m5e4g.md",
+        "audioPath": "assets/audio/admin-uploads/1787365794149-musicAudio.mp3",
+        "linkedMusicId": "music-mt3rfonf",
+        "order": 31,
+        "showOnHome": false,
+        "homeOrder": 4,
+        "releaseYear": "2026"
     }
 ]
