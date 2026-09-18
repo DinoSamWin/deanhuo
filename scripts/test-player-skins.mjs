@@ -50,7 +50,7 @@ class Element {
     closest(selector) { return selector === '.player-chrome' && this.chrome ? this : null; }
 }
 
-function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced = false } = {}) {
+function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced = false, refreshRate = 60 } = {}) {
     let now = 0;
     let sequence = 0;
     const scheduled = new Map();
@@ -133,7 +133,7 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
     motion.matches = reduced;
 
     const state = { contexts: [], sources: [], energy: 0, spectrum: null, images: [], pixels: [],
-        canvasFails: false, frames: [], resetCount: 0, palettes: [] };
+        canvasFails: false, frames: [], resetCount: 0, palettes: [], animationFrames: 0, analysisFrames: 0 };
     class AudioNode {
         constructor() { this.destinations = []; }
         connect(destination) { this.destinations.push(destination); }
@@ -151,7 +151,10 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
         createAnalyser() {
             const node = new AudioNode();
             node.frequencyBinCount = 512;
-            node.getByteFrequencyData = data => state.spectrum ? data.set(state.spectrum) : data.fill(state.energy);
+            node.getByteFrequencyData = data => {
+                state.analysisFrames++;
+                return state.spectrum ? data.set(state.spectrum) : data.fill(state.energy);
+            };
             return node;
         }
         createMediaElementSource(element) {
@@ -192,7 +195,10 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
         performance: { now: () => now },
         setTimeout: schedule,
         clearTimeout: id => scheduled.delete(id),
-        requestAnimationFrame: callback => schedule(callback, 1000 / 60),
+        requestAnimationFrame: callback => schedule(time => {
+            state.animationFrames++;
+            callback(time);
+        }, 1000 / refreshRate),
         cancelAnimationFrame: id => scheduled.delete(id),
         queueMicrotask
     });
@@ -328,6 +334,51 @@ console.log('PASS: one audible graph, preserved playback, real energy only, smoo
     }
 }
 console.log('PASS: frequency bands, stronger transients, sustained notes, silence, onset cooldown and normalized renderer frames.');
+
+{
+    const runAtRefreshRate = refreshRate => {
+        const h = createHarness({ storedSkin: 'pulse', refreshRate });
+        h.audio.play();
+        h.advance(500);
+        for (const strength of [95, 235, 145, 255]) {
+            h.spectrum({ bass: strength, mid: strength * 0.6, treble: strength * 0.35 });
+            h.advance(80);
+            h.spectrum();
+            h.advance(440);
+        }
+        assert.equal(h.state.frames.length, h.state.animationFrames,
+            `${refreshRate} Hz displays must receive a draw on every animation frame`);
+        assert.ok(Math.abs(h.state.frames.length - 2.58 * refreshRate) <= 2,
+            'visual frame delivery must follow the display instead of the old 30 fps cap');
+        assert.ok(Math.abs(h.state.analysisFrames - 2.58 * 60) <= 2,
+            'FFT/onset sampling remains approximately 60 Hz regardless of display refresh rate');
+        const beats = h.state.frames.filter(frame => frame.beat > 0);
+        assert.equal(beats.length, 4, 'each real attack is delivered once, including on high-refresh displays');
+        if (refreshRate > 60) {
+            assert.ok(h.state.frames.length > h.state.analysisFrames * 1.4);
+            const onsetIndex = h.state.frames.findIndex(frame => frame.beat > 0);
+            const onset = h.state.frames[onsetIndex];
+            const next = h.state.frames[onsetIndex + 1];
+            assert.equal(next.beat, 0, 'an intermediate animation frame must not replay the last onset');
+            assert.ok(next.impact < onset.impact && next.impact > 0,
+                'impact keeps decaying smoothly between analysis samples');
+            assert.ok(next.bass > onset.bass,
+                'band envelopes continue moving on intermediate high-refresh frames');
+            assert.ok(next.delta < 12, 'the renderer receives the real high-refresh frame delta');
+        }
+        return beats;
+    };
+    const standard = runAtRefreshRate(60);
+    const highRefresh = runAtRefreshRate(120);
+    runAtRefreshRate(90);
+    for (let index = 0; index < standard.length; index++) {
+        assert.ok(Math.abs(standard[index].beat - highRefresh[index].beat) < 0.05,
+            'the same attack should have the same strength at 60 and 120 Hz');
+        assert.ok(Math.abs(standard[index].now - highRefresh[index].now) < 35,
+            'refresh rate changes must not shift onset timing by more than the sampling interval');
+    }
+}
+console.log('PASS: every-rAF rendering at 60/90/120 Hz, independent FFT cadence, smooth intermediate frames and single-delivery onsets.');
 
 {
     const h = createHarness({ storedSkin: 'pulse' });

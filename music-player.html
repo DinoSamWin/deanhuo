@@ -828,7 +828,7 @@
         }
     </style>
     <link rel="stylesheet" href="css/music-player-desktop.css?v=20260913-room-18">
-    <link rel="stylesheet" href="css/music-player-skins.css?v=20260918-pulse-2">
+    <link rel="stylesheet" href="css/music-player-skins.css?v=20260918-liquid-3">
 </head>
 
 <body id="player-body" data-share-dynamic="true">
@@ -902,6 +902,7 @@
             </div>
 
             <!-- Lyrics Region -->
+            <div class="lyric-echo" id="pulse-lyric-echo" aria-hidden="true"></div>
             <div class="lyrics-section" id="lyrics-display">
                 <!-- Lyrics lines injected by JS -->
             </div>
@@ -909,25 +910,42 @@
             <!-- Physical controls and their labels -->
             <div class="player-controls player-chrome">
             <button class="control-btn" id="btn-prev" type="button" aria-label="上一首">
-                <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <svg class="original-icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                     <path d="M19 20 7 12l12-8v16Z"></path>
                     <path d="M5 19V5" fill="none" stroke-linecap="round"></path>
+                </svg>
+                <svg class="pulse-icon" viewBox="0 0 32 32" aria-hidden="true">
+                    <g transform="translate(32 0) scale(-1 1)">
+                        <path d="M8.3 7.8C7.05 7 5.5 7.9 5.5 9.35v13.3c0 1.45 1.55 2.35 2.8 1.55l10.45-6.65c1.15-.73 1.15-2.37 0-3.1Z" />
+                        <rect x="23.5" y="7" width="2.5" height="18" rx="1.25" />
+                    </g>
                 </svg>
             </button>
 
             <button class="control-btn play-btn" id="btn-toggle" type="button" aria-label="开始播放" aria-pressed="false">
-                <svg class="icon-play" viewBox="0 0 24 24" aria-hidden="true">
+                <svg class="icon-play original-icon" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M8 5.5v13l10-6.5-10-6.5Z" stroke-linejoin="round"></path>
                 </svg>
-                <svg class="icon-pause" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <svg class="icon-pause original-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path d="M9 5v14M15 5v14" stroke-width="2.6" stroke-linecap="round"></path>
+                </svg>
+                <svg class="pulse-icon pulse-icon-play" viewBox="0 0 32 32" aria-hidden="true">
+                    <path d="M11.05 5.9C9.27 4.81 7 6.09 7 8.18v15.64c0 2.09 2.27 3.37 4.05 2.28l12.76-7.82c1.7-1.04 1.7-3.52 0-4.56Z" />
+                </svg>
+                <svg class="pulse-icon pulse-icon-pause" viewBox="0 0 32 32" aria-hidden="true">
+                    <rect x="7.5" y="5.5" width="5.5" height="21" rx="2.75" />
+                    <rect x="19" y="5.5" width="5.5" height="21" rx="2.75" />
                 </svg>
             </button>
 
             <button class="control-btn" id="btn-next" type="button" aria-label="下一首">
-                <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <svg class="original-icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                     <path d="m5 4 12 8-12 8V4Z"></path>
                     <path d="M19 5v14" fill="none" stroke-linecap="round"></path>
+                </svg>
+                <svg class="pulse-icon" viewBox="0 0 32 32" aria-hidden="true">
+                    <path d="M8.3 7.8C7.05 7 5.5 7.9 5.5 9.35v13.3c0 1.45 1.55 2.35 2.8 1.55l10.45-6.65c1.15-.73 1.15-2.37 0-3.1Z" />
+                    <rect x="23.5" y="7" width="2.5" height="18" rx="1.25" />
                 </svg>
             </button>
             </div>
@@ -966,9 +984,9 @@
     <audio id="audio-element" preload="metadata" playsinline></audio>
 
     <script src="js/wechat-share.js?v=20260912-song-route-3"></script>
-    <script src="js/music-player-pulse.js?v=20260918-pulse-2"></script>
-    <script src="js/music-player-skins.js?v=20260918-pulse-2"></script>
-    <script src="js/music-player.js?v=20260918-immersive-room-12"></script>
+    <script src="js/music-player-pulse.js?v=20260918-liquid-3"></script>
+    <script src="js/music-player-skins.js?v=20260918-liquid-3"></script>
+    <script src="js/music-player.js?v=20260918-liquid-3"></script>
 </body>
 
 </html>

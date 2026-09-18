@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
         timeTotal: document.getElementById('time-total'),
         slider: document.getElementById('progress-slider'),
         lyricsBox: document.getElementById('lyrics-display'),
+        lyricEcho: document.getElementById('pulse-lyric-echo'),
         playerBody: document.body,
         versionStrip: document.getElementById('version-strip')
     };
@@ -414,6 +415,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const catalogTiming = getCatalogLyricTiming(song);
 
         elements.lyricsBox.innerHTML = '';
+        if (elements.lyricEcho) elements.lyricEcho.textContent = '';
         lyricsHaveTimestamps = false;
         activeLyricIndex = -1;
         lyricScrollIndex = -1;
@@ -501,11 +503,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const ink = document.createElement('span');
         ink.className = 'lyric-keyword-ink';
         ink.textContent = token[0];
-        const echo = document.createElement('span');
-        echo.className = 'lyric-echo';
-        echo.setAttribute('aria-hidden', 'true');
-        echo.textContent = token[0];
-        keyword.append(ink, echo);
+        item.dataset.echo = token[0];
+        keyword.appendChild(ink);
         // Keep one flex item in the original H5 layout, so long lines still
         // wrap as a sentence instead of three separate text columns.
         const sentence = document.createElement('span');
@@ -530,6 +529,15 @@ document.addEventListener('DOMContentLoaded', () => {
         activeIdx = Math.max(0, Math.min(activeIdx, lines.length - 1));
         if (force || activeIdx !== activeLyricIndex) {
             activeLyricIndex = activeIdx;
+
+            // The enlarged token belongs to the scene, not the word's inline
+            // box: its center stays at the viewport center even on wrapped lines.
+            if (elements.lyricEcho) {
+                const token = lines[activeIdx].dataset.echo || '';
+                elements.lyricEcho.textContent = token;
+                elements.lyricEcho.style.setProperty('--echo-length', Math.max(1, Array.from(token).length * .62));
+                elements.lyricEcho.classList.toggle('echo-alternate', activeIdx % 2 === 1);
+            }
 
             // The highlight always changes at the exact saved timestamp. Only
             // the scroll position below is allowed to anticipate the next line.

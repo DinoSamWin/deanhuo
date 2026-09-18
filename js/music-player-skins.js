@@ -3,7 +3,7 @@
 
     const STORAGE_KEY = 'dean-player-skin';
     const IDLE_DELAY = 5000;
-    const FRAME_INTERVAL = 1000 / 30;
+    const ANALYSIS_INTERVAL = 1000 / 60;
     const BEAT_COOLDOWN = 320;
     const DETECTOR_WARMUP = 180;
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
@@ -24,6 +24,12 @@
     let resumePending = false;
     let visualFrame = null;
     let lastFrameTime = 0;
+    let lastAnalysisTime = 0;
+    let nextAnalysisTime = 0;
+    let targetBass = 0;
+    let targetMid = 0;
+    let targetTreble = 0;
+    let targetEnergy = 0;
     let smoothLevel = 0;
     let smoothBass = 0;
     let smoothMid = 0;
@@ -287,6 +293,8 @@
 
     function resetDetector() {
         smoothLevel = smoothBass = smoothMid = smoothTreble = impact = 0;
+        targetBass = targetMid = targetTreble = targetEnergy = 0;
+        lastAnalysisTime = nextAnalysisTime = 0;
         previousSpectrum = null;
         previousBass = fluxBaseline = fluxDeviation = energyBaseline = 0;
         detectorReadyAt = 0;
@@ -312,7 +320,7 @@
         return previous + (target - previous) * (1 - Math.exp(-elapsed / timeConstant));
     }
 
-    function analyseFrame(now, delta) {
+    function analyseSpectrum(now, delta) {
         const elapsed = Math.min(delta, 100);
         const binWidth = audioContext.sampleRate / analyser.fftSize;
         const low = sampleBand(40, 250, binWidth);
@@ -343,10 +351,19 @@
         }
         previousSpectrum.set(frequencyData);
         previousBass = low.energy;
-        smoothBass = followEnvelope(smoothBass, low.energy, elapsed, 40, 200);
-        smoothMid = followEnvelope(smoothMid, middle.energy, elapsed, 55, 240);
-        smoothTreble = followEnvelope(smoothTreble, high.energy, elapsed, 30, 160);
-        smoothLevel = followEnvelope(smoothLevel, energy, elapsed, 65, 300);
+        targetBass = low.energy;
+        targetMid = middle.energy;
+        targetTreble = high.energy;
+        targetEnergy = energy;
+        return beat;
+    }
+
+    function drawFrame(now, delta, beat) {
+        const elapsed = Math.min(delta, 100);
+        smoothBass = followEnvelope(smoothBass, targetBass, elapsed, 40, 200);
+        smoothMid = followEnvelope(smoothMid, targetMid, elapsed, 55, 240);
+        smoothTreble = followEnvelope(smoothTreble, targetTreble, elapsed, 30, 160);
+        smoothLevel = followEnvelope(smoothLevel, targetEnergy, elapsed, 65, 300);
         // Immediate attack and ~300 ms visible release; silence never creates a beat.
         impact = Math.max(beat, impact * Math.exp(-elapsed / 135));
         if (impact < 0.001) impact = 0;
@@ -354,7 +371,8 @@
         document.body.style.setProperty('--pulse-impact', impact.toFixed(4));
         window.DeanPulseVisuals?.draw?.({
             now, delta, bass: smoothBass, mid: smoothMid, treble: smoothTreble,
-            energy: smoothLevel, beat, impact, spectrum: frequencyData, binWidth
+            energy: smoothLevel, beat, impact, spectrum: frequencyData,
+            binWidth: audioContext.sampleRate / analyser.fftSize
         });
     }
 
@@ -383,12 +401,23 @@
                 stopVisuals();
                 return;
             }
-            const elapsed = lastFrameTime ? now - lastFrameTime : FRAME_INTERVAL;
-            if (elapsed >= FRAME_INTERVAL - 1) {
-                lastFrameTime = now;
+            const elapsed = lastFrameTime ? now - lastFrameTime : ANALYSIS_INTERVAL;
+            lastFrameTime = now;
+            let beat = 0;
+            // Analyze at a stable ~60 Hz cadence, independently of a 60/90/120 Hz
+            // display. Each onset is delivered once; intermediate display frames
+            // continue the time-based band envelopes and impact decay.
+            if (!nextAnalysisTime || now >= nextAnalysisTime - 0.5) {
+                const analysisElapsed = lastAnalysisTime ? now - lastAnalysisTime : ANALYSIS_INTERVAL;
+                lastAnalysisTime = now;
+                if (!nextAnalysisTime) nextAnalysisTime = now;
+                const missedIntervals = Math.max(1, Math.floor((now - nextAnalysisTime) / ANALYSIS_INTERVAL) + 1);
+                nextAnalysisTime += missedIntervals * ANALYSIS_INTERVAL;
                 analyser.getByteFrequencyData(frequencyData);
-                analyseFrame(now, elapsed);
+                beat = analyseSpectrum(now, analysisElapsed);
             }
+            // Never cap visual motion to the FFT cadence: draw on every rAF.
+            drawFrame(now, elapsed, beat);
             visualFrame = requestAnimationFrame(renderFrame);
         };
         visualFrame = requestAnimationFrame(renderFrame);
