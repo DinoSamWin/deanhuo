@@ -828,7 +828,7 @@
         }
     </style>
     <link rel="stylesheet" href="css/music-player-desktop.css?v=20260913-room-18">
-    <link rel="stylesheet" href="css/music-player-skins.css?v=20260918-pulse-1">
+    <link rel="stylesheet" href="css/music-player-skins.css?v=20260918-pulse-2">
 </head>
 
 <body id="player-body" data-share-dynamic="true">
@@ -852,6 +852,8 @@
         <div class="pulse-wash" id="pulse-glow"></div>
         <div class="pulse-rings pulse-rings-left"></div>
         <div class="pulse-rings pulse-rings-right"></div>
+        <div class="pulse-floor-light"></div>
+        <canvas class="pulse-field" id="pulse-canvas"></canvas>
         <div class="pulse-grain"></div>
     </div>
 
@@ -936,7 +938,7 @@
         <button class="skin-tool fullscreen-tool" id="btn-fullscreen" type="button" aria-label="进入全屏" title="进入全屏" hidden>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4" /></svg>
         </button>
-        <button class="skin-tool" id="skin-toggle" type="button" aria-controls="skin-menu" aria-expanded="false">
+        <button class="skin-tool" id="skin-toggle" type="button" aria-label="切换播放器皮肤" aria-controls="skin-menu" aria-expanded="false">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1.2a2 2 0 0 0 1.4-3.4 1.4 1.4 0 0 1 1-2.4h1.2A4.2 4.2 0 0 0 21 11 8 8 0 0 0 12 3Z"/><path d="M7.5 10h.01M10 6.5h.01M14 6.5h.01M17 10h.01" stroke-width="2.6"/></svg>
             <span>换肤</span>
         </button>
@@ -964,8 +966,9 @@
     <audio id="audio-element" preload="metadata" playsinline></audio>
 
     <script src="js/wechat-share.js?v=20260912-song-route-3"></script>
-    <script src="js/music-player-skins.js?v=20260918-pulse-1"></script>
-    <script src="js/music-player.js?v=20260918-immersive-room-10"></script>
+    <script src="js/music-player-pulse.js?v=20260918-pulse-2"></script>
+    <script src="js/music-player-skins.js?v=20260918-pulse-2"></script>
+    <script src="js/music-player.js?v=20260918-immersive-room-12"></script>
 </body>
 
 </html>

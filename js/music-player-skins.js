@@ -4,6 +4,8 @@
     const STORAGE_KEY = 'dean-player-skin';
     const IDLE_DELAY = 5000;
     const FRAME_INTERVAL = 1000 / 30;
+    const BEAT_COOLDOWN = 320;
+    const DETECTOR_WARMUP = 180;
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     let audio = null;
     let onChange = null;
@@ -23,11 +25,23 @@
     let visualFrame = null;
     let lastFrameTime = 0;
     let smoothLevel = 0;
+    let smoothBass = 0;
+    let smoothMid = 0;
+    let smoothTreble = 0;
+    let impact = 0;
+    let previousSpectrum = null;
+    let previousBass = 0;
+    let fluxBaseline = 0;
+    let fluxDeviation = 0;
+    let energyBaseline = 0;
+    let detectorReadyAt = 0;
+    let lastBeatTime = -Infinity;
     let paletteRequest = 0;
 
     function setPalette(hue = 218, saturation = 64) {
         document.body.style.setProperty('--pulse-hue', String(Math.round(hue)));
         document.body.style.setProperty('--pulse-saturation', `${Math.round(saturation)}%`);
+        window.DeanPulseVisuals?.setPalette?.(hue, saturation);
     }
 
     function setCover(value) {
@@ -196,7 +210,8 @@
         try {
             nextAnalyser = audioContext.createAnalyser();
             nextAnalyser.fftSize = 1024;
-            nextAnalyser.smoothingTimeConstant = 0.76;
+            // Preserve attacks for onset detection; the visual envelope is smoothed separately.
+            nextAnalyser.smoothingTimeConstant = 0.32;
             nextAnalyser.minDecibels = -85;
             nextAnalyser.maxDecibels = -20;
             nextAnalyser.connect(audioContext.destination);
@@ -262,7 +277,7 @@
     }
 
     function canAnimate() {
-        return isImmersive() && isPlaying() && !document.hidden && !reducedMotion?.matches
+        return isImmersive() && isPlaying() && !audio.seeking && !document.hidden && !reducedMotion?.matches
             && analyser && audioContext?.state === 'running' && hasSameOriginAudio();
     }
 
@@ -270,13 +285,88 @@
         document.body.style.setProperty('--pulse-level', value.toFixed(4));
     }
 
+    function resetDetector() {
+        smoothLevel = smoothBass = smoothMid = smoothTreble = impact = 0;
+        previousSpectrum = null;
+        previousBass = fluxBaseline = fluxDeviation = energyBaseline = 0;
+        detectorReadyAt = 0;
+        lastBeatTime = -Infinity;
+    }
+
+    function sampleBand(low, high, binWidth) {
+        const first = Math.max(1, Math.ceil(low / binWidth));
+        const last = Math.min(frequencyData.length - 1, Math.floor(high / binWidth));
+        let magnitude = 0;
+        let flux = 0;
+        for (let index = first; index <= last; index++) {
+            const value = frequencyData[index] / 255;
+            magnitude += value;
+            if (previousSpectrum) flux += Math.max(0, value - previousSpectrum[index] / 255);
+        }
+        const count = Math.max(1, last - first + 1);
+        return { energy: Math.pow(magnitude / count, 1.5), flux: flux / count };
+    }
+
+    function followEnvelope(previous, target, elapsed, attack, release) {
+        const timeConstant = target > previous ? attack : release;
+        return previous + (target - previous) * (1 - Math.exp(-elapsed / timeConstant));
+    }
+
+    function analyseFrame(now, delta) {
+        const elapsed = Math.min(delta, 100);
+        const binWidth = audioContext.sampleRate / analyser.fftSize;
+        const low = sampleBand(40, 250, binWidth);
+        const middle = sampleBand(250, 2400, binWidth);
+        const high = sampleBand(2400, 10000, binWidth);
+        const energy = low.energy * 0.52 + middle.energy * 0.34 + high.energy * 0.14;
+        // Positive spectral change detects a drum/vocal attack, not sustained loudness.
+        const flux = low.flux * 0.52 + middle.flux * 0.34 + high.flux * 0.14;
+        const bassRise = Math.max(0, low.energy - previousBass);
+        let beat = 0;
+        if (!previousSpectrum) {
+            previousSpectrum = new Uint8Array(frequencyData.length);
+            energyBaseline = energy;
+            detectorReadyAt = now + DETECTOR_WARMUP;
+        } else {
+            const threshold = Math.max(0.014, fluxBaseline * 1.8 + fluxDeviation * 0.8);
+            if (now >= detectorReadyAt && now - lastBeatTime >= BEAT_COOLDOWN
+                && energy > 0.035 && flux > threshold && (bassRise > 0.012 || flux > 0.025)) {
+                // Absolute attack energy retains the difference between a quiet accent and a kick.
+                beat = Math.min(1, Math.max(0.12,
+                    flux * 1.35 + Math.max(0, energy - energyBaseline) * 0.45 + bassRise * 0.24));
+                lastBeatTime = now;
+            }
+            const adaptation = 1 - Math.exp(-elapsed / 1100);
+            fluxDeviation += (Math.abs(flux - fluxBaseline) - fluxDeviation) * adaptation;
+            fluxBaseline += (flux - fluxBaseline) * adaptation;
+            energyBaseline += (energy - energyBaseline) * (1 - Math.exp(-elapsed / 750));
+        }
+        previousSpectrum.set(frequencyData);
+        previousBass = low.energy;
+        smoothBass = followEnvelope(smoothBass, low.energy, elapsed, 40, 200);
+        smoothMid = followEnvelope(smoothMid, middle.energy, elapsed, 55, 240);
+        smoothTreble = followEnvelope(smoothTreble, high.energy, elapsed, 30, 160);
+        smoothLevel = followEnvelope(smoothLevel, energy, elapsed, 65, 300);
+        // Immediate attack and ~300 ms visible release; silence never creates a beat.
+        impact = Math.max(beat, impact * Math.exp(-elapsed / 135));
+        if (impact < 0.001) impact = 0;
+        setPulseLevel(smoothLevel);
+        document.body.style.setProperty('--pulse-impact', impact.toFixed(4));
+        window.DeanPulseVisuals?.draw?.({
+            now, delta, bass: smoothBass, mid: smoothMid, treble: smoothTreble,
+            energy: smoothLevel, beat, impact, spectrum: frequencyData, binWidth
+        });
+    }
+
     function stopVisuals() {
         if (visualFrame !== null) cancelAnimationFrame(visualFrame);
         visualFrame = null;
         lastFrameTime = 0;
-        smoothLevel = 0;
+        resetDetector();
         document.body.classList.remove('is-audio-reactive');
         setPulseLevel(0);
+        document.body.style.setProperty('--pulse-impact', '0');
+        window.DeanPulseVisuals?.reset?.();
         // Do not suspend or disconnect the context: the same audio keeps playing in every skin.
     }
 
@@ -297,17 +387,7 @@
             if (elapsed >= FRAME_INTERVAL - 1) {
                 lastFrameTime = now;
                 analyser.getByteFrequencyData(frequencyData);
-                const binWidth = audioContext.sampleRate / analyser.fftSize;
-                const firstBin = Math.max(1, Math.floor(40 / binWidth));
-                const lastBin = Math.min(frequencyData.length - 1, Math.ceil(220 / binWidth));
-                let bass = 0;
-                for (let index = firstBin; index <= lastBin; index++) bass += frequencyData[index] / 255;
-                const target = Math.pow(bass / Math.max(1, lastBin - firstBin + 1), 1.65);
-                // Real bass energy, with a gentle rise and a longer release; no synthetic beat clock.
-                const timeConstant = target > smoothLevel ? 180 : 650;
-                const smoothing = 1 - Math.exp(-Math.min(elapsed, 100) / timeConstant);
-                smoothLevel += (target - smoothLevel) * smoothing;
-                setPulseLevel(Math.min(1, Math.max(0, smoothLevel)));
+                analyseFrame(now, elapsed);
             }
             visualFrame = requestAnimationFrame(renderFrame);
         };
@@ -419,6 +499,10 @@
         audio.addEventListener('loadstart', () => {
             stopVisuals();
             wakeControls();
+        });
+        audio.addEventListener('seeking', stopVisuals);
+        audio.addEventListener('seeked', () => {
+            if ((isImmersive() || mediaSource) && isPlaying()) prepareAudio();
         });
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) stopVisuals();

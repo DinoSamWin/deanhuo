@@ -478,14 +478,41 @@ document.addEventListener('DOMContentLoaded', () => {
         lyrics.forEach((line, index) => {
             const item = document.createElement('div');
             item.className = 'lyric-line';
-            item.textContent = line.text;
-            item.dataset.text = line.text;
+            renderLyricText(item, line.text, index);
             item.dataset.index = index;
             fragment.appendChild(item);
         });
         elements.lyricsBox.appendChild(fragment);
 
         requestAnimationFrame(() => updateLyricsDisplay(elements.audio.currentTime || 0, true));
+    }
+
+    function renderLyricText(item, text, index) {
+        // One Chinese character or one whole Latin word becomes the visual echo.
+        // Choosing per line keeps the word stable during playback and seeking.
+        const tokens = [...text.matchAll(/[\p{Script=Han}]|[\p{L}\p{N}]+(?:['’][\p{L}]+)*/gu)];
+        if (!tokens.length) {
+            item.textContent = text;
+            return;
+        }
+        const token = tokens[index % Math.min(4, tokens.length)];
+        const keyword = document.createElement('span');
+        keyword.className = 'lyric-keyword';
+        const ink = document.createElement('span');
+        ink.className = 'lyric-keyword-ink';
+        ink.textContent = token[0];
+        const echo = document.createElement('span');
+        echo.className = 'lyric-echo';
+        echo.setAttribute('aria-hidden', 'true');
+        echo.textContent = token[0];
+        keyword.append(ink, echo);
+        // Keep one flex item in the original H5 layout, so long lines still
+        // wrap as a sentence instead of three separate text columns.
+        const sentence = document.createElement('span');
+        sentence.className = 'lyric-text';
+        sentence.append(document.createTextNode(text.slice(0, token.index)), keyword,
+            document.createTextNode(text.slice(token.index + token[0].length)));
+        item.appendChild(sentence);
     }
 
     function updateLyricsDisplay(currentTime, force = false) {

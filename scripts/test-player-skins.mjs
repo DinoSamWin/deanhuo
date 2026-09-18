@@ -132,7 +132,8 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
     };
     motion.matches = reduced;
 
-    const state = { contexts: [], sources: [], energy: 0, images: [], pixels: [], canvasFails: false };
+    const state = { contexts: [], sources: [], energy: 0, spectrum: null, images: [], pixels: [],
+        canvasFails: false, frames: [], resetCount: 0, palettes: [] };
     class AudioNode {
         constructor() { this.destinations = []; }
         connect(destination) { this.destinations.push(destination); }
@@ -150,7 +151,7 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
         createAnalyser() {
             const node = new AudioNode();
             node.frequencyBinCount = 512;
-            node.getByteFrequencyData = data => data.fill(state.energy);
+            node.getByteFrequencyData = data => state.spectrum ? data.set(state.spectrum) : data.fill(state.energy);
             return node;
         }
         createMediaElementSource(element) {
@@ -179,7 +180,12 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
         location: { origin: 'http://localhost' },
         matchMedia: () => motion,
         localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
-        AudioContext
+        AudioContext,
+        DeanPulseVisuals: {
+            draw: frame => state.frames.push({ ...frame, spectrum: Array.from(frame.spectrum) }),
+            reset: () => { state.resetCount++; },
+            setPalette: (hue, saturation) => state.palettes.push({ hue, saturation })
+        }
     };
     const context = vm.createContext({
         window, document, URL, Image, Uint8Array,
@@ -203,8 +209,17 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
         state.pixels = new Uint8ClampedArray(32 * 32 * 4);
         for (let index = 0; index < state.pixels.length; index += 4) state.pixels.set([red, green, blue, 255], index);
     };
+    const spectrum = ({ bass = 0, mid = 0, treble = 0 } = {}) => {
+        state.spectrum = Uint8Array.from({ length: 512 }, (_, index) => {
+            const frequency = index * 44100 / 1024;
+            if (frequency >= 40 && frequency < 250) return bass;
+            if (frequency >= 250 && frequency < 2400) return mid;
+            if (frequency >= 2400 && frequency <= 10000) return treble;
+            return 0;
+        });
+    };
     return { skin, document, body, toggle, menu, original, pulse, audio, motion, state, storage,
-        advance, level, palette, solidPixels, changes: () => changes };
+        advance, level, palette, solidPixels, spectrum, changes: () => changes };
 }
 
 {
@@ -261,6 +276,112 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
 console.log('PASS: one audible graph, preserved playback, real energy only, smooth release, visibility and reduced motion.');
 
 {
+    const onset = strength => {
+        const h = createHarness({ storedSkin: 'pulse' });
+        h.audio.play();
+        h.advance(600);
+        h.spectrum({ bass: strength, mid: strength * 0.6, treble: strength * 0.35 });
+        h.advance(80);
+        const beats = h.state.frames.filter(frame => frame.beat > 0);
+        assert.equal(beats.length, 1, 'a single attack creates one onset');
+        return { h, beat: beats[0] };
+    };
+    const weak = onset(95);
+    const strong = onset(245);
+    assert.ok(strong.beat.beat > weak.beat.beat * 1.5, 'strong attacks produce materially stronger ripples');
+    assert.ok(weak.beat.beat > 0 && strong.beat.beat <= 1);
+    assert.ok(strong.beat.bass > strong.beat.mid && strong.beat.mid > strong.beat.treble,
+        'the renderer receives independent frequency bands');
+    assert.ok(strong.beat.delta > 0 && strong.beat.binWidth > 0);
+    assert.equal(strong.beat.spectrum.length, 512);
+    const peak = strong.h.state.frames.at(-1).impact;
+    strong.h.advance(6000);
+    assert.equal(strong.h.state.frames.filter(frame => frame.beat > 0).length, 1,
+        'a sustained loud spectrum does not manufacture repeated beats');
+    assert.ok(strong.h.state.frames.at(-1).energy > 0.4, 'continuous light still follows sustained energy');
+    assert.ok(strong.h.state.frames.at(-1).impact < peak * 0.01, 'impact releases while the note remains loud');
+    strong.h.spectrum();
+    strong.h.advance(1800);
+    assert.equal(strong.h.state.frames.filter(frame => frame.beat > 0).length, 1, 'silence never creates onsets');
+    assert.ok(strong.h.level() < 0.005);
+
+    const h = createHarness({ storedSkin: 'pulse' });
+    h.audio.play();
+    h.advance(500);
+    for (let index = 0; index < 10; index++) {
+        h.spectrum({ bass: 230, mid: 160, treble: 85 });
+        h.advance(70);
+        h.spectrum();
+        h.advance(70);
+    }
+    const beats = h.state.frames.filter(frame => frame.beat > 0);
+    assert.ok(beats.length >= 2, 'separated attacks continue to trigger after the cooldown');
+    for (let index = 1; index < beats.length; index++) {
+        assert.ok(beats[index].now - beats[index - 1].now >= 320,
+            'dense transients cannot trigger strobing more often than the onset cooldown');
+    }
+    for (const frame of h.state.frames) {
+        for (const name of ['bass', 'mid', 'treble', 'energy', 'beat', 'impact']) {
+            assert.ok(Number.isFinite(frame[name]) && frame[name] >= 0 && frame[name] <= 1,
+                `${name} must be finite and normalized`);
+        }
+    }
+}
+console.log('PASS: frequency bands, stronger transients, sustained notes, silence, onset cooldown and normalized renderer frames.');
+
+{
+    const h = createHarness({ storedSkin: 'pulse' });
+    h.audio.play();
+    h.advance(500);
+    h.spectrum({ bass: 240, mid: 180, treble: 120 });
+    h.advance(60);
+    assert.ok(h.state.frames.some(frame => frame.beat > 0));
+    const resetBeforeSeek = h.state.resetCount;
+    h.audio.seeking = true;
+    h.audio.emit('seeking');
+    assert.ok(h.state.resetCount > resetBeforeSeek, 'seeking clears visible ripples');
+    assert.equal(h.level(), 0);
+    assert.equal(Number(h.body.properties.get('--pulse-impact')), 0);
+    const framesBeforeSeek = h.state.frames.length;
+    h.advance(500);
+    assert.equal(h.state.frames.length, framesBeforeSeek, 'no frames are drawn while seeking');
+    h.spectrum({ bass: 255, mid: 255, treble: 255 });
+    h.audio.seeking = false;
+    h.audio.emit('seeked');
+    h.advance(500);
+    assert.ok(h.state.frames.length > framesBeforeSeek);
+    assert.ok(h.state.frames.slice(framesBeforeSeek).every(frame => frame.beat === 0),
+        'seek primes the new spectrum instead of comparing it with the old playback position');
+
+    const checkFreshStart = restart => {
+        h.spectrum();
+        h.advance(400);
+        const start = h.state.frames.length;
+        const resets = h.state.resetCount;
+        restart();
+        h.spectrum({ bass: 255, mid: 255, treble: 255 });
+        h.advance(450);
+        assert.ok(h.state.resetCount > resets);
+        assert.ok(h.state.frames.slice(start).every(frame => frame.beat === 0),
+            'returning to playback primes a fresh spectrum without a phantom beat');
+    };
+    checkFreshStart(() => { h.audio.pause(); h.audio.play(); });
+    checkFreshStart(() => {
+        h.document.hidden = true;
+        h.document.emit('visibilitychange');
+        h.document.hidden = false;
+        h.document.emit('visibilitychange');
+    });
+    checkFreshStart(() => {
+        h.audio.setAttribute('src', 'assets/audio/changed.mp3');
+        h.audio.emit('loadstart');
+        h.audio.emit('playing');
+    });
+    checkFreshStart(() => { h.original.emit('click'); h.pulse.emit('click'); });
+}
+console.log('PASS: seek, pause, visibility, track and skin changes reset detection and renderer state.');
+
+{
     const h = createHarness({ storedSkin: 'pulse' });
     h.audio.play();
     // A mouse click leaves its button focused. Native inert then causes blur.
@@ -312,6 +433,8 @@ console.log('PASS: exact five-second idle, inert controls, touch/mouse wake, men
     h.state.images.at(-1).onload();
     assert.ok(h.palette().hue > 310 && h.palette().hue < 330, 'the palette reflects pink cover pixels');
     assert.ok(h.palette().saturation > 40);
+    assert.ok(h.state.palettes.at(-1).hue > 310 && h.state.palettes.at(-1).hue < 330,
+        'the ripple renderer receives the cover-derived palette');
     h.skin.setCover('assets/images/old-cover.jpg');
     const old = h.state.images.at(-1);
     h.skin.setCover('assets/images/new-cover.jpg');
