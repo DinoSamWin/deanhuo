@@ -132,6 +132,10 @@ function createHarness({ width = 1440, height = 900, dpr = 2, available = true,
 
 const impulsesOf = frame => Array.from({ length: 4 }, (_, index) =>
     frame['u_impulses[0]'].slice(index * 4, index * 4 + 4)).filter(impulse => impulse[3] > 0);
+const responseOf = harness => {
+    const { drive, punch, density } = harness.renderer.getDiagnostics();
+    return [drive, punch, density];
+};
 
 {
     const h = createHarness();
@@ -141,7 +145,8 @@ const impulsesOf = frame => Array.from({ length: 4 }, (_, index) =>
         const frame = h.draw({ now: index * 1000 / 120, delta: 1000 / 120 });
         assert.ok(frame.u_time[0] > previousTime, 'liquid time advances on every high-refresh input frame');
         previousTime = frame.u_time[0];
-        assert.deepEqual(frame.u_audio, [.6, .35, .2, .5]);
+        assert.equal(frame.u_surface.length, 4, 'the GPU receives the live visual surface envelope');
+        assert.ok(frame.u_surface.every(value => value >= 0 && value <= 1));
     }
     assert.equal(h.state.draws.length, 120, 'every supplied frame produces one GPU draw');
     assert.equal(h.state.contextRequests.length, 1, 'all frames reuse a single WebGL context');
@@ -197,7 +202,7 @@ console.log('PASS: one gentle pre-play still, lazy inactive/reduced-motion fallb
         return { h, frame };
     };
     const quiet = settle(.07);
-    const drive = quiet.frame.u_response[0];
+    const drive = quiet.h.renderer.getDiagnostics().drive;
     assert.ok(quiet.frame.u_waveStrength[0] > (.36 + drive * .64) * 1.15,
         'quiet playback gets a modestly stronger broad-wave floor than before');
     assert.ok(quiet.frame.u_waveStrength[1] > (.48 + drive * .70) * 1.15,
@@ -208,7 +213,7 @@ console.log('PASS: one gentle pre-play still, lazy inactive/reduced-motion fallb
     assert.ok(Math.abs(loud.frame.u_waveStrength[1] - 1.18) < .000001,
         'maximal local-highlight strength stays at the existing ceiling');
     const strong = settle(.46);
-    assert.ok(Math.abs(strong.frame.u_waveStrength[0] - (.36 + strong.frame.u_response[0] * .64)) < .000001,
+    assert.ok(Math.abs(strong.frame.u_waveStrength[0] - (.36 + strong.h.renderer.getDiagnostics().drive * .64)) < .000001,
         'strong passages above the low-energy region retain their original intensity');
     const travel = quiet.frame.u_travel[0];
     quiet.h.renderer.reset();
@@ -227,7 +232,7 @@ console.log('PASS: one gentle pre-play still, lazy inactive/reduced-motion fallb
             'the static-to-playing envelope is elapsed-time based at 60/120 Hz');
     }
 }
-console.log('PASS: stronger quiet-playback floor, unchanged loud peaks, gentle resume and frame-rate-independent intensity.');
+console.log('PASS: quiet-playback floor, bounded broad/glint envelopes, gentle resume and frame-rate-independent intensity.');
 
 {
     const run = fps => {
@@ -239,9 +244,8 @@ console.log('PASS: stronger quiet-playback floor, unchanged loud peaks, gentle r
             // sanitize them instead of producing fake music-driven accents.
             const frame = h.draw({ ambient: true, delta: 1000 / fps, energy: 1, bass: 1,
                 mid: 1, treble: 1, beat: 1, impact: 1 });
-            assert.deepEqual(frame.u_audio, [0, 0, 0, 0]);
-            assert.deepEqual(frame.u_response, [0, 0, 0]);
-            assert.equal(frame.u_impact[0], 0);
+            assert.deepEqual(responseOf(h), [0, 0, 0]);
+            assert.deepEqual(frame.u_surface, [0, 0, 0, 0], 'stale audio cannot animate the ambient surface');
             assert.ok(frame['u_impulses[0]'].every(value => value === 0), 'ambient frames never create accents');
             assert.ok(frame.u_travel[0] > lastTravel, 'ambient waves keep propagating while audio is paused');
             lastTravel = frame.u_travel[0];
@@ -333,7 +337,7 @@ console.log('PASS: stable random origins across 120 Hz frames, continuous impuls
     bounded.draw({ beat: .3 });
     const resumed = delayed.draw({ delta: 10000, beat: 0 });
     const normal = bounded.draw({ delta: 50, beat: 0 });
-    for (const name of ['u_time', 'u_travel', 'u_response', 'u_impulses[0]']) {
+    for (const name of ['u_time', 'u_travel', 'u_surface', 'u_impulses[0]']) {
         assert.deepEqual(resumed[name], normal[name],
             'returning after a long suspended frame must advance at most 50 ms, not jump the flow or its accents');
     }
@@ -408,8 +412,8 @@ console.log('PASS: constant outward base cadence, measured left/right intervals 
         quietFrame = quiet.draw({ energy: .07, bass: .09, mid: .06, treble: .025 });
         strongFrame = strong.draw({ energy: .46, bass: .7, mid: .4, treble: .25 });
     }
-    const quietDrive = quietFrame.u_response[0];
-    const strongDrive = strongFrame.u_response[0];
+    const quietDrive = quiet.renderer.getDiagnostics().drive;
+    const strongDrive = strong.renderer.getDiagnostics().drive;
     assert.ok(quietDrive > 0 && quietDrive < .12, 'quiet passages retain a small, visible liquid response');
     assert.ok(strongDrive > .7 && strongDrive <= 1, 'loud passages use a substantially larger bounded response');
     assert.ok(strongDrive > quietDrive * 8,
@@ -418,7 +422,7 @@ console.log('PASS: constant outward base cadence, measured left/right intervals 
         'louder passages animate the local water-glint deformation without changing base propagation');
     const quietAccent = quiet.draw({ energy: .07, beat: .055 });
     const strongAccent = strong.draw({ energy: .46, beat: .38 });
-    assert.ok(strongAccent.u_response[1] > quietAccent.u_response[1] * 8,
+    assert.ok(strong.renderer.getDiagnostics().punch > quiet.renderer.getDiagnostics().punch * 8,
         'strong accents must visibly exceed small accents rather than sharing a minimum-strength plateau');
     assert.ok(impulsesOf(strongAccent).at(-1)[3] > impulsesOf(quietAccent).at(-1)[3] * 8,
         'local material displacement must preserve the same strong/weak distinction as the global response');
@@ -426,21 +430,50 @@ console.log('PASS: constant outward base cadence, measured left/right intervals 
 console.log('PASS: convex quiet/loud drive, responsive local-glint deformation and distinct weak/strong local punches.');
 
 {
+    const silent = createHarness();
+    for (let index = 0; index < 120; index++) {
+        const frame = silent.draw({ energy: 0, bass: 1, treble: 1, beat: 0 });
+        assert.deepEqual(frame.u_surface, [0, 0, 0, 0],
+            'isolated bass/treble values without audible energy cannot fabricate a surface response');
+    }
+    const tonal = createHarness();
+    for (let index = 0; index < 180; index++) {
+        const frame = tonal.draw({ energy: .30, bass: .70, treble: .225, beat: 0 });
+        assert.deepEqual(frame.u_surface, Array.from(tonal.renderer.getDiagnostics().surfaceResponse),
+            'surface diagnostics report the actual four GPU inputs, not unused detector values');
+    }
+    const steady = tonal.state.draws.at(-1).u_surface;
+    const drive = tonal.renderer.getDiagnostics().drive;
+    assert.ok(Math.abs(steady[0] - drive) < .00001, 'sustained loudness reaches the visual exposure envelope');
+    assert.equal(steady[1], 0, 'a steady tone creates no synthetic attack');
+    assert.ok(Math.abs(steady[2] - Math.pow((.70 - .04) / .70, 1.25)) < .00001,
+        'bass excursion preserves its normalized bounded low-frequency target');
+    assert.ok(Math.abs(steady[3] - drive * .5) < .00001,
+        'local refracted detail follows treble gated by audible drive');
+    const attack = tonal.draw({ energy: .30, bass: .70, treble: .225, beat: .435 });
+    assert.ok(attack.u_surface[1] > .7 && attack.u_surface[1] < 1,
+        'a strong attack visibly engages within one display frame without a discontinuous jump');
+}
+console.log('PASS: real surface diagnostics, silent spectral gating, bounded bass/detail channels and immediate smoothed attack.');
+
+{
     const h = createHarness();
     const first = h.draw({ energy: .525, beat: .435, impact: .9 });
-    assert.ok(first.u_response[0] > .25, 'loudness starts responding in the first display frame');
-    assert.ok(first.u_response[1] > .9, 'a strong onset reaches its punch immediately, without startup latency');
-    assert.ok(first.u_response[2] > 0, 'the first real onset contributes to tempo density');
+    const firstResponse = responseOf(h);
+    assert.ok(firstResponse[0] > .25, 'loudness starts responding in the first display frame');
+    assert.ok(firstResponse[1] > .9, 'a strong onset reaches its punch immediately, without startup latency');
+    assert.ok(firstResponse[2] > 0, 'the first real onset contributes to tempo density');
     const second = h.draw({ energy: 0, bass: 0, mid: 0, treble: 0, beat: 0, impact: 0 });
     for (let channel = 0; channel < 3; channel++) {
-        assert.ok(second.u_response[channel] > 0 && second.u_response[channel] < first.u_response[channel],
+        assert.ok(responseOf(h)[channel] > 0 && responseOf(h)[channel] < firstResponse[channel],
             'after the onset, drive/punch/density release smoothly rather than rising late or snapping off');
     }
     let silent;
     for (let index = 0; index < 300; index++) {
         silent = h.draw({ energy: 0, bass: 0, mid: 0, treble: 0, beat: 0, impact: 0 });
     }
-    assert.ok(silent.u_response.every(value => value < .001), 'all three responses settle back toward zero in silence');
+    assert.ok(responseOf(h).every(value => value < .001), 'all three responses settle back toward zero in silence');
+    assert.ok(silent.u_surface.every(value => value < .001), 'the visible surface settles back toward zero in silence');
     assert.equal(h.renderer.getDiagnostics().activeImpulses, 0, 'a decaying response must not generate new beat impulses');
 }
 console.log('PASS: first-frame attack, immediate strong punch, smooth time-based release and silent settling without synthetic beats.');
@@ -453,7 +486,7 @@ console.log('PASS: first-frame attack, immediate strong punch, smooth time-based
             const frame = h.draw({ now: index * 1000 / fps, delta: 1000 / fps,
                 energy: .25, bass: .3, mid: .2, treble: .12,
                 beat: index % intervalFrames === 0 ? .35 : 0 });
-            if (index >= fps * 2) { totalDensity += frame.u_response[2]; samples++; }
+            if (index >= fps * 2) { totalDensity += h.renderer.getDiagnostics().density; samples++; }
         }
         return { h, meanDensity: totalDensity / samples, frame: h.state.draws.at(-1) };
     };
@@ -463,12 +496,12 @@ console.log('PASS: first-frame attack, immediate strong punch, smooth time-based
         'four real accents per second accumulate much more motion density than one equal-strength accent');
     assert.ok(rapid.frame.u_time[0] > sparse.frame.u_time[0] * 1.25,
         'denser real onsets influence local-glint deformation independently of base-wave propagation');
-    assert.ok(Math.abs(rapid.frame.u_response[0] - sparse.frame.u_response[0]) < 1e-10,
+    assert.ok(Math.abs(rapid.h.renderer.getDiagnostics().drive - sparse.h.renderer.getDiagnostics().drive) < 1e-10,
         'tempo density must not rewrite the independent loudness envelope');
     const highRefresh = runRhythm(30, 120);
     assert.ok(Math.abs(highRefresh.meanDensity - rapid.meanDensity) < .015,
         'density is elapsed-time based and stays consistent at 60 Hz and 120 Hz');
-    assert.ok(Math.abs(highRefresh.frame.u_response[0] - rapid.frame.u_response[0]) < 1e-10,
+    assert.ok(Math.abs(highRefresh.h.renderer.getDiagnostics().drive - rapid.h.renderer.getDiagnostics().drive) < 1e-10,
         'the drive envelope is refresh-rate independent');
     assert.equal(highRefresh.h.state.draws.length, 600, 'higher-refresh response still draws on every supplied frame');
 }
@@ -482,23 +515,32 @@ console.log('PASS: rapid versus sparse beat-density separation, independent loud
         const frame = h.draw({ delta: deltas[index % deltas.length], energy: maximum ? 1 : 0,
             bass: maximum ? 1 : 0, mid: maximum ? 1 : 0, treble: maximum ? 1 : 0,
             beat: maximum ? 1 : .001, impact: maximum ? 1 : 0 });
-        assert.equal(frame.u_response.length, 3);
-        assert.ok(frame.u_response.every(value => Number.isFinite(value) && value >= 0 && value <= 1),
+        assert.ok(responseOf(h).every(value => Number.isFinite(value) && value >= 0 && value <= 1),
             'drive, punch and density remain normalized under repeated maximal onsets and stalled frames');
+        assert.equal(frame.u_surface.length, 4);
+        assert.ok(frame.u_surface.every(value => Number.isFinite(value) && value >= 0 && value <= 1),
+            'the actual visible surface remains finite and bounded independently of detector state');
         for (const numbers of Object.values(frame)) {
             assert.ok(numbers.every(Number.isFinite), 'all submitted GPU uniforms remain finite');
         }
-        const { drive, punch, density } = h.renderer.getDiagnostics();
-        assert.deepEqual(frame.u_response, [drive, punch, density], 'diagnostics describe the actual GPU response');
     }
+    const surfaceBeforeReset = h.state.draws.at(-1).u_surface;
     h.renderer.reset();
-    assert.deepEqual(h.state.draws.at(-1).u_response, [0, 0, 0], 'reset immediately clears every response channel');
+    assert.deepEqual(h.state.draws.at(-1).u_surface, surfaceBeforeReset,
+        'reset keeps the visible surface instead of flashing back to idle in one frame');
     const { drive, punch, density } = h.renderer.getDiagnostics();
     assert.deepEqual([drive, punch, density], [0, 0, 0], 'reset also clears diagnostic response state');
     const resumed = h.draw({ energy: 0, bass: 0, mid: 0, treble: 0, beat: 0, impact: 0 });
-    assert.deepEqual(resumed.u_response, [0, 0, 0], 'resuming in silence cannot resurrect a pre-reset punch or tempo density');
+    assert.deepEqual(responseOf(h), [0, 0, 0], 'resuming in silence cannot resurrect a pre-reset punch or tempo density');
+    for (let channel = 0; channel < 4; channel++) {
+        assert.ok(resumed.u_surface[channel] <= surfaceBeforeReset[channel], 'the held surface decays after reset');
+    }
+    for (let index = 0; index < 240; index++) h.draw({ ambient: true, bass: 1, energy: 1, beat: 1, treble: 1 });
+    assert.ok(h.state.draws.at(-1).u_surface.every(value => value < 1e-6),
+        'ambient frames release every surface channel even when supplied stale loud analyser values');
+    assert.equal(h.renderer.getDiagnostics().activeImpulses, 0);
 }
-console.log('PASS: finite bounded response uniforms under stress, exact response reset and no stale response on silent resume.');
+console.log('PASS: bounded detector/surface responses, immediate detector reset, flash-free visual release and no stale ambient beats.');
 
 {
     const h = createHarness();
@@ -513,9 +555,7 @@ console.log('PASS: finite bounded response uniforms under stress, exact response
     assert.equal(paused.u_time[0], time, 'reset alone neither advances nor rewinds the surface clock');
     assert.equal(paused.u_travel[0], travel, 'reset alone leaves outward travel in place until the next supplied frame');
     assert.equal(h.renderer.getDiagnostics().waveTravel, travel);
-    assert.deepEqual(paused.u_audio, [0, 0, 0, 0]);
-    assert.equal(paused.u_impact[0], 0);
-    assert.deepEqual(paused.u_response, [0, 0, 0]);
+    assert.deepEqual(responseOf(h), [0, 0, 0]);
     assert.ok(paused['u_impulses[0]'].every(number => number === 0));
     assert.equal(h.renderer.getDiagnostics().activeImpulses, 0);
     const beforeRotation = h.state.draws.length;
@@ -534,8 +574,8 @@ console.log('PASS: finite bounded response uniforms under stress, exact response
     assert.equal(rotated.u_time[0], time, 'paused orientation redraw preserves the frozen liquid clock');
     assert.equal(rotated.u_travel[0], travel, 'paused rotation redraw preserves the frozen outward wave position');
     assert.equal(h.renderer.getDiagnostics().frameCount, frameCount);
-    assert.deepEqual(rotated.u_audio, [0, 0, 0, 0]);
-    assert.deepEqual(rotated.u_response, [0, 0, 0], 'paused rotation must not restart the liquid response');
+    assert.deepEqual(rotated.u_surface, paused.u_surface, 'paused rotation preserves the held visual surface');
+    assert.deepEqual(responseOf(h), [0, 0, 0], 'paused rotation must not restart the detector');
     assert.ok(rotated['u_impulses[0]'].every(number => number === 0));
     h.renderer.reset();
     h.renderer.setPalette(325, 65);

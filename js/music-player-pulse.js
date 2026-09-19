@@ -8,6 +8,8 @@
     // mean intervals of .8s left / 1.6s right, including ambient (paused) frames.
     const BASE_WAVE_SPEED = .19 / (.8 * 1.50);
     const AMBIENT_STRENGTH = [.30, .32];
+    const SURFACE_ATTACK = [24, 12, 24, 35];
+    const SURFACE_RELEASE = [240, 180, 200, 220];
     const VERTEX = `
         attribute vec2 a_position;
         varying vec2 v_uv;
@@ -26,9 +28,10 @@
         uniform vec2 u_resolution;
         uniform float u_time;
         uniform float u_travel;
-        uniform vec4 u_audio;
-        uniform float u_impact;
-        uniform vec3 u_response;
+        // Display-side envelopes, not raw detector values: loudness, attack,
+        // low-frequency excursion and treble sparkle. These remain continuous
+        // when the audio graph is paused/reset, then release into the idle field.
+        uniform vec4 u_surface;
         uniform vec2 u_waveStrength;
         uniform vec3 u_dark;
         uniform vec3 u_mid;
@@ -44,14 +47,27 @@
         float band(float radius, float centre, float width) {
             return exp(-square((radius - centre) / width));
         }
-        vec3 speakerWaves(vec2 q, float side) {
+        vec4 speakerWaves(vec2 q, float side) {
             float angle = atan(q.y, q.x);
             // Visible inward-facing half only: unlike atan's +/-PI seam on the
             // right, this coordinate stays continuous through the middle.
             float inwardAngle = atan(q.y, abs(q.x) + .0001);
             float radius = length(q * vec2(1., .97));
             float t = u_time * .32;
-            float light = 0., shade = 0., thin = 0.;
+            float light = 0., shade = 0., thin = 0., reflection = 0.;
+            float drive = u_surface.x;
+            float attack = u_surface.y;
+            float bass = u_surface.z;
+            float detail = u_surface.w;
+            // The reference's speaker-like inner surface expands/contracts on
+            // bass and catches light on attacks. Only low-order curvature is
+            // used: no high-frequency folds, metal normals or full-screen zoom.
+            float inner = 1. - smoothstep(.24, .62, radius);
+            float curvature = sin(inwardAngle * 2.1 + t * .60 + side * 1.8) * .6
+                + sin(inwardAngle * 3.3 - t * .33 + side) * .4;
+            float excursion = (bass * .024 + attack * .018) * inner;
+            radius -= excursion * (.65 + curvature * .35);
+            float localResponse = drive * .60 + attack * .78 + bass * .24;
             // Left: a quicker, feathered wash. Right: smaller/slower ripples.
             // Offsets and per-emission values break the equally spaced tunnel
             // pattern, without introducing per-frame randomness or phase jumps.
@@ -69,7 +85,8 @@
                 // multiplying two early fades that erase the outer two waves.
                 float fade = smoothstep(.055, .14, centre) * (1. - smoothstep(extent, extent + .12, centre));
                 float width = .036 + character * .018 + age * .012;
-                float shape = sin(angle * 2. + seed * 6.28) * .002;
+                float shape = sin(angle * 2. + seed * 6.28) * .002
+                    + curvature * (drive * .008 + attack * .012) * inner;
                 float shoulder = square(.5 + .5 * cos(angle + character * 6.28));
                 float exposure = .78 + shoulder * .22;
                 // The travelling texture has its own visible floor; music
@@ -78,12 +95,15 @@
                 float strength = (.72 + pow(seed, 1.4) * .45) * contrast * mix(1.2, 1., side);
                 // The dark left field sheds a broad luminous shoulder; its
                 // shadow is secondary, rather than another dark outlined ring.
+                float lightPatch = exp(-square((inwardAngle - sin(t * .41 + seed * 6.28) * .8) / .74));
+                float accent = 1. + localResponse * lightPatch * mix(.95, .52, side);
                 light += band(radius + shape, centre, width) * fade * strength * exposure
-                    * (.12 + character * .10) * mix(1.28, 1., side);
+                    * (.12 + character * .10) * mix(1.28, 1., side) * accent;
                 // Separate the broad bright and dark shoulders by roughly half
                 // a wavelength so they do not cancel into a flat colour field.
                 shade += band(radius + shape, centre + .085, width * 1.10)
-                    * fade * strength * exposure * (.14 + (1. - character) * .10);
+                    * fade * strength * exposure * (.14 + (1. - character) * .10)
+                    * (1. + localResponse * lightPatch * .58);
             }
             float thinWidth = max(.0040, 1.5 / min(u_resolution.x, u_resolution.y));
             // No full-circle baseline: translucent details only catch light in
@@ -98,15 +118,46 @@
                 float pinch = .5 + .5 * sin(t * .75 + seed * 6.28);
                 float patch = (seed * 2. - 1.) * .94 + sin(t * .22 + seed * 5.) * .10;
                 float arc = exp(-square((inwardAngle - patch) / (.20 + pinch * .18)));
-                float shape = sin(inwardAngle * 3. + seed * 5.) * .008
-                    + sin(inwardAngle * 5. - t * .65 + seed * 4.) * .012 * pinch;
-                float strength = fade * arc * (.075 + seed * .085) * u_waveStrength.y * mix(.6, 1., side);
-                float width = thinWidth * (.9 + pinch * 1.1);
+                float shape = sin(inwardAngle * 3. + seed * 5.) * (.008 + bass * .012)
+                    + sin(inwardAngle * 5. - t * .65 + seed * 4.) * (.012 + attack * .018) * pinch;
+                float strength = fade * arc * (.075 + seed * .085) * u_waveStrength.y * mix(.6, 1., side)
+                    * (1. + drive * .6 + attack * 1.2 + detail * .7);
+                float width = thinWidth * (.9 + pinch * 1.1 + drive * .5);
                 thin += band(radius + shape, centre, width) * strength;
                 // A soft second shoulder pinches away from the first, making a
                 // little refracted-water glint rather than an unbroken neon arc.
                 thin += band(radius + shape, centre + .012 + pinch * .009, width * 1.3) * strength * pinch * .32;
                 light += band(radius + shape, centre, width * 5.) * strength * .38;
+            }
+            // The sharp meniscus visible in the reference is a translucent
+            // filled crescent, NOT a gaussian glow. Its two boundaries separate
+            // on bass then meet at tapered tips. A small pixel-sized AA edge
+            // preserves that thin, clearly readable water-reflection surface.
+            float aa = max(.0010, 1.1 / min(u_resolution.x, u_resolution.y));
+            float core = .18 + bass * .052 + attack * .025;
+            shade += (1. - smoothstep(core - .008, core + .018, radius)) * drive * mix(.30, .045, side);
+            reflection += band(radius, core, aa * 1.25) * (drive * .09 + attack * .05);
+            for (int index = 0; index < 2; index++) {
+                float layer = float(index);
+                float drift = .5 + .5 * sin(t * .53 + layer * 3.2 + side * 2.1);
+                float patch = sin(t * .37 + side * 2.7 + layer * 2.4) * mix(.20, .75, layer);
+                float span = mix(1.28, .76, layer);
+                float along = inwardAngle - patch;
+                float taper = pow(max(0., 1. - square(along / span)), .75);
+                float lobes = .045 + .955 * smoothstep(.30, .90, abs(along));
+                float thickness = (.006 + bass * .040 + attack * .023) * taper * mix(lobes, .18, layer)
+                    * mix(.90, .55, side);
+                float centre = core + mix(.033, .085, side) + layer * .065 + drift * .033;
+                float bend = sin(inwardAngle * 2.8 - t * .56 + layer * 3.) * (.005 + bass * .014);
+                float across = radius + bend - centre;
+                float ribbon = smoothstep(-aa, aa, across)
+                    * (1. - smoothstep(thickness - aa, thickness + aa, across))
+                    * smoothstep(0., .10, taper);
+                float caustic = (drive * .18 + bass * .12 + attack * .24)
+                    * mix(.48, .78, side) * (1. - layer * .45);
+                reflection += ribbon * caustic;
+                light += band(across, thickness * .5, .030) * taper * caustic * .20;
+                shade += band(across, -.018, .018) * taper * caustic * .34;
             }
             // Real onsets add lighter, partially transparent water rings. Their
             // age always increases, so a release can never pull a wave backwards.
@@ -119,11 +170,11 @@
                 float sideWeight = mix(.55, 1., side < .5 ? 1. - impulse.x : impulse.x);
                 float arc = exp(-square((inwardAngle - (impulse.y - .5) * 2.) / .32));
                 float strength = fade * impulse.w * sideWeight;
-                light += band(radius, centre, .044 + age * .020) * arc * strength * .065;
-                thin += band(radius, centre, thinWidth * 1.8) * arc * strength * .055;
+                light += band(radius, centre, .044 + age * .020) * arc * strength * .24;
+                thin += band(radius, centre, thinWidth * 2.2) * arc * strength * .18;
             }
             float envelope = 1. - smoothstep(extent - .12, extent, length(q));
-            return vec3(light, shade, thin) * envelope;
+            return vec4(light, shade, thin, reflection) * envelope;
         }
         void main() {
             vec2 scale = u_resolution / min(u_resolution.x, u_resolution.y);
@@ -134,17 +185,22 @@
             float size = portrait ? .82 : min(1., scale.x * .46);
             vec2 left = (p - vec2(-.07 * size, scale.y * .5)) / size;
             vec2 right = (p - vec2(scale.x + .07 * size, scale.y * .5)) / size;
-            vec3 waves = speakerWaves(left, 0.) + speakerWaves(right, 1.);
+            vec4 waves = speakerWaves(left, 0.) + speakerWaves(right, 1.);
             float edge = min(v_uv.x, 1. - v_uv.x);
             waves *= 1. - smoothstep(portrait ? .20 : .25, portrait ? .35 : .36, edge);
             // The centre is a still, low-frequency cover-colour gradient. Left
             // dark / right light is deliberate and also shapes the optical waves.
             vec3 colour = mix(u_dark, u_light, pow(v_uv.x, 1.12));
-            colour *= 1. - waves.y;
+            colour *= 1. - min(waves.y, .62);
             colour += u_light * waves.x * mix(.60, 1., v_uv.x);
+            // A water highlight becomes pale locally, without bleaching the
+            // cover-coloured background or changing the central lyric contrast.
             colour += mix(u_light, vec3(1.), .10) * waves.z * mix(.60, 1., v_uv.x);
+            colour = mix(colour, mix(u_light, vec3(1.), .52), min(waves.w, .52));
             float edgeY = abs(v_uv.y - .5) * 2.;
-            colour *= 1. - .56 * smoothstep(.65, 1., edgeY) - .12 * smoothstep(.91, 1., edgeY);
+            // Controls add their own temporary scrim. Do not bake a black top/
+            // bottom mask into the water: it erases the reference's lit edges.
+            colour *= 1. - .18 * smoothstep(.75, 1., edgeY);
             colour += (hash(gl_FragCoord.xy) - .5) / 255.;
             gl_FragColor = vec4(max(colour, vec3(0.)), 1.);
         }
@@ -161,6 +217,7 @@
     let colours = [];
     let frameCount = 0, averageDelta = 16.67, slowFrames = 0;
     let drive = 0, punch = 0, density = 0;
+    let surfaceResponse = [0, 0, 0, 0];
     let playbackBlend = 0;
     let strength = [...AMBIENT_STRENGTH];
     let lastFrame = { ambient: true, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0, impact: 0 };
@@ -247,7 +304,7 @@
         const attribute = gl.getAttribLocation(program, 'a_position');
         gl.enableVertexAttribArray(attribute);
         gl.vertexAttribPointer(attribute, 2, gl.FLOAT, false, 0, 0);
-        for (const name of ['u_resolution', 'u_time', 'u_travel', 'u_audio', 'u_impact', 'u_response', 'u_waveStrength', 'u_dark', 'u_mid', 'u_light', 'u_impulses[0]']) {
+        for (const name of ['u_resolution', 'u_time', 'u_travel', 'u_surface', 'u_waveStrength', 'u_dark', 'u_mid', 'u_light', 'u_impulses[0]']) {
             uniforms[name] = gl.getUniformLocation(program, name);
         }
         if (!eventsBound) {
@@ -312,9 +369,7 @@
         // The reference's broad-wave cadence persists during silent/paused
         // passages. Audio changes local light/shape, not this transport clock.
         gl.uniform1f(uniforms.u_travel, clockTime * BASE_WAVE_SPEED);
-        gl.uniform4f(uniforms.u_audio, frame.bass, frame.mid, frame.treble, frame.energy);
-        gl.uniform1f(uniforms.u_impact, frame.impact);
-        gl.uniform3fv(uniforms.u_response, [drive, punch, density]);
+        gl.uniform4f(uniforms.u_surface, ...surfaceResponse);
         gl.uniform2f(uniforms.u_waveStrength, ...strength);
         ['u_dark', 'u_mid', 'u_light'].forEach((name, index) => gl.uniform3fv(uniforms[name], colours[index]));
         impulseData.fill(0);
@@ -347,6 +402,14 @@
             impulses = [];
             punch = density = 0;
         }
+        const energyGate = Math.min(1, Math.max(0, (frame.energy - .01) / .12));
+        const bassExcursion = Math.pow(Math.min(1, Math.max(0, (frame.bass - .04) / .70)), 1.25) * energyGate;
+        const targets = ambient ? [0, 0, 0, 0]
+            : [drive, punch, bassExcursion, Math.min(1, Math.max(0, frame.treble / .45)) * drive];
+        surfaceResponse = surfaceResponse.map((value, index) => {
+            const time = targets[index] > value ? SURFACE_ATTACK[index] : SURFACE_RELEASE[index];
+            return value + (targets[index] - value) * (1 - Math.exp(-delta / time));
+        });
         const targetStrength = targetWaveStrength(ambient);
         strength = strength.map((value, index) => value + (targetStrength[index] - value) * transition);
         flowTime += delta / 1000 * (.14 + drive * 2.3 + punch * 2.1 + density * 1.25);
@@ -378,6 +441,9 @@
         // Allocate nothing for the original skin, hidden pages or reduced motion.
         if (!program && document.body.dataset?.playerSkin === 'pulse' && !document.hidden
             && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) initialize();
+        // Clear detection immediately, but preserve the display-side material
+        // envelopes: pausing a strongly displaced surface must not snap it flat.
+        // Ambient frames release surfaceResponse without replaying old onsets.
         // Preserve phase and current broad-wave contrast at this boundary.
         // Subsequent ambient frames ease toward the softer floor; reset itself
         // cannot flash/reseed the background or schedule a second animation loop.
@@ -388,7 +454,7 @@
         draw, reset, setPalette,
         getDiagnostics: () => ({ renderer: program && !lost ? 'webgl-liquid' : 'static',
             width, height, renderScale, frameCount, averageDelta, activeImpulses: impulses.length,
-            drive, punch, density, playbackBlend, ambient: lastFrame.ambient === true,
+            drive, punch, density, surfaceResponse: [...surfaceResponse], playbackBlend, ambient: lastFrame.ambient === true,
             waveStrength: [...strength], waveTravel: clockTime * BASE_WAVE_SPEED })
     };
 })();
