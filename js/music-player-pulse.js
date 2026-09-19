@@ -68,6 +68,18 @@
             float excursion = (bass * .024 + attack * .018) * inner;
             radius -= excursion * (.65 + curvature * .35);
             float localResponse = drive * .60 + attack * .78 + bass * .24;
+            // Onsets light a patch of the existing surface. They do not emit a
+            // second family of rings with a different radius or propagation.
+            float onsetLight = 0.;
+            for (int index = 0; index < 4; index++) {
+                vec4 impulse = u_impulses[index];
+                float age = impulse.z;
+                float fade = smoothstep(0., .055, age) * (1. - smoothstep(.20, .60, age));
+                float sideWeight = mix(.55, 1., side < .5 ? 1. - impulse.x : impulse.x);
+                float arc = exp(-square((inwardAngle - (impulse.y - .5) * 2.) / .40));
+                onsetLight += fade * impulse.w * sideWeight * arc;
+            }
+            onsetLight = min(onsetLight, 1.);
             // Left: a quicker, feathered wash. Right: smaller/slower ripples.
             // Offsets and per-emission values break the equally spaced tunnel
             // pattern, without introducing per-frame randomness or phase jumps.
@@ -86,7 +98,20 @@
                 float fade = smoothstep(.055, .14, centre) * (1. - smoothstep(extent, extent + .12, centre));
                 float width = .036 + character * .018 + age * .012;
                 float shape = sin(angle * 2. + seed * 6.28) * .002
-                    + curvature * (drive * .008 + attack * .012) * inner;
+                    + curvature * (drive * .008 + attack * .012) * inner
+                    + sin(inwardAngle * 2.4 + character * 6.28 + t * .18)
+                        * (drive * .005 + attack * .005) * inner;
+                // One surface coordinate owns the whole wave: its bright face,
+                // dark face and reflected edge share centre/width/warp/lifetime.
+                // Changing the audio bends this surface, never a light sticker.
+                float waveCoordinate = radius + shape - centre;
+                float slopePosition = waveCoordinate / width;
+                float height = exp(-square(slopePosition));
+                // Normalized analytic derivative of this exact gaussian wave.
+                // Select only the illuminated face (not abs(slope), which would
+                // trace both sides as disconnected neon outlines).
+                float facingSlope = clamp(-2.33164 * slopePosition * height, 0., 1.);
+                float backSlope = clamp(2.33164 * slopePosition * height, 0., 1.);
                 float shoulder = square(.5 + .5 * cos(angle + character * 6.28));
                 float exposure = .78 + shoulder * .22;
                 // The travelling texture has its own visible floor; music
@@ -97,81 +122,40 @@
                 // shadow is secondary, rather than another dark outlined ring.
                 float lightPatch = exp(-square((inwardAngle - sin(t * .41 + seed * 6.28) * .8) / .74));
                 float accent = 1. + localResponse * lightPatch * mix(.95, .52, side);
-                light += band(radius + shape, centre, width) * fade * strength * exposure
+                light += height * fade * strength * exposure
                     * (.12 + character * .10) * mix(1.28, 1., side) * accent;
                 // Separate the broad bright and dark shoulders by roughly half
                 // a wavelength so they do not cancel into a flat colour field.
-                shade += band(radius + shape, centre + .085, width * 1.10)
+                shade += band(waveCoordinate, .085, width * 1.10)
                     * fade * strength * exposure * (.14 + (1. - character) * .10)
                     * (1. + localResponse * lightPatch * .58);
-            }
-            float thinWidth = max(.0040, 1.5 / min(u_resolution.x, u_resolution.y));
-            // No full-circle baseline: translucent details only catch light in
-            // a soft local patch, then disappear. Never a hard traced contour.
-            for (int index = 0; index < 3; index++) {
-                float layer = float(index);
-                float distance = travel * 1.12 + layer * .24 + side * .08;
-                float age = mod(distance, .72) / .72;
-                float seed = hash(vec2(floor(distance / .72) + 11., layer + side * 5.));
-                float centre = .09 + age * .58;
-                float fade = smoothstep(.03, .21, age) * (1. - smoothstep(.32, .72, age));
-                float pinch = .5 + .5 * sin(t * .75 + seed * 6.28);
-                float patch = (seed * 2. - 1.) * .94 + sin(t * .22 + seed * 5.) * .10;
-                float arc = exp(-square((inwardAngle - patch) / (.20 + pinch * .18)));
-                float shape = sin(inwardAngle * 3. + seed * 5.) * (.008 + bass * .012)
-                    + sin(inwardAngle * 5. - t * .65 + seed * 4.) * (.012 + attack * .018) * pinch;
-                float strength = fade * arc * (.075 + seed * .085) * u_waveStrength.y * mix(.6, 1., side)
-                    * (1. + drive * .6 + attack * 1.2 + detail * .7);
-                float width = thinWidth * (.9 + pinch * 1.1 + drive * .5);
-                thin += band(radius + shape, centre, width) * strength;
-                // A soft second shoulder pinches away from the first, making a
-                // little refracted-water glint rather than an unbroken neon arc.
-                thin += band(radius + shape, centre + .012 + pinch * .009, width * 1.3) * strength * pinch * .32;
-                light += band(radius + shape, centre, width * 5.) * strength * .38;
-            }
-            // The sharp meniscus visible in the reference is a translucent
-            // filled crescent, NOT a gaussian glow. Its two boundaries separate
-            // on bass then meet at tapered tips. A small pixel-sized AA edge
-            // preserves that thin, clearly readable water-reflection surface.
-            float aa = max(.0010, 1.1 / min(u_resolution.x, u_resolution.y));
-            float core = .18 + bass * .052 + attack * .025;
-            shade += (1. - smoothstep(core - .008, core + .018, radius)) * drive * mix(.30, .045, side);
-            reflection += band(radius, core, aa * 1.25) * (drive * .09 + attack * .05);
-            for (int index = 0; index < 2; index++) {
-                float layer = float(index);
-                float drift = .5 + .5 * sin(t * .53 + layer * 3.2 + side * 2.1);
-                float patch = sin(t * .37 + side * 2.7 + layer * 2.4) * mix(.20, .75, layer);
-                float span = mix(1.28, .76, layer);
+                float patch = sin(t * .37 + seed * 6.28 + side * 1.7) * .85;
                 float along = inwardAngle - patch;
-                float taper = pow(max(0., 1. - square(along / span)), .75);
-                float lobes = .045 + .955 * smoothstep(.30, .90, abs(along));
-                float thickness = (.006 + bass * .040 + attack * .023) * taper * mix(lobes, .18, layer)
-                    * mix(.90, .55, side);
-                float centre = core + mix(.033, .085, side) + layer * .065 + drift * .033;
-                float bend = sin(inwardAngle * 2.8 - t * .56 + layer * 3.) * (.005 + bass * .014);
-                float across = radius + bend - centre;
-                float ribbon = smoothstep(-aa, aa, across)
-                    * (1. - smoothstep(thickness - aa, thickness + aa, across))
-                    * smoothstep(0., .10, taper);
-                float caustic = (drive * .18 + bass * .12 + attack * .24)
-                    * mix(.48, .78, side) * (1. - layer * .45);
-                reflection += ribbon * caustic;
-                light += band(across, thickness * .5, .030) * taper * caustic * .20;
-                shade += band(across, -.018, .018) * taper * caustic * .34;
-            }
-            // Real onsets add lighter, partially transparent water rings. Their
-            // age always increases, so a release can never pull a wave backwards.
-            for (int index = 0; index < 4; index++) {
-                vec4 impulse = u_impulses[index];
-                float age = impulse.z;
-                float centre = .12 + age * (.22 + impulse.w * .025) * mix(1., .72, side);
-                // Finish before a fifth 170ms onset can recycle this pool slot.
-                float fade = smoothstep(0., .07, age) * (1. - smoothstep(.25, .64, age));
-                float sideWeight = mix(.55, 1., side < .5 ? 1. - impulse.x : impulse.x);
-                float arc = exp(-square((inwardAngle - (impulse.y - .5) * 2.) / .32));
-                float strength = fade * impulse.w * sideWeight;
-                light += band(radius, centre, .044 + age * .020) * arc * strength * .24;
-                thin += band(radius, centre, thinWidth * 2.2) * arc * strength * .18;
+                float arc = exp(-square(along / (.38 + character * .30)));
+                float grazing = .5 + .5 * sin(inwardAngle * 2.8 + t * .44 + character * 6.28);
+                // Changing the grazing angle exposes a narrower or broader
+                // portion of the SAME slope. No independent meniscus radius.
+                float sharpness = mix(24., 5., grazing * (drive * .6 + bass * .25 + attack * .15));
+                float sheen = pow(facingSlope, sharpness);
+                // A wet patch has a readable, antialiased boundary. Its width
+                // opens with the same grazing slope; it is not a blurred lamp
+                // nor a separately positioned crescent floating over the water.
+                float wetness = grazing * (drive * .55 + bass * .25 + attack * .20);
+                float threshold = mix(.993, .80, wetness);
+                #ifdef HAS_DERIVATIVES
+                float slopeAA = max(.003, fwidth(facingSlope) * .8);
+                #else
+                float slopeAA = .010;
+                #endif
+                float wetEdge = smoothstep(threshold - slopeAA, threshold + slopeAA, facingSlope);
+                float reflectedEnergy = .012 * u_waveStrength.y + drive * .22
+                    + bass * .08 + attack * .30 + detail * .08 + onsetLight * .22;
+                float surfaceLight = fade * strength * arc * reflectedEnergy * mix(.92, .72, side);
+                reflection += mix(sheen, wetEdge, .70 + drive * .15) * surfaceLight;
+                thin += pow(facingSlope, 32.) * fade * arc * detail * .06;
+                // The adjacent darker face belongs to the same wave too; it
+                // makes the lit slope read as water depth, not an outside lamp.
+                shade += backSlope * surfaceLight * .30;
             }
             float envelope = 1. - smoothstep(extent - .12, extent, length(q));
             return vec4(light, shade, thin, reflection) * envelope;
@@ -193,10 +177,9 @@
             vec3 colour = mix(u_dark, u_light, pow(v_uv.x, 1.12));
             colour *= 1. - min(waves.y, .62);
             colour += u_light * waves.x * mix(.60, 1., v_uv.x);
-            // A water highlight becomes pale locally, without bleaching the
-            // cover-coloured background or changing the central lyric contrast.
-            colour += mix(u_light, vec3(1.), .10) * waves.z * mix(.60, 1., v_uv.x);
-            colour = mix(colour, mix(u_light, vec3(1.), .52), min(waves.w, .52));
+            // Reflect the scene's cover-coloured light on the lit wave face.
+            // No white overlay / large halo is composited above the surface.
+            colour += u_light * (waves.z + waves.w) * mix(.86, .72, v_uv.x);
             float edgeY = abs(v_uv.y - .5) * 2.;
             // Controls add their own temporary scrim. Do not bake a black top/
             // bottom mask into the water: it erases the reference's lit edges.

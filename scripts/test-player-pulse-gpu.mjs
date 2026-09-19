@@ -16,6 +16,51 @@ try {
 }
 
 const source = readFileSync(new URL('../js/music-player-pulse.js', import.meta.url), 'utf8');
+const vertexSource = source.match(/const VERTEX = `([\s\S]*?)`;/)?.[1];
+const fragmentSource = source.match(/const FRAGMENT = `([\s\S]*?)`;/)?.[1];
+assert.ok(vertexSource && fragmentSource, 'the GPU probe must use the actual production shaders');
+
+// Isolate one production wave, then expose its reflection and its geometric
+// crest in separate channels. This is deliberately not a hand-written second
+// implementation: changing the real reflection path also changes this probe.
+// Other reflection loops are left intact so detached fixed-radius glints leak
+// outside the isolated crest and fail the pixel test below.
+function couplingProbe(fragment, side, detached = false) {
+    const replace = (pattern, replacement, label) => {
+        assert.ok(pattern.test(fragment), `coupling probe could not locate ${label}`);
+        fragment = fragment.replace(pattern, replacement);
+    };
+    replace(/vec4 speakerWaves\(vec2 q, float side\)\s*\{/,
+        '$&\n            float couplingSupport = 0., couplingCrest = 0.;', 'the production surface');
+    replace(/for \(int index = 0; index < 4; index\+\+\)\s*\{\s*float layer = float\(index\);/,
+        '$&\n                if (index != 0) continue;', 'the principal travelling wave loop');
+    replace(/float waveCoordinate\s*=\s*[^;]+;/,
+        `$&
+                float couplingPosition = waveCoordinate / width;
+                couplingSupport += smoothstep(-1.5, -1.2, couplingPosition)
+                    * (1. - smoothstep(-.25, -.05, couplingPosition)) * fade;
+                couplingCrest += exp(-square(couplingPosition)) * fade;`,
+        'the shared reflection / wave coordinate');
+    if (detached) {
+        // Mutation control reproduces the old bug: a pale inner rim at its own
+        // radius, unaffected by the outward phase of the water underneath it.
+        replace(/float envelope\s*=/,
+            'reflection += .16 * band(radius, .31, .008);\n            float envelope =',
+            'the post-wave envelope');
+    }
+    replace(/return vec4\(light, shade, thin, reflection\) \* envelope;/,
+        'return vec4(reflection + thin, couplingSupport, couplingCrest, 0.) * envelope;', 'the production wave channels');
+    replace(/vec4 waves = speakerWaves\(left, 0\.\) \+ speakerWaves\(right, 1\.\);/,
+        `vec4 waves = speakerWaves(${side ? 'right, 1.' : 'left, 0.'});`, 'the selected side');
+    replace(/gl_FragColor\s*=\s*[^;]+;/,
+        'gl_FragColor = vec4(min(waves.x * 4., 1.), min(waves.y, 1.), min(waves.z, 1.), 1.);',
+        'the diagnostic channel output');
+    return fragment;
+}
+
+const couplingShaders = [0, 1].flatMap(side => [false, true].map(detached => ({
+    side, detached, fallback: false, fragment: couplingProbe(fragmentSource, side, detached)
+}))).concat({ side: 0, detached: false, fallback: true, fragment: couplingProbe(fragmentSource, 0) });
 const browser = await chromium.launch({ headless: true,
     ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
 try {
@@ -121,8 +166,117 @@ try {
         assert.ok(report.comparisons.some(sample => sample.channels[channel] > .05),
             `surface channel ${channel} must influence actual pixels, not merely appear in diagnostics`);
     }
+    const coupling = await page.evaluate(({ vertex, probes }) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 864;
+        canvas.height = 400;
+        const gl = canvas.getContext('webgl', { antialias: false, alpha: false });
+        if (!gl) throw new Error('Real WebGL is required for the moving-crest coupling probe.');
+        const prefix = gl.getExtension('OES_standard_derivatives')
+            ? '#extension GL_OES_standard_derivatives : enable\n#define HAS_DERIVATIVES\n' : '';
+        const shader = (type, code) => {
+            const result = gl.createShader(type);
+            gl.shaderSource(result, code);
+            gl.compileShader(result);
+            if (!gl.getShaderParameter(result, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(result));
+            return result;
+        };
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        const surfaceSize = Math.min(1, canvas.width / canvas.height * .46);
+        const samples = [];
+        for (const probe of probes) {
+            const program = gl.createProgram();
+            const vs = shader(gl.VERTEX_SHADER, vertex);
+            // Compile and draw one full probe without the extension directive
+            // or HAS_DERIVATIVES, even on GPUs that support derivatives. This
+            // exercises the real wet-edge fallback instead of a mocked string.
+            const fs = shader(gl.FRAGMENT_SHADER, (probe.fallback ? '' : prefix) + probe.fragment);
+            gl.attachShader(program, vs);
+            gl.attachShader(program, fs);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+            gl.useProgram(program);
+            const position = gl.getAttribLocation(program, 'a_position');
+            gl.enableVertexAttribArray(position);
+            gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
+            const location = name => gl.getUniformLocation(program, name);
+            gl.uniform2f(location('u_resolution'), canvas.width, canvas.height);
+            gl.uniform2f(location('u_waveStrength'), .55, .65);
+            gl.uniform4f(location('u_surface'), .55, .45, .65, .4);
+            gl.uniform4fv(location('u_impulses[0]'), new Float32Array(16));
+            for (const time of [.4, 2.1, 5.3]) {
+                gl.uniform1f(location('u_time'), time);
+                for (const phase of [.12, .18, .24]) {
+                    gl.uniform1f(location('u_travel'), phase);
+                    gl.drawArrays(gl.TRIANGLES, 0, 3);
+                    const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+                    gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+                    if (gl.getError() !== gl.NO_ERROR) throw new Error('GPU coupling probe generated a WebGL error.');
+                    let reflection = 0, outside = 0, crest = 0, reflectionRadius = 0, crestRadius = 0;
+                    for (let y = 0; y < canvas.height; y++) {
+                        for (let x = 0; x < canvas.width; x++) {
+                            const offset = (y * canvas.width + x) * 4;
+                            const r = pixels[offset];
+                            const g = pixels[offset + 1];
+                            const b = pixels[offset + 2];
+                            const qx = probe.side ? (canvas.width - x - .5) / canvas.height / surfaceSize + .07
+                                : (x + .5) / canvas.height / surfaceSize + .07;
+                            const qy = ((y + .5) / canvas.height - .5) / surfaceSize * .97;
+                            const radius = Math.hypot(qx, qy);
+                            reflection += r;
+                            crest += b;
+                            reflectionRadius += r * radius;
+                            crestRadius += b * radius;
+                            // Green is only the illuminated inner slope, not
+                            // the entire Gaussian crest / scene. Blue marks the
+                            // underlying crest independently for displacement.
+                            // A rim cannot pass by merely being on the same side.
+                            if (g < 4) outside += r;
+                        }
+                    }
+                    samples.push({ side: probe.side, detached: probe.detached, fallback: probe.fallback, time, phase,
+                        reflection, crest, outsideFraction: outside / Math.max(1, reflection),
+                        reflectionRadius: reflectionRadius / Math.max(1, reflection),
+                        crestRadius: crestRadius / Math.max(1, crest) });
+                }
+            }
+            gl.deleteProgram(program);
+            gl.deleteShader(vs);
+            gl.deleteShader(fs);
+        }
+        gl.deleteBuffer(buffer);
+        return samples;
+    }, { vertex: vertexSource, probes: couplingShaders });
+    for (const sample of coupling.filter(sample => !sample.detached)) {
+        assert.ok(sample.reflection > 1000, 'the isolated travelling wave must have a measurable real highlight');
+        assert.ok(sample.crest > 1000, 'the coupling probe must expose a real underlying wave crest');
+        assert.ok(sample.outsideFraction < .025,
+            `reflection escaped its own wave shoulder: ${JSON.stringify(sample)}`);
+    }
+    assert.equal(coupling.filter(sample => sample.fallback).length, 9,
+        'the no-derivatives wet-edge branch must compile and render all nine real GPU probe frames');
+    for (const side of [0, 1]) {
+        for (const time of [.4, 2.1, 5.3]) {
+            const frames = coupling.filter(sample => !sample.detached && !sample.fallback
+                && sample.side === side && sample.time === time);
+            for (let index = 1; index < frames.length; index++) {
+                const reflectionDelta = frames[index].reflectionRadius - frames[index - 1].reflectionRadius;
+                const crestDelta = frames[index].crestRadius - frames[index - 1].crestRadius;
+                assert.ok(crestDelta > .02,
+                    `the test must actually move the underlying water crest: ${JSON.stringify({ side, time, frames })}`);
+                assert.ok(reflectionDelta > .02 && Math.abs(reflectionDelta - crestDelta) < .025,
+                    `highlight and water must move outward together, not at separate radii: ${JSON.stringify({ side, time, reflectionDelta, crestDelta })}`);
+            }
+        }
+        assert.ok(coupling.some(sample => sample.detached && sample.side === side && sample.outsideFraction > .10),
+            'negative control must reject a fixed-radius reflection even though the real wave still moves');
+    }
     console.log(JSON.stringify(report, null, 2));
-    console.log('PASS: real WebGL active audio uniform, four live surface channels, same-phase quiet/strong contrast, stable lyric centre and no GPU errors.');
+    console.log(JSON.stringify({ coupling }, null, 2));
+    console.log('PASS: real WebGL active audio uniform, four live surface channels, quiet/strong contrast, stable lyric centre, wave-locked reflections across phase/time, detached-rim negative control, no-derivatives fallback and no GPU errors.');
 } finally {
     await browser.close();
 }
