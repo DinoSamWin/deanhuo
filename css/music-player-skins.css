@@ -501,6 +501,16 @@ body[data-player-skin="pulse"] .desktop-close-btn:focus-visible { outline: 2px s
 body[data-player-skin="pulse"] .player-chrome { transition: opacity 550ms ease, visibility 550ms ease; }
 body[data-player-skin="pulse"].is-idle { cursor: none; }
 body[data-player-skin="pulse"].is-idle .player-chrome { opacity: 0; visibility: hidden; pointer-events: none; }
+/* A fullscreen listener must always have a visible way out. Leave only the
+   small top-right toolbar and X present; the song controls still disappear. */
+body[data-player-skin="pulse"].is-player-fullscreen.is-idle :is(.skin-tools, .desktop-close-btn) {
+    opacity: .64;
+    visibility: visible;
+    pointer-events: auto;
+}
+body[data-player-skin="pulse"].is-player-fullscreen.is-idle :is(.skin-tools, .desktop-close-btn):is(:hover, :focus-within) {
+    opacity: 1;
+}
 
 @media (min-width: 901px) and (hover: hover) and (pointer: fine) {
     .skin-menu .skin-original-desktop { display: block; }

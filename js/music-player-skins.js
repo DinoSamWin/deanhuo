@@ -15,6 +15,8 @@
     let toggle = null;
     let menu = null;
     let fullscreenButton = null;
+    let fullscreenToolbar = null;
+    let closeButton = null;
     let fullscreenPending = false;
     let fullscreenOperation = 0;
     let idleTimer = null;
@@ -194,9 +196,19 @@
 
     function setIdle(idle) {
         document.body.classList.toggle('is-idle', idle);
+        const keepExitControls = isImmersive() && Boolean(fullscreenElement());
         document.querySelectorAll('.player-chrome').forEach(element => {
-            element.inert = idle;
+            // Native fullscreen has no surrounding browser navigation. Keep
+            // its visible escape controls focusable and clickable even while
+            // the song information and playback controls fade away.
+            const escapeControl = element === fullscreenToolbar || element === closeButton;
+            element.inert = idle && !(keepExitControls && escapeControl);
         });
+    }
+
+    function isFullscreenEscapeTarget(target) {
+        return isImmersive() && Boolean(fullscreenElement()) && Boolean(target)
+            && Boolean(fullscreenToolbar?.contains(target) || closeButton?.contains(target));
     }
 
     function wakeControls() {
@@ -531,8 +543,12 @@
     }
 
     function updateFullscreenButton() {
-        if (!fullscreenButton) return;
         const active = Boolean(fullscreenElement());
+        document.body.classList.toggle('is-player-fullscreen', active);
+        const closeLabel = active ? '关闭播放器并返回音乐列表' : '返回音乐列表';
+        closeButton?.setAttribute('aria-label', closeLabel);
+        closeButton?.setAttribute('title', closeLabel);
+        if (!fullscreenButton) return;
         const label = active ? '退出全屏' : '进入全屏';
         fullscreenButton.hidden = !active && !fullscreenRequest();
         fullscreenButton.setAttribute('aria-pressed', String(active));
@@ -604,7 +620,7 @@
             if (!isImmersive()) return;
             const wasIdle = document.body.classList.contains('is-idle');
             wakeControls();
-            if (wasIdle && event.pointerType !== 'mouse') {
+            if (wasIdle && event.pointerType !== 'mouse' && !isFullscreenEscapeTarget(event.target)) {
                 swallowTouchClickUntil = performance.now() + 800;
                 event.preventDefault();
                 event.stopPropagation();
@@ -620,12 +636,13 @@
             if (isImmersive()) wakeControls();
         }, { passive: true });
         document.addEventListener('click', event => {
-            if (performance.now() < swallowTouchClickUntil) {
+            if (performance.now() < swallowTouchClickUntil && !isFullscreenEscapeTarget(event.target)) {
                 swallowTouchClickUntil = 0;
                 event.preventDefault();
                 event.stopImmediatePropagation();
                 return;
             }
+            swallowTouchClickUntil = 0;
             if (isMenuOpen() && !menu.contains(event.target) && !toggle.contains(event.target)) setMenuOpen(false);
         }, true);
         document.addEventListener('keydown', event => {
@@ -657,6 +674,8 @@
         toggle = document.getElementById('skin-toggle');
         menu = document.getElementById('skin-menu');
         fullscreenButton = document.getElementById('btn-fullscreen');
+        fullscreenToolbar = fullscreenButton?.closest('.player-chrome') || null;
+        closeButton = document.getElementById('btn-close');
 
         toggle?.addEventListener('click', () => setMenuOpen(!isMenuOpen()));
         document.querySelectorAll('[data-skin-option]').forEach(button => {

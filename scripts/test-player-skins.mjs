@@ -56,8 +56,8 @@ class Element {
 
     setAttribute(name, value) { this.attributes.set(name, value); }
     getAttribute(name) { return this.attributes.get(name) ?? null; }
-    contains(element) { return element === this; }
-    closest(selector) { return selector === '.player-chrome' && this.chrome ? this : null; }
+    contains(element) { return element === this || Boolean(element?.parent && this.contains(element.parent)); }
+    closest(selector) { return selector === '.player-chrome' && this.chrome ? this : this.parent?.closest(selector) || null; }
 }
 
 function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced = false, refreshRate = 60,
@@ -90,21 +90,25 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
     const toggle = new Element();
     const menu = new Element();
     const fullscreen = new Element();
+    const toolbar = new Element();
+    const close = new Element();
+    const playback = new Element();
     const original = new Element();
     const pulse = new Element();
     const audio = new Element();
     const motion = new Element();
     const visualCanvas = new Element();
-    const chrome = [toggle, fullscreen];
-    chrome.forEach(element => {
-        element.chrome = true;
+    toggle.parent = fullscreen.parent = menu.parent = toolbar;
+    const chrome = [toolbar, close, playback];
+    chrome.forEach(element => { element.chrome = true; });
+    [...chrome, toggle, fullscreen].forEach(element => {
         element.focus = () => { document.activeElement = element; };
         let inert = false;
         Object.defineProperty(element, 'inert', {
             get: () => inert,
             set: value => {
                 inert = value;
-                if (!value || document.activeElement !== element) return;
+                if (!value || !element.contains(document.activeElement)) return;
                 document.activeElement = body;
                 element.emit('blur');
                 document.emit('focusout', { target: element });
@@ -147,6 +151,7 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
         'skin-toggle': toggle,
         'skin-menu': menu,
         'btn-fullscreen': fullscreen,
+        'btn-close': close,
         'pulse-canvas': visualCanvas
     })[id];
     document.querySelectorAll = selector => selector === '[data-skin-option]'
@@ -274,6 +279,7 @@ function createHarness({ storedSkin, audioUrl = 'assets/audio/test.mp3', reduced
         });
     };
     return { skin, document, body, toggle, menu, original, pulse, audio, motion, state, storage, fullscreen, fullscreenCalls,
+        toolbar, close, playback,
         visualCanvas, advance, level, palette, solidPixels, spectrum, changes: () => changes };
 }
 
@@ -649,13 +655,13 @@ console.log('PASS: seek, pause, visibility, track and skin changes reset detecti
     h.advance(1);
     await Promise.resolve();
     assert.equal(h.body.classes.has('is-idle'), true);
-    assert.equal(h.toggle.inert, true);
+    assert.equal(h.toolbar.inert, true);
     assert.equal(h.document.activeElement, h.body, 'inert removes the old mouse focus');
     h.advance(1000);
     assert.equal(h.body.classes.has('is-idle'), true, 'inert-generated blur must not wake controls');
     const touch = h.document.emit('pointerdown', { pointerType: 'touch' });
     assert.equal(touch.defaultPrevented, true);
-    assert.equal(h.toggle.inert, false);
+    assert.equal(h.toolbar.inert, false);
     assert.equal(h.document.emit('click').immediateStopped, true, 'wake touch cannot activate a hidden control');
     h.toggle.emit('click');
     assert.equal(h.menu.hidden, false);
@@ -677,7 +683,7 @@ console.log('PASS: seek, pause, visibility, track and skin changes reset detecti
     h.advance(5000);
     h.audio.pause();
     assert.equal(h.body.classes.has('is-idle'), false, 'pausing reveals controls immediately');
-    assert.equal(h.toggle.inert, false);
+    assert.equal(h.toolbar.inert, false);
     h.advance(12000);
     assert.equal(h.body.classes.has('is-idle'), false, 'paused controls never time out');
 }
@@ -699,9 +705,11 @@ for (const fullscreenApi of ['standard', 'webkit']) {
     h.pulse.emit('click');
     h.audio.play();
     h.advance(5000);
-    assert.equal(h.toggle.inert, true);
+    assert.equal(h.toolbar.inert, false, 'the fullscreen toolbar stays available during idle');
+    assert.equal(h.close.inert, false, 'X remains an accessible escape during idle');
+    assert.equal(h.playback.inert, true, 'normal playback controls still hide during idle');
     h.document.emit('pointermove');
-    assert.equal(h.toggle.inert, false, 'native fullscreen controls wake after idle');
+    assert.equal(h.toolbar.inert, false, 'native fullscreen controls remain available after wake');
     h.advance(5000);
     h.document.emit('pointerdown', { pointerType: 'touch' });
     // Native transition can interrupt an old touch gesture. Do not let that
@@ -712,7 +720,7 @@ for (const fullscreenApi of ['standard', 'webkit']) {
     assert.equal(h.fullscreenCalls.exits, 1);
     assert.equal(h.fullscreen.getAttribute('aria-pressed'), 'false');
     assert.equal(h.fullscreen.getAttribute('title'), '进入全屏');
-    assert.equal(h.toggle.inert, false);
+    assert.equal(h.toolbar.inert, false);
     await h.skin.exitFullscreen();
     assert.equal(h.fullscreenCalls.exits, 1, 'closing outside fullscreen is a harmless no-op');
 }
@@ -721,7 +729,7 @@ for (const fullscreenApi of ['standard', 'webkit']) {
     h.fullscreen.emit('click');
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(h.fullscreen.getAttribute('aria-pressed'), 'false');
-    assert.equal(h.toggle.inert, false);
+    assert.equal(h.toolbar.inert, false);
     h.toggle.emit('click');
     assert.equal(h.menu.hidden, false, 'a rejected native request never disables the toolbar');
     h.fullscreen.emit('click');
@@ -730,6 +738,51 @@ for (const fullscreenApi of ['standard', 'webkit']) {
     assert.equal(createHarness().fullscreen.hidden, true, 'unsupported hosts do not expose an unusable action');
 }
 console.log('PASS: standard/WebKit fullscreen boundary, skin switching, idle recovery, exit, labels and rejected requests.');
+
+for (const fullscreenApi of ['standard', 'webkit']) {
+    for (const pointerType of ['mouse', 'touch', 'pen']) {
+        for (const control of ['fullscreen', 'close', 'toggle']) {
+            const h = createHarness({ storedSkin: 'pulse', fullscreenApi });
+            h.fullscreen.emit('click');
+            await new Promise(resolve => setImmediate(resolve));
+            h.audio.play();
+            h.advance(5600);
+            assert.equal(h.body.classes.has('is-idle'), true);
+            assert.equal(h.body.classes.has('is-player-fullscreen'), true);
+            assert.equal(h.toolbar.inert, false);
+            assert.equal(h.close.inert, false);
+            assert.equal(h.playback.inert, true);
+            assert.equal(h.close.getAttribute('aria-label'), '关闭播放器并返回音乐列表');
+            // Use an SVG child rather than the button itself, as with a real tap.
+            const icon = new Element();
+            icon.parent = h[control];
+            const press = h.document.emit('pointerdown', { pointerType, target: icon });
+            assert.equal(press.defaultPrevented, false, `${pointerType} can activate ${control} without a wake-only tap`);
+            const click = h.document.emit('click', { target: icon });
+            assert.equal(click.immediateStopped, false);
+            h[control].emit('click');
+            if (control === 'fullscreen') {
+                await new Promise(resolve => setImmediate(resolve));
+                assert.equal(h.fullscreenCalls.exits, 1, 'one press exits native fullscreen');
+                assert.equal(h.body.classes.has('is-player-fullscreen'), false);
+            } else if (control === 'toggle') {
+                assert.equal(h.menu.hidden, false, 'the persistent toolbar also opens its skin menu in one press');
+            }
+        }
+    }
+}
+{
+    const h = createHarness({ storedSkin: 'pulse', fullscreenApi: 'standard' });
+    h.fullscreen.emit('click');
+    await new Promise(resolve => setImmediate(resolve));
+    h.audio.play();
+    h.advance(5500);
+    const wake = h.document.emit('pointerdown', { pointerType: 'touch', target: h.body });
+    assert.equal(wake.defaultPrevented, true, 'hidden playback controls retain their accidental-tap protection');
+    assert.equal(h.document.emit('click', { target: h.close }).immediateStopped, false,
+        'a stale wake gesture cannot swallow a visible exit control');
+}
+console.log('PASS: fullscreen idle retains the toolbar and X; mouse, touch and pen activate exits in one press.');
 
 {
     const h = createHarness({ storedSkin: 'pulse', fullscreenApi: 'standard' });
@@ -760,7 +813,7 @@ console.log('PASS: standard/WebKit fullscreen boundary, skin switching, idle rec
     await exit;
     assert.equal(finished, true, 'X can continue navigating within 1500 ms even if the host exit hangs');
     assert.equal(h.fullscreen.getAttribute('aria-pressed'), 'true', 'timeout never fabricates a native exit state');
-    assert.equal(h.toggle.inert, false);
+    assert.equal(h.toolbar.inert, false);
 }
 console.log('PASS: unresolved native fullscreen promises cannot trap retry, skin controls or close navigation.');
 

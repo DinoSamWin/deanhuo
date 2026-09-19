@@ -337,7 +337,7 @@ console.log('PASS: stable random origins across 120 Hz frames, continuous impuls
     bounded.draw({ beat: .3 });
     const resumed = delayed.draw({ delta: 10000, beat: 0 });
     const normal = bounded.draw({ delta: 50, beat: 0 });
-    for (const name of ['u_time', 'u_travel', 'u_surface', 'u_impulses[0]']) {
+    for (const name of ['u_time', 'u_sourceTime', 'u_travel', 'u_surface', 'u_impulses[0]']) {
         assert.deepEqual(resumed[name], normal[name],
             'returning after a long suspended frame must advance at most 50 ms, not jump the flow or its accents');
     }
@@ -349,11 +349,13 @@ console.log('PASS: stable random origins across 120 Hz frames, continuous impuls
 console.log('PASS: suspended-frame recovery preserves coherent phase/accents with bounded time and no catch-up burst.');
 
 {
+    const baseSpeed = .19 / (.8 * 1.50);
     const runTravel = fps => {
         const h = createHarness();
         const energies = [.06, .50, 0, .10, .55, 0, 0, 0];
         let previousTravel = 0;
         const distances = [];
+        const rates = [];
         for (let second = 0; second < energies.length; second++) {
             const start = previousTravel;
             for (let index = 0; index < fps; index++) {
@@ -364,31 +366,37 @@ console.log('PASS: suspended-frame recovery preserves coherent phase/accents wit
                 const travel = frame.u_travel[0];
                 assert.ok(travel > previousTravel,
                     'propagation must move outward on every frame, including abrupt loud-to-silent transitions');
-                assert.ok(travel - previousTravel < .3 / fps,
-                    'audio changes cannot jump or accelerate the base radial phase');
+                assert.ok(travel - previousTravel <= baseSpeed * 1.14 / fps + 1e-10,
+                    'broad waves never exceed 14% above idle speed, even on strong beats');
                 assert.equal(h.renderer.getDiagnostics().waveTravel, travel,
                     'wave diagnostics must report the exact propagation uniform submitted to the GPU');
+                assert.ok(h.renderer.getDiagnostics().waveRate >= 1 - 1e-10
+                    && h.renderer.getDiagnostics().waveRate <= 1.14 + 1e-10,
+                    'propagation speed stays between idle drift and its musical ceiling');
                 previousTravel = travel;
             }
             distances.push(previousTravel - start);
+            rates.push(h.renderer.getDiagnostics().waveRate);
         }
-        return { travel: previousTravel, distances };
+        return { travel: previousTravel, distances, rates };
     };
     const sixty = runTravel(60);
     const highRefresh = runTravel(120);
-    for (const distance of sixty.distances) {
-        assert.ok(Math.abs(distance - .19 / (.8 * 1.50)) < 1e-10,
-            'quiet, loud and silent passages retain the same measured base-wave cadence');
-    }
-    assert.ok(Math.abs(sixty.travel - highRefresh.travel) < 1e-10,
-        'the same eight-second timeline produces matching propagation at 60/120 Hz');
-    const perSecond = sixty.distances[0];
+    assert.ok(sixty.distances[1] > sixty.distances[0] * 1.03
+        && sixty.distances[1] < sixty.distances[0] * 1.14,
+        'strong music only gently increases broad-wave transport, never races the entire field');
+    assert.ok(sixty.rates[2] < sixty.rates[1], 'a release decelerates rather than keeping the last loud speed');
+    assert.ok(Math.abs(sixty.distances.at(-1) - baseSpeed) < .002,
+        'sustained silence settles back to the steady idle cadence');
+    assert.ok(Math.abs(sixty.travel - highRefresh.travel) < .015,
+        'the same musical timeline stays consistent at 60/120 Hz while integrating changing velocity');
+    const perSecond = baseSpeed;
     const sideFactors = script.match(/float travel = u_travel \* mix\(([\d.]+), ([\d.]+), side\)/);
     assert.ok(sideFactors, 'shader exposes the two fixed propagation factors');
     assert.ok(Math.abs(.19 / (perSecond * Number(sideFactors[1])) - .8) < 1e-10,
-        'left-side mean crest cadence matches approximately one wave per .8 seconds');
+        'left-side idle crest cadence remains approximately one wave per .8 seconds');
     assert.ok(Math.abs(.19 / (perSecond * Number(sideFactors[2])) - 1.6) < 1e-10,
-        'right-side mean crest cadence matches approximately one wave per 1.6 seconds');
+        'right-side idle crest cadence remains approximately one wave per 1.6 seconds');
     const silenceAt = fps => {
         const h = createHarness();
         for (let index = 0; index < fps * 3; index++) {
@@ -402,7 +410,52 @@ console.log('PASS: suspended-frame recovery preserves coherent phase/accents wit
     assert.ok(Math.abs(silentTravel - silenceAt(120)) < 1e-10,
         'silent travel is identical over equal elapsed time at 60 Hz and 120 Hz');
 }
-console.log('PASS: constant outward base cadence, measured left/right intervals and 60/120 Hz consistency across loud/quiet/silent passages.');
+console.log('PASS: steady idle drift, bounded music-driven acceleration/deceleration, monotonic phase and 60/120 Hz consistency.');
+
+{
+    const h = createHarness({ skin: 'pulse' });
+    h.renderer.reset();
+    assert.equal(h.state.draws.at(-1).u_audible[0], 0);
+    for (let index = 0; index < 90; index++) h.draw({ ambient: true, energy: 1, beat: 1 });
+    assert.equal(h.renderer.getDiagnostics().waveRate, 1, 'ambient frames cannot create synthetic musical acceleration');
+    assert.equal(h.state.draws.at(-1).u_audible[0], 0, 'ambient frames cannot fabricate music exposure');
+    for (let index = 0; index < 120; index++) h.draw({ energy: .07, bass: .09, treble: .025, beat: 0 });
+    const quiet = h.renderer.getDiagnostics();
+    assert.ok(quiet.audiblePresence > .6, 'even gentle audible music lifts the exposure floor');
+    assert.ok(quiet.waveRate > 1.02 && quiet.waveRate < 1.05, 'quiet music keeps the outer field near idle drift');
+    for (let index = 0; index < 30; index++) h.draw({ energy: .5, bass: .7, beat: index % 12 === 0 ? .4 : 0 });
+    const loud = h.renderer.getDiagnostics();
+    assert.ok(loud.waveRate > quiet.waveRate && loud.waveRate < 1.14,
+        'strong audio adds only a small, slowly eased transport change');
+    assert.ok(loud.audiblePresence > .98);
+    assert.equal(h.state.draws.at(-1).u_audible[0], loud.audiblePresence);
+    h.renderer.reset();
+    assert.equal(h.renderer.getDiagnostics().waveTravel, loud.waveTravel, 'pause never resets the integrated phase');
+    assert.equal(h.renderer.getDiagnostics().waveSpeed, loud.waveSpeed, 'pause holds current speed before its gentle release');
+    assert.equal(h.renderer.getDiagnostics().audiblePresence, loud.audiblePresence, 'pause cannot flash the water exposure');
+    for (let index = 0; index < 300; index++) h.draw({ ambient: true, energy: 1, beat: 1 });
+    assert.ok(Math.abs(h.renderer.getDiagnostics().waveRate - 1) < .0001);
+    assert.ok(h.renderer.getDiagnostics().audiblePresence < .00001);
+}
+console.log('PASS: audible light lift with restrained broad transport, phase-preserving pause and smooth idle recovery.');
+
+{
+    const steady = createHarness(), rhythmic = createHarness();
+    for (let index = 0; index < 180; index++) {
+        const frame = { energy: .38, bass: .4, treble: .18, beat: 0 };
+        steady.draw(frame);
+        rhythmic.draw({ ...frame, bass: index % 24 < 6 ? .9 : .1, beat: index % 24 === 0 ? .45 : 0 });
+        const calm = steady.renderer.getDiagnostics(), beat = rhythmic.renderer.getDiagnostics();
+        assert.equal(beat.waveTravel, calm.waveTravel, 'fast bass/beat changes cannot accelerate all outer rings');
+        assert.equal(rhythmic.state.draws.at(-1).u_time[0], steady.state.draws.at(-1).u_time[0],
+            'fast bass/beat changes cannot spin the grazing-light clock');
+    }
+    assert.ok(rhythmic.renderer.getDiagnostics().activeImpulses > 0,
+        'real onsets still drive local, outward-delayed highlights');
+    assert.ok(rhythmic.renderer.getDiagnostics().surfaceResponse[1] > 0,
+        'decoupling global motion must not disable the source attack response');
+}
+console.log('PASS: beat and bass drive local response without speeding or spinning the outer field.');
 
 {
     const quiet = createHarness();
@@ -418,8 +471,11 @@ console.log('PASS: constant outward base cadence, measured left/right intervals 
     assert.ok(strongDrive > .7 && strongDrive <= 1, 'loud passages use a substantially larger bounded response');
     assert.ok(strongDrive > quietDrive * 8,
         'the amplitude curve must preserve strong quiet/loud separation rather than compressing both with sqrt');
-    assert.ok(strongFrame.u_time[0] > quietFrame.u_time[0] * 3,
-        'louder passages animate the local water-glint deformation without changing base propagation');
+    assert.ok(strongFrame.u_time[0] > quietFrame.u_time[0]
+        && strongFrame.u_time[0] < quietFrame.u_time[0] * 1.42,
+        'grazing light drifts gently rather than globally racing on loud music');
+    assert.ok(strongFrame.u_sourceTime[0] > quietFrame.u_sourceTime[0] * 2,
+        'strong music animates the small source material independently of slow transport');
     const quietAccent = quiet.draw({ energy: .07, beat: .055 });
     const strongAccent = strong.draw({ energy: .46, beat: .38 });
     assert.ok(strong.renderer.getDiagnostics().punch > quiet.renderer.getDiagnostics().punch * 8,
@@ -494,8 +550,13 @@ console.log('PASS: first-frame attack, immediate strong punch, smooth time-based
     const rapid = runRhythm(15);
     assert.ok(rapid.meanDensity > sparse.meanDensity * 2.5,
         'four real accents per second accumulate much more motion density than one equal-strength accent');
-    assert.ok(rapid.frame.u_time[0] > sparse.frame.u_time[0] * 1.25,
-        'denser real onsets influence local-glint deformation independently of base-wave propagation');
+    assert.equal(rapid.frame.u_time[0], sparse.frame.u_time[0],
+        'denser real onsets must not accelerate the global grazing-light clock');
+    assert.ok(rapid.frame.u_sourceTime[0] > sparse.frame.u_sourceTime[0] * 1.04,
+        'dense music drives the separate inner-surface opening/closing clock');
+    assert.ok(rapid.h.renderer.getDiagnostics().surfaceResponse[1]
+        > sparse.h.renderer.getDiagnostics().surfaceResponse[1] * 2,
+        'dense accents remain visible through the fast source envelope');
     assert.ok(Math.abs(rapid.h.renderer.getDiagnostics().drive - sparse.h.renderer.getDiagnostics().drive) < 1e-10,
         'tempo density must not rewrite the independent loudness envelope');
     const highRefresh = runRhythm(30, 120);
@@ -503,6 +564,8 @@ console.log('PASS: first-frame attack, immediate strong punch, smooth time-based
         'density is elapsed-time based and stays consistent at 60 Hz and 120 Hz');
     assert.ok(Math.abs(highRefresh.h.renderer.getDiagnostics().drive - rapid.h.renderer.getDiagnostics().drive) < 1e-10,
         'the drive envelope is refresh-rate independent');
+    assert.ok(Math.abs(highRefresh.frame.u_sourceTime[0] - rapid.frame.u_sourceTime[0]) < .025,
+        'the independent material clock is continuous and consistent at 60/120 Hz');
     assert.equal(highRefresh.h.state.draws.length, 600, 'higher-refresh response still draws on every supplied frame');
 }
 console.log('PASS: rapid versus sparse beat-density separation, independent loudness and consistent 60/120 Hz response.');

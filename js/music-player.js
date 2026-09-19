@@ -7,6 +7,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentIndex = 0;
     let currentVersionIndex = 0;
     let isPlaying = false;
+    let playbackRequestId = 0;
+    let playbackPending = false;
+    let autoplayBlocked = false;
+    let playerClosed = false;
     let lyrics = [];
     let lyricsHaveTimestamps = false;
     let activeLyricIndex = -1;
@@ -62,11 +66,20 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelLyricScrollAnimation();
         updateLyricsDisplay(elements.audio.currentTime || 0, true);
     });
+    window.addEventListener('pagehide', () => {
+        playerClosed = true;
+        pauseAudio();
+    });
+    window.addEventListener('pageshow', event => {
+        // A history-restored player remains paused, but its controls work again.
+        if (event.persisted) playerClosed = false;
+    });
 
     // Keep the catalogue cacheable so repeat H5 visits do not refetch it.
     fetch('assets/data/music.json')
         .then(res => res.json())
         .then(data => {
+            if (playerClosed) return;
             songs = getVisibleResources(data);
             if (songs.length === 0) return;
 
@@ -95,7 +108,12 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.audio.addEventListener('seeked', () => updateProgress(true));
         elements.audio.addEventListener('loadedmetadata', updateDuration);
         elements.audio.addEventListener('durationchange', updateDuration);
-        elements.audio.addEventListener('play', () => setPlayingState(true));
+        elements.audio.addEventListener('play', () => {
+            // A queued play event may arrive after the user has already paused
+            // or closed the player. Reflect the element, not the stale event.
+            if (playerClosed) elements.audio.pause();
+            setPlayingState(!playerClosed && !elements.audio.paused && !elements.audio.ended);
+        });
         elements.audio.addEventListener('pause', () => setPlayingState(false));
         elements.audio.addEventListener('ended', () => nextTrack());
 
@@ -110,6 +128,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function closePlayer() {
+        if (playerClosed) return;
+        playerClosed = true;
+        pauseAudio();
         await window.DeanPlayerSkin?.exitFullscreen?.();
         let canReturnToReferrer = false;
 
@@ -183,7 +204,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadTrack(index, initial = false) {
+        if (playerClosed) return;
         const song = songs[index];
+        if (!song) return;
+        pauseAudio();
         currentVersionIndex = 0;
         const songPath = `/song/${encodeURIComponent(song.id)}`;
         if (window.location.pathname !== songPath && window.history?.replaceState) {
@@ -209,13 +233,9 @@ document.addEventListener('DOMContentLoaded', () => {
         renderVersionStrip(song);
         loadLyrics(song);
 
-        if (!initial) {
-            playAudio();
-        } else {
-            // WeChat and iOS block autoplay. Begin paused so the control and
-            // visual state always agree with the actual audio element.
-            setPlayingState(false);
-        }
+        // Start immediately, independently of the lyric request. Browsers which
+        // disallow audible autoplay keep an honest paused state and a play hint.
+        playAudio({ automatic: initial });
     }
 
     function renderVersionStrip(song) {
@@ -251,12 +271,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function selectVersion(index) {
+        if (playerClosed) return;
         const song = songs[currentIndex];
         const versions = getSongVersions(song);
         const version = versions[index];
         if (!version || index === currentVersionIndex) return;
 
-        const shouldResume = isPlaying;
+        const shouldResume = isPlaying || playbackPending;
+        pauseAudio();
         currentVersionIndex = index;
         elements.audio.src = version.url;
         elements.audio.currentTime = 0;
@@ -758,27 +780,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function togglePlay() {
-        if (elements.audio.paused || elements.audio.ended) playAudio();
-        else pauseAudio();
+        if (playerClosed) return;
+        if (playbackPending || (!elements.audio.paused && !elements.audio.ended)) pauseAudio();
+        else playAudio();
     }
 
-    async function playAudio() {
+    async function playAudio({ automatic = false } = {}) {
+        if (playerClosed) return;
+        const requestId = ++playbackRequestId;
+        playbackPending = true;
+        autoplayBlocked = false;
+        updatePlayState();
         try {
-            window.DeanPlayerSkin?.prepareAudio();
+            // Manual interaction can unlock Web Audio synchronously. Automatic
+            // entry waits for the actual play event before creating that graph.
+            if (!automatic) window.DeanPlayerSkin?.prepareAudio();
             await elements.audio.play();
+            if (requestId !== playbackRequestId || playerClosed) return;
+            playbackPending = false;
+            setPlayingState(!elements.audio.paused && !elements.audio.ended);
         } catch (error) {
-            setPlayingState(false);
-            console.warn('Playback could not start:', error);
+            // A cancelled request from an old track must not pause the new one
+            // or replace its control state after a quick version/track change.
+            if (requestId !== playbackRequestId || playerClosed) return;
+            playbackPending = false;
+            autoplayBlocked = error?.name === 'NotAllowedError';
+            setPlayingState(!elements.audio.paused && !elements.audio.ended);
+            if (!autoplayBlocked && error?.name !== 'AbortError') {
+                console.warn('Playback could not start:', error);
+            }
         }
     }
 
     function pauseAudio() {
+        playbackRequestId += 1;
+        playbackPending = false;
+        autoplayBlocked = false;
         elements.audio.pause();
+        setPlayingState(false);
     }
 
     function setPlayingState(nextState) {
         isPlaying = nextState;
         if (isPlaying) {
+            autoplayBlocked = false;
             startLyricSync();
         } else {
             stopLyricSync();
@@ -798,7 +843,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         elements.playBtn.setAttribute('aria-pressed', String(isPlaying));
-        elements.playBtn.setAttribute('aria-label', isPlaying ? '暂停播放' : '开始播放');
+        const playLabel = isPlaying ? '暂停播放'
+            : autoplayBlocked ? '浏览器已阻止自动播放，点击播放' : '开始播放';
+        elements.playBtn.setAttribute('aria-label', playLabel);
+        elements.playBtn.setAttribute('title', playLabel);
+        elements.playerBody?.classList.toggle('autoplay-blocked', autoplayBlocked);
     }
 
     function nextTrack() {
